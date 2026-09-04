@@ -40,7 +40,7 @@ curl -fsSL https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.sh | UNITY_
 | :--- | :--- | :--- |
 | **버전 확인** | `unity --version` | 설치된 Unity CLI 버전 출력 |
 | **환경 진단** | `unity doctor` | CLI 및 Unity 개발 환경 통합 진단 |
-| **설치된 에디터 목록** | `unity editors` (또나 `unity editors -i`) | 로컬에 설치된 Unity 에디터 목록 및 경로 출력 |
+| **설치된 에디터 목록** | `unity editors` (또는 `unity editors -i`) | 로컬에 설치된 Unity 에디터 목록 및 경로 출력 |
 | **에디터 설치** | `unity install lts` | 최신 LTS 에디터 설치 (예: `unity install 6000.3.7f1`) |
 | **모듈 포함 설치** | `unity install lts -m android ios webgl` | 에디터 설치 시 타겟 플랫폼 모듈 동시 설치 |
 | **모듈 추가** | `unity install-modules -e 6000.3.18f1 -m android` | 기존 설치된 에디터에 모듈 추가 |

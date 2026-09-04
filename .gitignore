@@ -1,0 +1,48 @@
+# Unity 표준 Git 무시 설정 (.gitignore)
+# ==========================================
+
+# 1. 유니티 엔진 임시 캐시 및 빌드 폴더 (Unity Temporary Caches & Builds)
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# 2. 에셋 번들 및 패키지 캐시 (AssetBundles & Package Cache)
+/[Aa]sset[Bb]undles/
+/[Aa]ssets/[Aa]sset[Bb]undles/
+/[Aa]ssets/[Pp]ackage[Cc]ache/
+
+# 3. 비주얼 스튜디오 / IDE 자동 생성 프로젝트 파일 (IDE Project Files)
+.vs/
+.vscode/
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+.vsconfig
+
+# 4. OS 및 에디터 임시 파일 (OS & Editor Temporary Files)
+.DS_Store
+Thumbs.db
+desktop.ini
+*.directory
+*.apk
+*.aab
+*.unitypackage
+*.app
