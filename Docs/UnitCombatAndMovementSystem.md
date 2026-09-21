@@ -17,18 +17,23 @@
 - 📁 **2. 순수 ECS 데이터 구조체 (`UnitECSComponents.cs`)**
   - `UnitEntityTag`: 진영(`Faction`), 소속부대(`SquadId`), 생존(`IsAlive`), 격자 인덱스(`Row`, `Col`, `SlotIndex`)
   - `UnitMovementData`: 위치(`Position`), 회전(`Rotation`), 속도(`Velocity`), 목표좌표(`TargetPosition`), 가속도(`Acceleration`)
-  - `UnitCombatData`: 체력(`CurrentHp`), 공격력(`Damage`), 넉백속도(`KnockbackVelocity`), 질량(`Mass`), 목표적부대(`TargetSquadId`)
+  - `UnitCombatData`: 체력(`CurrentHp`), 공격력(`Damage`), 넉백속도(`KnockbackVelocity`), 질량(`Mass`), 목표적부대(`TargetSquadId`), 타겟위치캐시(`CachedEnemyPos`), 탐색타이머(`TargetSearchTimer`)
   - `UnitSeparationData`: 개인 척력 반경(`PersonalRadius`), 누적 척력(`SeparationForce`)
   - `DamageEvent`: 병렬 스레드 간 충돌/피격 데미지 큐 이벤트 구조체
 - 📁 **3. 병렬 연산 파이프라인 (Execution Pipeline)**
-  - 📂 3.1. 공간 해시 타겟팅 (Spatial Hash Targeting)
+  - 📂 3.1. 공간 해시 타겟팅 및 0.1초 주기화 캐싱 (Targeting & 10Hz Staggered Cache)
+    - 0.1초 주기(`TargetSearchTimer >= 0.1f`)로만 전체 유닛/부대 맵을 탐색하여 `CachedEnemyPos` 갱신
+    - 0.1초 사이 프레임은 무거운 순회 루프 100% 생략(Skip) 후 캐시 위치 즉시 사용
     - 지정 목표 부대(`TargetSquadId`) 최우선 100% 격리 탐색
+    - 정면 축 우선 1:1 정렬 타겟팅(`Frontal Alignment Scoring`): 횡방향 편차 페널티를 부여하여 내 정면 적 우선 락온
     - 1.45m 코앞 근접 적 우선 자기방어 반격
-    - 12m 공간 그리드 요격 및 자유유닛 전역 탐색
+    - 30m 공간 그리드 요격 및 자유유닛 전역 탐색
   - 📂 3.2. 상태 전이 및 속도 제어 (State & Movement)
     - 단순 이동(Move=1) 시 교전 즉시 이탈
-    - 공격 이동(AttackMove=2) 시 200명 전원 쇄도
-    - 선회 5도 불감대 및 가속도 보간
+    - 공격 이동(AttackMove=2) 시 2단계 메커니즘:
+      - 3.0m 밖: `TargetPosition`(방진 슬롯)을 유지하며 방패벽 대열 유지 평행 돌격
+      - 3.0m 이내 / 백병전: `enemyPos`를 향해 슬롯을 풀고 적진으로 쇄도하여 난전 개시
+    - 선회 5도 불감대, 가속도 보간 및 `RotateTowards` 쿼터니언 항시 정규화(`math.normalize`) 보장
   - 📂 3.3. 물리 척력 및 틈새 슬라이딩 (Separation & Deflection)
     - 전방 침범 100% 차단 (유닛 겹침 Stacking 방지)
     - 측면 굴절 벡터(Deflection) 합성으로 틈새 전진

@@ -24,6 +24,18 @@ namespace MiniTotalWar.ECS
         private readonly Dictionary<Unit, Entity> unitToEntityMap = new Dictionary<Unit, Entity>();
         private readonly Dictionary<Entity, Unit> entityToUnitMap = new Dictionary<Entity, Unit>();
 
+        // ⚡ [최적화] 매 프레임 GC 할당을 방지하기 위한 캐싱 구조체 및 딕셔너리
+        private struct SquadSyncInfo
+        {
+            public int TargetSquadId;
+            public int CmdState;
+            public float Speed;
+            public float Acceleration;
+        }
+
+        private readonly Dictionary<int, SquadSyncInfo> squadSyncMap = new Dictionary<int, SquadSyncInfo>(64);
+        private EntityQuery unitSyncQuery;
+
         private void Awake()
         {
             if (Instance == null) Instance = this;
@@ -38,6 +50,11 @@ namespace MiniTotalWar.ECS
             if (defaultWorld != null && defaultWorld.IsCreated)
             {
                 entityManager = defaultWorld.EntityManager;
+                unitSyncQuery = entityManager.CreateEntityQuery(
+                    ComponentType.ReadOnly<UnitEntityTag>(),
+                    ComponentType.ReadWrite<UnitCombatData>(),
+                    ComponentType.ReadWrite<UnitMovementData>()
+                );
                 isInitialized = true;
                 Debug.Log("[SquadECSSimulationBridge] 🚀 Unity 6 DOTS ECS 월드 및 EntityManager 초기화 완료!");
             }
@@ -54,162 +71,155 @@ namespace MiniTotalWar.ECS
             // 1. 하이브리드 게임오브젝트 모드 유닛 양방향 동기화
             SyncEntitiesToGameObjects();
 
-            // 2. ⚡ 순수 ECS 모드 매 프레임 부대 상태(TargetSquadId, MoveSpeed, CommandState) 실시간 완벽 동기화 (오브젝트 모드와 100% 동일화)
+            // 2. ⚡ 순수 ECS 모드 매 프레임 부대 상태(TargetSquadId, MoveSpeed, CommandState) 실시간 동기화
             if (BattleManager.Instance != null && BattleManager.Instance.usePureECS)
             {
                 var squads = BattleManager.Instance.GetAllSquads();
                 if (squads != null && squads.Count > 0)
                 {
-                    var query = entityManager.CreateEntityQuery(
-                        ComponentType.ReadOnly<UnitEntityTag>(),
-                        ComponentType.ReadWrite<UnitCombatData>(),
-                        ComponentType.ReadWrite<UnitMovementData>()
-                    );
-
-                    using (var entities = query.ToEntityArray(Allocator.Temp))
+                    // 🛡️ [부대 교전 연동 (Combat Cascade) - O(1) 초고속 판정]:
+                    // 부대가 이미 전군 돌격(AttackMove) 중이 아닌 경우:
+                    // SpatialHashGridSystem에서 O(1)로 집계된 MeleeEngagedCount를 확인하여 교전 돌입 시 전군 돌격 발동!
+                    for (int s = 0; s < squads.Count; s++)
                     {
-                        for (int s = 0; s < squads.Count; s++)
+                        Squad squad = squads[s];
+                        if (squad == null) continue;
+
+                        if (squad.currentCommandState != UnitCommandState.AttackMove && squad.currentCommandState != UnitCommandState.Move)
                         {
-                            Squad squad = squads[s];
-                            if (squad == null) continue;
-
                             int mySquadId = squad.GetInstanceID();
-
-                            // 🛡️ [부대 교전 연동 (Combat Cascade) - 다수결 및 정면 지향 검증]:
-                            // 부대가 이미 AttackMove로 전군 돌격 중이 아닌 경우(대기/방어/정리 상태):
-                            // 부대원 중 일부라도 적과 백병전(MeleeEngaged)에 돌입하면 지휘관이 즉시 전군 돌격(CommandAttackSquad)을 발동!
-                            // (후열 병사들이 슬롯에 멍하니 정렬해 있는 비현실적 현상 100% 원천 차단)
-                            if (squad.currentCommandState != UnitCommandState.AttackMove && squad.currentCommandState != UnitCommandState.Move)
+                            if (SpatialHashGridSystem.TryGetSquadAggregateData(mySquadId, out _, out _, out int meleeEngagedCount))
                             {
-                                int engagedEnemySquadId = -1;
-                                int maxEngagedCount = 0;
-                                System.Collections.Generic.Dictionary<int, int> enemyCounts = new System.Collections.Generic.Dictionary<int, int>();
-
-                                for (int i = 0; i < entities.Length; i++)
+                                if (meleeEngagedCount > 0)
                                 {
-                                    var tag = entityManager.GetComponentData<UnitEntityTag>(entities[i]);
-                                    if (tag.SquadId == mySquadId && tag.IsAlive == 1)
+                                    // 🚨 핵심: 부대에 이미 유효한 지정 목표 적 부대가 있다면 끝까지 고수!
+                                    if (squad.currentTargetSquad != null && squad.currentTargetSquad.MemberCount > 0)
                                     {
-                                        var cbt = entityManager.GetComponentData<UnitCombatData>(entities[i]);
-                                        if (cbt.CurrentState == 3 && cbt.TargetEntity != Unity.Entities.Entity.Null)
-                                        {
-                                            if (entityManager.Exists(cbt.TargetEntity) && entityManager.HasComponent<UnitEntityTag>(cbt.TargetEntity))
-                                            {
-                                                int eSquadId = entityManager.GetComponentData<UnitEntityTag>(cbt.TargetEntity).SquadId;
-                                                if (eSquadId != -1 && eSquadId != mySquadId)
-                                                {
-                                                    if (!enemyCounts.ContainsKey(eSquadId))
-                                                        enemyCounts[eSquadId] = 0;
-                                                    enemyCounts[eSquadId]++;
-
-                                                    if (enemyCounts[eSquadId] > maxEngagedCount)
-                                                    {
-                                                        maxEngagedCount = enemyCounts[eSquadId];
-                                                        engagedEnemySquadId = eSquadId;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // 🚨 핵심: 부대에 이미 유효한 지정 목표 적 부대가 있다면, 외곽 병사가 옆 부대와 스쳤더라도
-                                // 절대로 그 옆 부대로 지휘관 타겟을 바꾸지 않고 기존 정면 목표 부대를 100% 끝까지 고수합니다!
-                                if (squad.currentTargetSquad != null && squad.currentTargetSquad.MemberCount > 0)
-                                {
-                                    engagedEnemySquadId = squad.currentTargetSquad.GetInstanceID();
-                                }
-
-                                if (engagedEnemySquadId != -1)
-                                {
-                                    Squad enemySquad = null;
-                                    for (int k = 0; k < squads.Count; k++)
-                                    {
-                                        if (squads[k] != null && squads[k].GetInstanceID() == engagedEnemySquadId)
-                                        {
-                                            enemySquad = squads[k];
-                                            break;
-                                        }
-                                    }
-
-                                    if (enemySquad != null)
-                                    {
-                                        squad.CommandAttackSquad(enemySquad);
-                                    }
-                                }
-                            }
-
-                            int targetSquadId = (squad.currentTargetSquad != null && squad.currentTargetSquad.MemberCount > 0) 
-                                ? squad.currentTargetSquad.GetInstanceID() 
-                                : -1;
-                            int cmdState = (int)squad.currentCommandState;
-                            float spd = squad.targetSpeed > 0 ? squad.targetSpeed : (squad.isRunning ? 2.8f : 1.2f);
-                            float accel = squad.isRunning ? 8.0f : 5.5f;
-
-                            for (int i = 0; i < entities.Length; i++)
-                            {
-                                var tag = entityManager.GetComponentData<UnitEntityTag>(entities[i]);
-                                if (tag.SquadId == mySquadId && tag.IsAlive == 1)
-                                {
-                                    var combat = entityManager.GetComponentData<UnitCombatData>(entities[i]);
-                                    var mov = entityManager.GetComponentData<UnitMovementData>(entities[i]);
-
-                                    bool needUpdateCombat = false;
-
-                                    // [수정] TargetSquadId 불일치 시 항상 강제 갱신
-                                    if (combat.TargetSquadId != targetSquadId)
-                                    {
-                                        combat.TargetSquadId = targetSquadId;
-                                        needUpdateCombat = true;
-                                    }
-
-                                    // [수정] 부대 명령 상태 동기화 (기존 조건보다 완화하여 누락 방지)
-                                    if (cmdState == 1) // Move: 즉시 교전 해제
-                                    {
-                                        if (combat.CurrentState != 1)
-                                        {
-                                            combat.CurrentState = 1;
-                                            needUpdateCombat = true;
-                                        }
-                                    }
-                                    else if (cmdState == 2) // AttackMove: Idle(0) 포함 MeleeEngaged(3) 이외에는 모두 2로 전환
-                                    {
-                                        if (combat.CurrentState != 2 && combat.CurrentState != 3)
-                                        {
-                                            combat.CurrentState = 2;
-                                            needUpdateCombat = true;
-                                        }
-                                    }
-                                    else if (cmdState == 0) // Idle: 교전 상태가 아닌 경우에만 0으로 복귀
-                                    {
-                                        if (combat.CurrentState != 0 && combat.CurrentState != 3)
-                                        {
-                                            combat.CurrentState = 0;
-                                            needUpdateCombat = true;
-                                        }
-                                    }
-
-                                    if (needUpdateCombat)
-                                    {
-                                        entityManager.SetComponentData(entities[i], combat);
-                                    }
-
-                                    // [수정] AttackMove(2) 또는 MeleeEngaged(3) 상태에서는 MoveSpeed를 강제 덮어쓰지 않음
-                                    // (이 두 상태에서는 UnitCombatAndMovementSystem이 ChargeSpeed를 직접 제어함)
-                                    bool isEngaged = (combat.CurrentState == 2 || combat.CurrentState == 3);
-                                    if (!isEngaged)
-                                    {
-                                        mov.MoveSpeed = spd;
-                                        mov.Acceleration = accel;
-                                        entityManager.SetComponentData(entities[i], mov);
+                                        squad.CommandAttackSquad(squad.currentTargetSquad);
                                     }
                                     else
                                     {
-                                        // 가속도만 업데이트 (돌격 속도를 UnitCombatAndMovementSystem이 다루리도 Acceleration은 업데이트 필요)
-                                        mov.Acceleration = accel;
-                                        entityManager.SetComponentData(entities[i], mov);
+                                        // 가장 가까운 적 부대를 찾아 즉시 돌격 명령 (20개 부대 순회이므로 초고속)
+                                        Squad closestEnemy = null;
+                                        float minDistSqr = float.MaxValue;
+                                        Vector3 squadPos = squad.transform.position;
+
+                                        for (int k = 0; k < squads.Count; k++)
+                                        {
+                                            Squad enemy = squads[k];
+                                            if (enemy != null && enemy.isPlayer != squad.isPlayer && enemy.MemberCount > 0)
+                                            {
+                                                float dSqr = (enemy.transform.position - squadPos).sqrMagnitude;
+                                                if (dSqr < minDistSqr)
+                                                {
+                                                    minDistSqr = dSqr;
+                                                    closestEnemy = enemy;
+                                                }
+                                            }
+                                        }
+
+                                        if (closestEnemy != null)
+                                        {
+                                            squad.CommandAttackSquad(closestEnemy);
+                                        }
                                     }
                                 }
+                            }
+                        }
+                    }
+
+                    // ⚡ [부대 정보 O(1) 매핑 딕셔너리 구축 (부대 20개 순회 = O(M))]
+                    squadSyncMap.Clear();
+                    for (int s = 0; s < squads.Count; s++)
+                    {
+                        Squad squad = squads[s];
+                        if (squad == null) continue;
+
+                        int targetSquadId = (squad.currentTargetSquad != null && squad.currentTargetSquad.MemberCount > 0)
+                            ? squad.currentTargetSquad.GetInstanceID()
+                            : -1;
+                        int cmdState = (int)squad.currentCommandState;
+                        float spd = squad.targetSpeed > 0 ? squad.targetSpeed : (squad.isRunning ? 2.8f : 1.2f);
+                        float accel = squad.isRunning ? 8.0f : 5.5f;
+
+                        squadSyncMap[squad.GetInstanceID()] = new SquadSyncInfo
+                        {
+                            TargetSquadId = targetSquadId,
+                            CmdState = cmdState,
+                            Speed = spd,
+                            Acceleration = accel
+                        };
+                    }
+
+                    // ⚡ [엔티티 단 1회 직렬 순회 - 160,000회 중첩 루프를 4,000회 단일 루프로 40배 절감]
+                    using (var entities = unitSyncQuery.ToEntityArray(Allocator.Temp))
+                    {
+                        for (int i = 0; i < entities.Length; i++)
+                        {
+                            Entity e = entities[i];
+                            var tag = entityManager.GetComponentData<UnitEntityTag>(e);
+                            if (tag.IsAlive == 0 || tag.SquadId == -1) continue;
+                            if (!squadSyncMap.TryGetValue(tag.SquadId, out var syncInfo)) continue;
+
+                            var combat = entityManager.GetComponentData<UnitCombatData>(e);
+                            bool needUpdateCombat = false;
+
+                            // 1. TargetSquadId 불일치 시 갱신
+                            if (combat.TargetSquadId != syncInfo.TargetSquadId)
+                            {
+                                combat.TargetSquadId = syncInfo.TargetSquadId;
+                                needUpdateCombat = true;
+                            }
+
+                            // 2. 부대 명령 상태 동기화
+                            if (syncInfo.CmdState == 1) // Move: 즉시 교전 해제 및 강제 이동
+                            {
+                                if (combat.CurrentState != 1)
+                                {
+                                    combat.CurrentState = 1;
+                                    combat.TargetEntity = Entity.Null;
+                                    combat.CachedEnemyPos = float3.zero;
+                                    combat.ChargeImpactReady = 0;
+                                    needUpdateCombat = true;
+                                }
+                            }
+                            else if (syncInfo.CmdState == 2) // AttackMove: Idle(0) 포함 MeleeEngaged(3) 이외에는 모두 2로 전환
+                            {
+                                if (combat.CurrentState != 2 && combat.CurrentState != 3)
+                                {
+                                    combat.CurrentState = 2;
+                                    needUpdateCombat = true;
+                                }
+                            }
+                            else if (syncInfo.CmdState == 0) // Idle: 지휘관 정지/재정비 상태
+                            {
+                                if (combat.CurrentState != 0 && (syncInfo.TargetSquadId == -1 || combat.CurrentState != 3))
+                                {
+                                    combat.CurrentState = 0;
+                                    combat.TargetEntity = Entity.Null;
+                                    combat.CachedEnemyPos = float3.zero;
+                                    combat.ChargeImpactReady = 0;
+                                    needUpdateCombat = true;
+                                }
+                            }
+
+                            // 🚨 변경이 있을 때만 SetComponentData 호출 (매 프레임 무차별 쓰기 제거)
+                            if (needUpdateCombat)
+                            {
+                                entityManager.SetComponentData(e, combat);
+                            }
+
+                            // 3. 이동 속도 및 가속도 동기화 (실제 변경 시에만 SetComponentData 호출)
+                            var mov = entityManager.GetComponentData<UnitMovementData>(e);
+                            bool isEngaged = (combat.CurrentState == 2 || combat.CurrentState == 3);
+                            float desiredSpeed = isEngaged ? mov.MoveSpeed : syncInfo.Speed;
+                            float desiredAccel = syncInfo.Acceleration;
+
+                            if (math.abs(mov.MoveSpeed - desiredSpeed) > 0.001f || math.abs(mov.Acceleration - desiredAccel) > 0.001f)
+                            {
+                                mov.MoveSpeed = desiredSpeed;
+                                mov.Acceleration = desiredAccel;
+                                entityManager.SetComponentData(e, mov);
                             }
                         }
                     }
@@ -286,7 +296,9 @@ namespace MiniTotalWar.ECS
                 ChargeImpactReady = 1,
                 EngagementStartTime = 0f,
                 AutoAttackEnabled = unit.autoAttackEnabled ? 1 : 0,
-                TargetSquadId = (unit.mySquad != null && unit.mySquad.currentTargetSquad != null) ? unit.mySquad.currentTargetSquad.GetInstanceID() : -1
+                TargetSquadId = (unit.mySquad != null && unit.mySquad.currentTargetSquad != null) ? unit.mySquad.currentTargetSquad.GetInstanceID() : -1,
+                CachedEnemyPos = float3.zero,
+                TargetSearchTimer = (float)(entity.Index % 10) * 0.01f
             });
 
             entityManager.SetComponentData(entity, new UnitSeparationData

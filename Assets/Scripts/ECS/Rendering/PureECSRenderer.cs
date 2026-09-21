@@ -27,9 +27,10 @@ namespace MiniTotalWar.ECS
         private EntityQuery unitQuery;
         private bool isInitialized = false;
 
-        private Matrix4x4[] playerMatrices = new Matrix4x4[1023];
-        private Matrix4x4[] playerSelectedMatrices = new Matrix4x4[1023];
-        private Matrix4x4[] enemyMatrices = new Matrix4x4[1023];
+        private Matrix4x4[] playerMatrices = new Matrix4x4[4096];
+        private Matrix4x4[] playerSelectedMatrices = new Matrix4x4[4096];
+        private Matrix4x4[] enemyMatrices = new Matrix4x4[4096];
+        private readonly Matrix4x4[] sharedBatchBuffer = new Matrix4x4[1023];
         private MaterialPropertyBlock propBlock;
 
         private readonly HashSet<int> selectedSquadIds = new HashSet<int>();
@@ -119,12 +120,22 @@ namespace MiniTotalWar.ECS
                 }
             }
 
-            using (var entities = unitQuery.ToEntityArray(Allocator.TempJob))
+            bool hasSelectedEntities = (selectedEntitySet != null && selectedEntitySet.Count > 0);
+            NativeArray<Entity> entities = default;
+            if (hasSelectedEntities)
+            {
+                entities = unitQuery.ToEntityArray(Allocator.TempJob);
+            }
+
             using (var tags = unitQuery.ToComponentDataArray<UnitEntityTag>(Allocator.TempJob))
             using (var movements = unitQuery.ToComponentDataArray<UnitMovementData>(Allocator.TempJob))
             {
                 int totalEntities = tags.Length;
-                if (totalEntities == 0) return;
+                if (totalEntities == 0)
+                {
+                    if (hasSelectedEntities && entities.IsCreated) entities.Dispose();
+                    return;
+                }
 
                 int playerCount = 0;
                 int playerSelectedCount = 0;
@@ -136,12 +147,21 @@ namespace MiniTotalWar.ECS
 
                     float3 pos = movements[i].Position;
                     quaternion rot = movements[i].Rotation;
+                    float lenSq = math.lengthsq(rot.value);
+                    if (lenSq < 0.0001f || !math.all(math.isfinite(rot.value)))
+                    {
+                        rot = quaternion.identity;
+                    }
+                    else
+                    {
+                        rot = math.normalize(rot);
+                    }
 
                     Matrix4x4 mat = Matrix4x4.TRS(pos, rot, unitScale);
 
                     if (tags[i].Faction == 1) // 아군
                     {
-                        bool isSelected = selectedSquadIds.Contains(tags[i].SquadId) || (selectedEntitySet != null && selectedEntitySet.Contains(entities[i]));
+                        bool isSelected = selectedSquadIds.Contains(tags[i].SquadId) || (hasSelectedEntities && selectedEntitySet.Contains(entities[i]));
                         if (isSelected)
                         {
                             if (playerSelectedCount >= playerSelectedMatrices.Length)
@@ -169,6 +189,11 @@ namespace MiniTotalWar.ECS
                     }
                 }
 
+                if (hasSelectedEntities && entities.IsCreated)
+                {
+                    entities.Dispose();
+                }
+
                 // GPU Instancing으로 1023개 단위 일괄 렌더링 (Draw Call 1~3개로 압축!)
                 RenderBatches(playerMaterial, playerMatrices, playerCount);
                 RenderBatches(playerSelectedMaterial, playerSelectedMatrices, playerSelectedCount);
@@ -180,21 +205,19 @@ namespace MiniTotalWar.ECS
         {
             if (totalCount == 0 || mat == null || unitMesh == null) return;
 
-            int batchSize = 1023;
+            const int batchSize = 1023;
             int offset = 0;
-
-            Matrix4x4[] batch = new Matrix4x4[batchSize];
 
             while (offset < totalCount)
             {
                 int count = Mathf.Min(batchSize, totalCount - offset);
-                System.Array.Copy(matrices, offset, batch, 0, count);
+                System.Array.Copy(matrices, offset, sharedBatchBuffer, 0, count);
 
                 Graphics.DrawMeshInstanced(
                     unitMesh,
                     0,
                     mat,
-                    batch,
+                    sharedBatchBuffer,
                     count,
                     propBlock,
                     UnityEngine.Rendering.ShadowCastingMode.Off,

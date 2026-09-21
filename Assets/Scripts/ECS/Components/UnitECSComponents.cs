@@ -59,6 +59,8 @@ namespace MiniTotalWar.ECS
         public float EngagementStartTime; // 교전 시작 시간 (0f = 비교전)
         public int AutoAttackEnabled;     // 1 = 자동 선제 돌격 On, 0 = 근접 접촉 방어 Off (V)
         public int TargetSquadId;         // 부대 지휘관이 지정한 목표 적 부대 InstanceID (-1 = 없음/자유)
+        public float3 CachedEnemyPos;     // 0.1초 주기로 갱신되는 타겟 적의 위치 캐시 (최적화)
+        public float TargetSearchTimer;   // 적 위치/타겟 탐색 주기 타이머 (0.1초 주기 분산)
     }
 
     /// <summary>

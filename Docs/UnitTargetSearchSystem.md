@@ -11,11 +11,11 @@
 
 ```mermaid
 graph TD
-    A[UnitTargetSearchSystem] --> B(매 프레임 실행)
+    A[UnitTargetSearchSystem] --> B(0.1초 10Hz 주기 실행)
     B --> C(SearchEnemyTargetGridJob)
-    C --> D(1. 300m 탐색 범위 설정)
-    C --> E(2. 전장의 모든 생존 유닛 배열 순회)
-    C --> F(3. 아군 제외 후 가장 가까운 적을 RadarTargetEntity에 저장)
+    C --> D(1. 30m 반경 15셀 공간 해시 탐색)
+    C --> E(2. 시선 정면 축 forwardDot > 0.25f 필터링)
+    C --> F(3. 목표 부대 우선 필터링 후 RadarTargetEntity에 저장)
 ```
 
 ## 🗂️ 2. 해시 테이블 메서드/구조체 색인표 (Hash Table Index)

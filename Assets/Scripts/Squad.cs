@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -1033,10 +1033,11 @@ public class Squad : MonoBehaviour
                     combat.CurrentState = (int)cmdState;
                     // [수정] TargetSquadId는 기존 값 유지 (SyncTargetSquadIdToSimulations에서 이미 주입됨)
 
-                    if (cmdState == UnitCommandState.Move)
+                    if (cmdState == UnitCommandState.Move || cmdState == UnitCommandState.Idle)
                     {
                         combat.EngagementStartTime = 0f;
                         combat.TargetEntity = Unity.Entities.Entity.Null;
+                        combat.CachedEnemyPos = Unity.Mathematics.float3.zero;
                         combat.ChargeImpactReady = 0;
                         combat.KnockbackVelocity = Unity.Mathematics.float3.zero;
                     }
@@ -2040,11 +2041,7 @@ public class Squad : MonoBehaviour
         // 타겟을 절대로 변경하지 않고 끝까지 공격 유지! (접근 도중 타겟이 바뀌며 옆 부대로 꺾이는 현상 100% 원천 차단)
         if (currentTargetSquad != null && currentTargetSquad.MemberCount > 0)
         {
-            float distToCurrentTarget = Vector3.Distance(myPos, currentTargetSquad.GetVisualCenter());
-            if (distToCurrentTarget <= 80.0f)
-            {
-                return;
-            }
+            return;
         }
 
         float minScore = float.MaxValue;
@@ -2174,56 +2171,32 @@ public class Squad : MonoBehaviour
         {
             if (initialUnitCount > 0)
             {
-                var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
-                if (world != null && world.IsCreated)
+                int squadId = GetInstanceID();
+                if (MiniTotalWar.ECS.SpatialHashGridSystem.TryGetSquadAggregateData(squadId, out Unity.Mathematics.float3 center, out int count, out int _))
                 {
-                    var em = world.EntityManager;
-                    var query = em.CreateEntityQuery(
-                        typeof(MiniTotalWar.ECS.UnitEntityTag),
-                        typeof(MiniTotalWar.ECS.UnitMovementData)
-                    );
+                    currentAliveCount = count;
 
-                    using (var entities = query.ToEntityArray(Unity.Collections.Allocator.Temp))
+                    if (count > 0)
                     {
-                        int squadId = GetInstanceID();
-                        Vector3 sum = Vector3.zero;
-                        int count = 0;
+                        Vector3 vCenter = (Vector3)center;
+                        ecsVisualCenter = vCenter;
+                        hasEcsVisualCenter = true;
+                        transform.position = vCenter;
 
-                        for (int i = 0; i < entities.Length; i++)
+                        if (isMoving && Vector3.Distance(vCenter, moveDestination) <= 0.25f)
                         {
-                            var tag = em.GetComponentData<MiniTotalWar.ECS.UnitEntityTag>(entities[i]);
-                            if (tag.SquadId == squadId && tag.IsAlive == 1)
-                            {
-                                var mov = em.GetComponentData<MiniTotalWar.ECS.UnitMovementData>(entities[i]);
-                                sum += (Vector3)mov.Position;
-                                count++;
-                            }
+                            isMoving = false;
+                            AutoAcquireFrontEnemyTarget();
                         }
-
-                        currentAliveCount = count;
-
-                        if (count > 0)
+                    }
+                    else
+                    {
+                        if (BattleManager.Instance != null)
                         {
-                            ecsVisualCenter = sum / count;
-                            hasEcsVisualCenter = true;
-                            transform.position = ecsVisualCenter;
-
-                            if (isMoving && Vector3.Distance(ecsVisualCenter, moveDestination) <= 0.25f)
-                            {
-                                isMoving = false;
-                                AutoAcquireFrontEnemyTarget();
-                            }
+                            BattleManager.Instance.UnregisterSquad(this);
                         }
-                        else
-                        {
-                            // 💀 부대 전멸: 부대 오브젝트 파괴 및 UI 자동 해제
-                            if (BattleManager.Instance != null)
-                            {
-                                BattleManager.Instance.UnregisterSquad(this);
-                            }
-                            DestroySquadObject();
-                            return;
-                        }
+                        DestroySquadObject();
+                        return;
                     }
                 }
 

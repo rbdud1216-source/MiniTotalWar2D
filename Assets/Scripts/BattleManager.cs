@@ -123,10 +123,19 @@ public class BattleManager : MonoBehaviour
     {
         allSquads.Clear();
 
-        if (usePureECS && FindAnyObjectByType<MiniTotalWar.ECS.PureECSRenderer>() == null)
+        if (usePureECS)
         {
-            GameObject rendererObj = new GameObject("[PureECSRenderer]");
-            rendererObj.AddComponent<MiniTotalWar.ECS.PureECSRenderer>();
+            if (FindAnyObjectByType<MiniTotalWar.ECS.PureECSRenderer>() == null)
+            {
+                GameObject rendererObj = new GameObject("[PureECSRenderer]");
+                rendererObj.AddComponent<MiniTotalWar.ECS.PureECSRenderer>();
+            }
+
+            if (FindAnyObjectByType<MiniTotalWar.ECS.SquadECSSimulationBridge>() == null)
+            {
+                GameObject bridgeObj = new GameObject("[SquadECSSimulationBridge]");
+                bridgeObj.AddComponent<MiniTotalWar.ECS.SquadECSSimulationBridge>();
+            }
         }
 
         // 1. 플레이어 군단 스폰
@@ -380,7 +389,9 @@ public class BattleManager : MonoBehaviour
                         ChargeImpactReady = 1,
                         EngagementStartTime = 0f,
                         AutoAttackEnabled = 1,
-                        TargetSquadId = -1
+                        TargetSquadId = -1,
+                        CachedEnemyPos = float3.zero,
+                        TargetSearchTimer = (float)(i % 10) * 0.01f
                     });
 
                     em.SetComponentData(entity, new UnitSeparationData

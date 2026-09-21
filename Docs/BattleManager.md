@@ -15,11 +15,12 @@
   - `Awake()`, `Start()`
   - `usePureECS`: 게임오브젝트 모드 vs 순수 ECS 모드 글로벌 전환 플래그
   - `GetAllSquads()`, `UnregisterSquad()`: 전장 부대 등록/해제 관리
-- 📁 **2. 군단 스폰 파이프라인 (Army Spawning Pipeline)**
-  - `SpawnBattleScenario()`: 전장 배치 시나리오 총괄 실행
+- 📁 **2. 군단 스폰 및 자동 교전 파이프라인 (Army Spawning & Battle Pipeline)**
+  - `SpawnBattleScenario()`: 전장 배치 시나리오 총괄 실행 (순수 ECS 모드 시 `PureECSRenderer` 및 `SquadECSSimulationBridge` 자동 생성 보장)
   - `SpawnArmy()`: 진영별(아군/적군) 다중 부대 생성 및 배치
     - GameObject 모드: `Squad` GameObject 및 `Unit` Prefab 인스턴스화
-    - Pure ECS 모드: `SquadECSSimulationBridge`를 통한 순수 ECS 엔티티 일괄 스폰
+    - Pure ECS 모드: 순수 ECS 엔티티 일괄 스폰 및 `SquadECSSimulationBridge`를 통한 실시간 동기화
+  - `OrderEnemiesToAttack()`: 스폰 직후 아군과 적군 부대를 X좌표 기준으로 1:1 평행 매칭하여 정면 돌격 명령 하달
 - 📁 **3. 디버그 및 기즈모 (Gizmos & Diagnostics)**
   - `OnDrawGizmosSelected()`, `DrawArmyGizmos()`: 에디터 씬 뷰 배치 프리뷰 박스 렌더링
   - `ResetAllUnitsPhysics()`: 물리 속도 강제 초기화
@@ -32,10 +33,11 @@
 
 | 메서드 (Key) | 반환형 / 파라미터 | 핵심 역할 & 기능 요약 (Value) | 호출자 (Callers) | 소스 줄 번호 (Line Range) |
 | :--- | :--- | :--- | :--- | :--- |
-| `UnregisterSquad` | `void (Squad squad)` | 부대 전멸/해체 시 전체 목록에서 제거 | `Squad.OnDestroy` | [BattleManager.cs#L90-L99](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L90-L99) |
-| `SpawnBattleScenario` | `void ()` | 인스펙터 설정에 따른 전장 시나리오 군단 생성 | `Start()` | [BattleManager.cs#L122-L142](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L122-L142) |
-| `SpawnArmy` | `void (isPlayer, configs, center, angle)` | 진영별 다중 부대 및 병사 스폰 & 듀얼 모드 분기 | `SpawnBattleScenario` | [BattleManager.cs#L144-L409](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L144-L409) |
-| `ResetAllUnitsPhysics` | `void ()` | 전장 모든 유닛의 물리 속도 초기화 | 디버그 / UI | [BattleManager.cs#L411-L434](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L411-L434) |
+| `UnregisterSquad` | `void (Squad squad)` | 부대 전멸/해체 시 전체 목록에서 제거 | `Squad.OnDestroy` | [BattleManager.cs#L90-L96](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L90-L96) |
+| `SpawnBattleScenario` | `void ()` | 인스펙터 설정에 따른 전장 군단 생성 & 렌더러/브릿지 보장 | `Start()` | [BattleManager.cs#L122-L148](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L122-L148) |
+| `OrderEnemiesToAttack` | `void ()` | 아군/적군 부대 X좌표 정렬 기반 1:1 정면 돌격 명령 하달 | `SpawnBattleScenario` | [BattleManager.cs#L150-L200](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L150-L200) |
+| `SpawnArmy` | `void (isPlayer, configs, center, angle)` | 진영별 다중 부대 및 병사 스폰 & 듀얼 모드 분기 | `SpawnBattleScenario` | [BattleManager.cs#L202-L440](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L202-L440) |
+| `ResetAllUnitsPhysics` | `void ()` | 전장 모든 유닛의 물리 속도 초기화 | 디버그 / UI | [BattleManager.cs#L450-L480](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L450-L480) |
 
 ---
 
@@ -44,10 +46,12 @@
 ```mermaid
 flowchart TD
     A[게임 시작: BattleManager.Start] --> B[SpawnBattleScenario]
-    B --> C[SpawnArmy: 아군 & 적군 군단 생성]
-    C --> D{usePureECS 플래그 분기}
-    D -- false (GameObject 모드) --> E[Squad 및 Unit GameObject 생성 -> UnitJobSimulationManager 등록]
-    D -- true (Pure ECS 모드) --> F[SquadECSSimulationBridge -> 순수 Entity 컴포넌트 일괄 생성]
+    B --> B1{usePureECS 여부}
+    B1 -- true --> B2[PureECSRenderer 및 SquadECSSimulationBridge 자동 생성 보장]
+    B1 -- false --> C[SpawnArmy: 아군 & 적군 군단 생성]
+    B2 --> C
+    C --> D[OrderEnemiesToAttack: X좌표 1:1 정면 상대 매칭]
+    D --> E[CommandAttackSquad: 목표 아군 부대 타겟 영구 고수 일제 돌격]
 ```
 
 ---

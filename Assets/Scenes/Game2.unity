@@ -521,7 +521,119 @@ MonoBehaviour:
     customPosition: {x: 0, y: 0, z: 0}
     customRotationY: 0
     customUnitPrefab: {fileID: 0}
+  - squadName: "\uC81C1 \uBCF4\uBCD1\uB300"
+    unitCount: 200
+    columns: 20
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
+  - squadName: "\uC81C1 \uBCF4\uBCD1\uB300"
+    unitCount: 200
+    columns: 20
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
+  - squadName: "\uC81C1 \uBCF4\uBCD1\uB300"
+    unitCount: 200
+    columns: 20
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
+  - squadName: "\uC81C1 \uBCF4\uBCD1\uB300"
+    unitCount: 200
+    columns: 20
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
+  - squadName: "\uC81C1 \uBCF4\uBCD1\uB300"
+    unitCount: 200
+    columns: 20
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
+  - squadName: "\uC81C1 \uBCF4\uBCD1\uB300"
+    unitCount: 200
+    columns: 20
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
+  - squadName: "\uC81C1 \uBCF4\uBCD1\uB300"
+    unitCount: 200
+    columns: 20
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
   enemyArmyConfigs:
+  - squadName: "\uC801"
+    unitCount: 200
+    columns: 5
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
+  - squadName: "\uC801"
+    unitCount: 200
+    columns: 5
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
+  - squadName: "\uC801"
+    unitCount: 200
+    columns: 5
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
+  - squadName: "\uC801"
+    unitCount: 200
+    columns: 5
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
+  - squadName: "\uC801"
+    unitCount: 200
+    columns: 5
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
+  - squadName: "\uC801"
+    unitCount: 200
+    columns: 5
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
+  - squadName: "\uC801"
+    unitCount: 200
+    columns: 5
+    formationType: 0
+    useCustomPosition: 0
+    customPosition: {x: 0, y: 0, z: 0}
+    customRotationY: 0
+    customUnitPrefab: {fileID: 0}
   - squadName: "\uC801"
     unitCount: 200
     columns: 5

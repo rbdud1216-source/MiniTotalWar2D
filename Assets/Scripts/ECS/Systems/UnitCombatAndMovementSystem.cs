@@ -51,6 +51,14 @@ namespace MiniTotalWar.ECS
             tagLookup.Update(ref state);
 
             NativeQueue<DamageEvent> damageQueue = new NativeQueue<DamageEvent>(Allocator.TempJob);
+            NativeParallelHashSet<int> engagedSquads = new NativeParallelHashSet<int>(32, Allocator.TempJob);
+
+            // 0단계: 현재 앞열이 적과 충돌하여 백병전(3) 중인 부대 ID들을 초고속 병렬 수집
+            var detectJob = new DetectEngagedSquadsJob
+            {
+                EngagedSquads = engagedSquads.AsParallelWriter()
+            };
+            JobHandle detectHandle = detectJob.ScheduleParallel(state.Dependency);
 
             // 1단계: 이동, 회전, 돌격 가속, 척력 및 공격 쿨다운/타격 이벤트 수집 (병렬 스케줄링)
             var movementJob = new UnitMovementCombatJob
@@ -58,13 +66,15 @@ namespace MiniTotalWar.ECS
                 SpatialMap = spatialGrid.SpatialMap,
                 SquadMap = spatialGrid.SquadMap,
                 AllAliveUnits = spatialGrid.AllAliveUnits.AsDeferredJobArray(),
+                AllAliveEntityMap = spatialGrid.AllAliveEntityMap,
+                EngagedSquads = engagedSquads,
                 DamageQueue = damageQueue.AsParallelWriter(),
                 DeltaTime = deltaTime,
                 CurrentTime = currentTime,
                 InvCellSize = SpatialHashGridSystem.INV_CELL_SIZE
             };
 
-            JobHandle moveHandle = movementJob.ScheduleParallel(state.Dependency);
+            JobHandle moveHandle = movementJob.ScheduleParallel(detectHandle);
 
             // 2단계: 큐에 쌓인 데미지/넉백 이벤트 일괄 적용 및 적 사망 처리 (안전한 단일 스케줄링)
             var applyDamageJob = new ApplyDamageJob
@@ -75,7 +85,28 @@ namespace MiniTotalWar.ECS
             };
 
             JobHandle damageHandle = applyDamageJob.Schedule(moveHandle);
-            state.Dependency = damageQueue.Dispose(damageHandle);
+            JobHandle finalHandle = damageQueue.Dispose(damageHandle);
+            state.Dependency = engagedSquads.Dispose(finalHandle);
+        }
+    }
+
+    /// <summary>
+    /// 0단계: 앞열이 적과 충돌하여 백병전(MeleeEngaged)에 돌입한 부대 목록을 초고속으로 수집하는 Job
+    /// </summary>
+    [BurstCompile]
+    public partial struct DetectEngagedSquadsJob : IJobEntity
+    {
+        public NativeParallelHashSet<int>.ParallelWriter EngagedSquads;
+
+        private void Execute(in UnitEntityTag tag, in UnitCombatData combat)
+        {
+            if (tag.IsAlive == 1 && tag.SquadId != -1)
+            {
+                if (combat.CurrentState == 3)
+                {
+                    EngagedSquads.Add(tag.SquadId);
+                }
+            }
         }
     }
 
@@ -88,6 +119,8 @@ namespace MiniTotalWar.ECS
         [ReadOnly] public NativeParallelMultiHashMap<int, EntitySpatialData> SpatialMap;
         [ReadOnly] public NativeParallelMultiHashMap<int, EntitySpatialData> SquadMap;
         [ReadOnly] public NativeArray<EntitySpatialData> AllAliveUnits;
+        [ReadOnly] public NativeParallelHashMap<Entity, EntitySpatialData> AllAliveEntityMap;
+        [ReadOnly] public NativeParallelHashSet<int> EngagedSquads;
         public NativeQueue<DamageEvent>.ParallelWriter DamageQueue;
         public float DeltaTime;
         public float CurrentTime;
@@ -112,83 +145,95 @@ namespace MiniTotalWar.ECS
             bool isFreeUnit = (tag.IsFreeUnit == 1 || tag.SquadId == -1);
             int closestEnemyIsFreeUnit = 0;
 
-            // 🎯 [0단계: 기존 코앞 타겟 유지 - Object 모드와 1:1 동일 로직]
+            // 🎯 [최적화] 매 프레임 적의 위치를 무차별 탐색하지 않고, 0.1초(10Hz)마다 1번씩만 적 위치 탐색/갱신!
+            combat.TargetSearchTimer += DeltaTime;
+            bool shouldSearchTarget = (combat.TargetSearchTimer >= 0.1f) || (combat.TargetEntity == Entity.Null && math.lengthsq(combat.CachedEnemyPos) < 0.001f);
+
             bool hasLockedTarget = false;
-            if (combat.TargetEntity != Entity.Null)
+
+            if (shouldSearchTarget)
             {
-                for (int i = 0; i < AllAliveUnits.Length; i++)
+                combat.TargetSearchTimer = 0f;
+
+                // 🎯 [0단계: 기존 코앞 타겟 유지 - O(1) 해시 룩업 최적화]
+                if (combat.TargetEntity != Entity.Null)
                 {
-                    EntitySpatialData targetData = AllAliveUnits[i];
-                    if (targetData.Entity == combat.TargetEntity)
+                    bool targetStillAlive = false;
+                    if (AllAliveEntityMap.TryGetValue(combat.TargetEntity, out EntitySpatialData targetData))
                     {
                         if (targetData.IsAlive == 1)
                         {
                             // 🚨 목표 부대가 명시적으로 지정되었는데, 현재 락온된 적이 그 부대원이 아니라면 락온 강제 해제!
-                            // (이전에 싸우던 옆 부대원에게 계속 쏠려서 목표 부대로 안 가는 현상 방지)
-                            if (combat.TargetSquadId != -1 && targetData.SquadId != combat.TargetSquadId)
+                            if (combat.TargetSquadId == -1 || targetData.SquadId == combat.TargetSquadId)
                             {
-                                break;
-                            }
-
-                            float sqrDistToTarget = math.lengthsq(targetData.Position - currentPos);
-                            if (sqrDistToTarget <= 2.1025f) // 1.45m * 1.45m
-                            {
-                                enemyPos = targetData.Position;
-                                closestEnemyEntity = combat.TargetEntity;
-                                closestEnemyIsFreeUnit = targetData.IsFreeUnit;
-                                foundEnemy = true;
-                                minEnemyDistSqr = sqrDistToTarget;
-                                hasLockedTarget = true;
+                                float sqrDistToTarget = math.lengthsq(targetData.Position - currentPos);
+                                if (sqrDistToTarget <= 2.1025f) // 1.45m * 1.45m
+                                {
+                                    enemyPos = targetData.Position;
+                                    closestEnemyEntity = combat.TargetEntity;
+                                    closestEnemyIsFreeUnit = targetData.IsFreeUnit;
+                                    foundEnemy = true;
+                                    minEnemyDistSqr = sqrDistToTarget;
+                                    hasLockedTarget = true;
+                                }
+                                targetStillAlive = true;
                             }
                         }
-                        break; // 타겟을 찾았으므로 루프 종료
+                    }
+
+                    // 🚨 기존 타겟이 이미 죽었거나 파괴되었으면 타겟 엔티티 즉시 해제!
+                    if (!targetStillAlive)
+                    {
+                        combat.TargetEntity = Entity.Null;
                     }
                 }
-            }
 
-            // 🎯 [1단계: 부대 지휘관의 목표 부대(TargetSquadId) 집중 탐색]
-            // [수정]: 이동 중(AttackMove=2)에는 지정 목표 부대원로만 직진.
-            if (!hasLockedTarget && !isFreeUnit && combat.TargetSquadId != -1)
-            {
-                float targetSquadMinSqr = 4000000f; // 2000m - 지정 목표 부대 탐색 범위
-
-                if (SquadMap.TryGetFirstValue(combat.TargetSquadId, out EntitySpatialData other, out var it))
+                // 🎯 [1단계: 부대 지휘관의 목표 부대(TargetSquadId) 집중 탐색]
+                if (!hasLockedTarget && !isFreeUnit && combat.TargetSquadId != -1)
                 {
-                    do
+                    float targetSquadMinCost = 4000000f; // 2000m - 지정 목표 부대 탐색 범위
+                    float3 myFwd = math.mul(movement.Rotation, new float3(0, 0, 1));
+
+                    if (SquadMap.TryGetFirstValue(combat.TargetSquadId, out EntitySpatialData other, out var it))
                     {
-                        if (other.IsAlive == 1 && other.Faction != tag.Faction)
+                        do
                         {
-                            float3 diff = other.Position - currentPos;
-                            diff.y = 0f;
-                            float sqrDist = math.lengthsq(diff);
-
-                            if (sqrDist < targetSquadMinSqr)
+                            if (other.IsAlive == 1 && other.Faction != tag.Faction)
                             {
-                                targetSquadMinSqr = sqrDist;
-                                enemyPos = other.Position;
-                                closestEnemyEntity = other.Entity;
-                                closestEnemyIsFreeUnit = other.IsFreeUnit;
-                                foundEnemy = true;
+                                float3 diff = other.Position - currentPos;
+                                diff.y = 0f;
+                                float sqrDist = math.lengthsq(diff);
+
+                                // 🎯 [정면 축 우선 1:1 정렬 (Frontal Alignment Scoring)]:
+                                // 내 정면 진행 축과의 횡방향 이탈량에 페널티를 부여하여, 
+                                // 측면/대각선 적으로 쏠리지 않고 내 정면에 마주한 적을 최우선 타겟으로 선택!
+                                float fwdDist = math.dot(diff, myFwd);
+                                float3 lateralVec = diff - (myFwd * fwdDist);
+                                float lateralSqr = math.lengthsq(lateralVec);
+
+                                float cost = sqrDist + (lateralSqr * 2.5f);
+                                if (fwdDist < 0f) cost += 1000f; // 등 뒤의 적은 큰 페널티
+
+                                if (cost < targetSquadMinCost)
+                                {
+                                    targetSquadMinCost = cost;
+                                    enemyPos = other.Position;
+                                    closestEnemyEntity = other.Entity;
+                                    closestEnemyIsFreeUnit = other.IsFreeUnit;
+                                    foundEnemy = true;
+                                    minEnemyDistSqr = sqrDist;
+                                }
                             }
-                        }
-                    } while (SquadMap.TryGetNextValue(out other, ref it));
+                        } while (SquadMap.TryGetNextValue(out other, ref it));
+                    }
                 }
 
-                if (foundEnemy)
+                // 🎯 [2단계: 목표 부대 미지정 시, 30m 레이더가 감지한 가장 가까운 적 탐색 - O(1) 해시 룩업 최적화]
+                if (!hasLockedTarget && !foundEnemy && combat.TargetSquadId == -1)
                 {
-                    minEnemyDistSqr = targetSquadMinSqr;
-                }
-            }
-
-            // 🎯 [2단계: 목표 부대 미지정 시, 300m 레이더가 감지한 가장 가까운 적 탐색]
-            if (!hasLockedTarget && !foundEnemy && combat.TargetSquadId == -1)
-            {
-                if (combat.RadarTargetEntity != Entity.Null)
-                {
-                    for (int i = 0; i < AllAliveUnits.Length; i++)
+                    if (combat.RadarTargetEntity != Entity.Null)
                     {
-                        EntitySpatialData radarData = AllAliveUnits[i];
-                        if (radarData.Entity == combat.RadarTargetEntity)
+                        if (AllAliveEntityMap.TryGetValue(combat.RadarTargetEntity, out EntitySpatialData radarData))
                         {
                             if (radarData.IsAlive == 1)
                             {
@@ -201,9 +246,39 @@ namespace MiniTotalWar.ECS
                                 radarDiff.y = 0f;
                                 minEnemyDistSqr = math.lengthsq(radarDiff);
                             }
-                            break;
                         }
                     }
+                }
+
+                if (foundEnemy)
+                {
+                    combat.CachedEnemyPos = enemyPos;
+                    combat.TargetEntity = closestEnemyEntity;
+                }
+                else
+                {
+                    // 🛡️ 주변에 적이 완전히 없으면 캐시된 적 위치 및 타겟 엔티티 즉시 완전 소거! (유령 타겟 뭉침 원천 박멸)
+                    combat.CachedEnemyPos = float3.zero;
+                    combat.TargetEntity = Entity.Null;
+                    if (combat.CurrentState == 3) combat.CurrentState = 0; // 백병전 잠금 즉시 해제
+                }
+            }
+            else
+            {
+                // ⚡ [0.1초 주기 사이 프레임]: 무거운 전체 탐색 루프를 100% 생략하고 캐시된 적 위치를 즉시 사용!
+                // 🚨 단, 유효한 타겟 엔티티가 살아있고 캐시 좌표가 있을 때만 유효한 적으로 인정 (유령 타겟팅 방지)
+                if (combat.TargetEntity != Entity.Null && math.lengthsq(combat.CachedEnemyPos) > 0.001f)
+                {
+                    enemyPos = combat.CachedEnemyPos;
+                    closestEnemyEntity = combat.TargetEntity;
+                    foundEnemy = true;
+                    float3 diff = enemyPos - currentPos;
+                    diff.y = 0f;
+                    minEnemyDistSqr = math.lengthsq(diff);
+                }
+                else
+                {
+                    foundEnemy = false;
                 }
             }
 
@@ -217,20 +292,16 @@ namespace MiniTotalWar.ECS
                 diffToEnemy.y = 0f;
                 distToEnemy = math.length(diffToEnemy); // ⚡ 실제 유닛 간의 정확한 실시간 유클리드 거리
 
-                // 🔒 이 프레임에 추격 중인 적의 SquadId를 임시 기록 (이 프레임 내 백병전 필터링용)
+                // 🔒 이 프레임에 추격 중인 적의 SquadId를 임시 기록 (이 프레임 내 백병전 필터링용) - O(1) 해시 룩업 최적화
                 // 🚨 주의: 개별 유닛 단위로 combat.TargetSquadId를 덮어쓰면 한 부대 안에서 병사들이 서로 다른 부대 ID를 잠가
                 // 부대가 둘로 쪼개지는 치명적인 버그가 발생하므로, combat.TargetSquadId는 오직 지휘관만 수정하도록 유지합니다.
                 if (localTargetSquadId == -1 && !isFreeUnit)
                 {
-                    for (int i = 0; i < AllAliveUnits.Length; i++)
+                    if (AllAliveEntityMap.TryGetValue(closestEnemyEntity, out EntitySpatialData closestData))
                     {
-                        if (AllAliveUnits[i].Entity == closestEnemyEntity)
+                        if (closestData.SquadId != -1)
                         {
-                            if (AllAliveUnits[i].SquadId != -1)
-                            {
-                                localTargetSquadId = AllAliveUnits[i].SquadId;
-                            }
-                            break;
+                            localTargetSquadId = closestData.SquadId;
                         }
                     }
                 }
@@ -290,20 +361,31 @@ namespace MiniTotalWar.ECS
                     }
                     else
                     {
-                        // 🌊 [후열 바둑판 방진 멈춤 100% 해제]:
-                        // 부대가 공격 중이거나, 목표 부대가 있거나, 전방 25m 내 적이 발견되면 후열 병사 전원 일제 돌격!
-                        bool shouldChaseEnemy = isAttacking || (foundEnemy && (combat.TargetSquadId != -1 || distToEnemy <= 25.0f));
+                        // 🌊 [오브젝트 모드 일치화: 방진 유지 돌격 -> 충돌 난전 2단계 메커니즘]
+                        bool isSquadAttacking = isAttacking || (foundEnemy && (combat.TargetSquadId != -1 || distToEnemy <= 25.0f));
+                        bool isSquadEngaged = (tag.SquadId != -1 && EngagedSquads.Contains(tag.SquadId));
 
-                        if (shouldChaseEnemy)
+                        if (isSquadAttacking)
                         {
-                            // 🦅 유저 요청 완벽 반영: 전투 시 억지로 대형(TargetPosition)을 유지하려 들지 않고, 
-                            // 완벽히 대형을 풀고 각자 가장 가까운 목표 부대원(enemyPos)에게 돌격!
-                            // 대형이 붕괴되어도 물리 척력(Separation)에 의해 자연스럽게 전선이 형성됨.
-                            float3 toEnemy = (math.lengthsq(diffToEnemy) > 0.001f) ? math.normalize(diffToEnemy) : new float3(0, 0, 1);
-                            targetDest = enemyPos - (toEnemy * 0.40f);
-                            
-                            isCharging = true;
-                            isCombatRunning = false;
+                            // 💥 [1단계: 접촉 전 돌격 (부대원 전원 비교전 상태)]
+                            // 적과 실제로 충돌하기 전까지는 대형 슬롯(movement.TargetPosition)을 유지하며 방진을 짠 채 일제히 전진 돌격!
+                            // (원거리에서 개별 적에게 쏠려 사선으로 달리는 현상을 원천 방지하고 대형 유지)
+                            if (!isSquadEngaged && distToEnemy > 2.5f && combat.CurrentState != 3)
+                            {
+                                targetDest = movement.TargetPosition;
+                                isCharging = true;
+                                isCombatRunning = false;
+                            }
+                            // ⚔️ [2단계: 충돌 및 백병전 (부대원 중 1명이라도 충돌/교전 돌입 시)]
+                            // 앞열이 적진과 부딪히는 순간 후열을 포함한 전군이 방진 슬롯 구속을 100% 풀고,
+                            // 각자 정면의 적(enemyPos)을 향해 일제히 쇄도하며 난전(Brawl) 개시!
+                            else
+                            {
+                                float3 toEnemy = (math.lengthsq(diffToEnemy) > 0.001f) ? math.normalize(diffToEnemy) : new float3(0, 0, 1);
+                                targetDest = enemyPos - (toEnemy * 0.40f);
+                                isCharging = true;
+                                isCombatRunning = false;
+                            }
                         }
                         else
                         {
@@ -431,7 +513,7 @@ namespace MiniTotalWar.ECS
             {
                 if (combat.CurrentState == 3)
                 {
-                    combat.CurrentState = (combat.AutoAttackEnabled == 0) ? 1 : 2;
+                    combat.CurrentState = 0; // 🛡️ 교전 상대 전멸 시 즉시 대기(Idle) 및 대형 복귀로 전환
                 }
                 targetDest = movement.TargetPosition;
                 isCharging = false;
@@ -542,7 +624,7 @@ namespace MiniTotalWar.ECS
 
             if (math.lengthsq(lookDir) > 0.001f)
             {
-                quaternion targetRot = quaternion.LookRotation(math.normalize(lookDir), math.up());
+                quaternion targetRot = quaternion.LookRotationSafe(lookDir, math.up());
                 float angleDiff = CalculateAngleDegrees(movement.Rotation, targetRot);
                 if (angleDiff > 5f)
                 {
@@ -582,9 +664,9 @@ namespace MiniTotalWar.ECS
         private static quaternion RotateTowards(quaternion from, quaternion to, float maxDegrees)
         {
             float angle = CalculateAngleDegrees(from, to);
-            if (angle <= 0.001f) return to;
+            if (angle <= 0.001f) return math.normalize(to);
             float t = math.min(1.0f, maxDegrees / angle);
-            return math.slerp(from, to, t);
+            return math.normalize(math.slerp(from, to, t));
         }
     }
 

@@ -31,19 +31,19 @@
   - `CommandCurvedFormation()`: 곡선 대형 전개 명령
   - `AddWaypoint()`, `ClearWaypoints()`: 다중 경유지(Waypoint) 대기열 관리
 - 📁 **4. 순차 기동 및 공간 정렬 루틴 (Staggered Dispatch & Spatial Sort)**
-  - `AssignFormationPositionsRoutine()`: $O(N^2)$ 공간 정렬 및 슬롯 배정 코루틴
+  - `AssignFormationPositionsRoutine()`: O(N^2) 공간 정렬 및 슬롯 배정 코루틴
   - `StartUnitsMovementStaggered()`: 전진/후진 방향성 열 단위 순차 출발 코루틴
 - 📁 **5. 전투 추적, 포위 및 AI (Combat Tracking, Envelopment & AI)**
   - `UpdateTargetSquadTracking()`: 공격 중 목표 적 부대 실시간 추적 및 갱신
   - `UpdateEnemyProjectionData()`: 적 부대 접적면 및 360도 좌표 투영
   - `DetectEnvelopmentThreat()`: 적의 포위 위협 감지
-  - `UpdateEnemySquadAI()`: 적군 부대의 1:1 전선 매칭 및 자율 의사결정 AI
+  - `UpdateEnemySquadAI()`: 적군 부대의 1:1 전선 매칭 및 목표 부대 영구 고수(Sticky Target Lock) AI
   - `UpdatePostCombatAutoReform()`, `ReformSquadAfterCombat()`: 전투 종료 후 전열 재정비
 - 📁 **6. 모드 전환 및 동기화 (Modes & Dual-Engine Sync)**
   - `ToggleRunMode()`, `SetRunMode()`: 달리기/걷기 모드 전환
   - `ToggleLooseFormation()`, `SetFormationType()`: 산개진/밀집진/특수진 전환
   - `SetAutoAttack()`, `SetStance()`: 자동 요격 및 부대 태세 전환
-  - `SyncTargetSquadIdToSimulations()`: Job System 및 Pure ECS 양방향 동기화
+  - `SyncTargetSquadIdToSimulations()`: Job System 및 Pure ECS 양방향 동기화 (Bridge 없을 시 EntityManager 직접 주입 폴백 포함)
   - `UpdateECSEntitiesTarget()`, `UpdateECSEntitiesSpeed()`: 순수 ECS 엔티티 1:1 동기화
 
 ---
@@ -54,21 +54,26 @@
 
 | 메서드 / 프로퍼티 (Key) | 반환형 / 파라미터 | 핵심 역할 & 기능 요약 (Value) | 호출자 (Callers) | 소스 줄 번호 (Line Range) |
 | :--- | :--- | :--- | :--- | :--- |
-| `CalculateSlotLocalOffset` | `Vector3 (r, c, count, rows, cols)` | 열과 행에 따른 슬롯 상대 좌표 계산 | `RebuildGridStructure` | [Squad.cs#L216-L238](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L216-L238) |
-| `CalculateSlotWorldPosition` | `Vector3 (r, c, ..., center, rot)` | 중심점 및 회전각 기반 슬롯 월드 좌표 산출 | `AssignFormationPositions` | [Squad.cs#L240-L255](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L240-L255) |
-| `SetRunMode` | `void (bool run)` | 구보/제식보행 속도 전환 및 엔티티 동기화 | `PlayerController`, `R키` | [Squad.cs#L591-L608](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L591-L608) |
-| `SetFormationType` | `void (SquadFormationType type)` | 진형 형태(일자, 사각방진, 쐐기 등) 변경 | `CommandUI`, 단축키 | [Squad.cs#L674-L695](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L674-L695) |
-| `RebuildGridStructure` | `void (int targetCols, bool sort)` | 부대 열 수 변경에 따른 내부 대형 격자 재구축 | `PlayerController`, `Awake` | [Squad.cs#L697-L779](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L697-L779) |
-| `CommandMoveWithFormation` | `void (dest, rot, cols, sort, state)` | 부대 전체 대형 이동 명령 하달 | `PlayerController`, `Update` | [Squad.cs#L781-L844](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L781-L844) |
-| `CommandAttackSquad` | `void (Squad enemySquad)` | 지정 적 부대 타겟팅 및 포위 대형 쇄도 | `PlayerController` | [Squad.cs#L1386-L1426](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1386-L1426) |
-| `SyncTargetSquadIdToSimulations` | `void (int targetSquadId)` | Job System & Pure ECS에 targetId 동기화 | `CommandAttackSquad`, `Tracking` | [Squad.cs#L1428-L1438](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1428-L1438) |
-| `UpdateEnemyProjectionData` | `void (enemy, rot, center)` | 적 부대의 360도 투영 폭 및 접적면 계산 | `CommandAttackSquad`, `Tracking` | [Squad.cs#L1440-L1593](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1440-L1593) |
-| `UpdateTargetSquadTracking` | `void ()` | 공격 중인 적 부대 위치 추적 및 슬롯 갱신 | `Update` | [Squad.cs#L1708-L1812](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1708-L1812) |
-| `UpdateEnemySquadAI` | `void ()` | 적 부대의 정면 1:1 매칭 및 공격 의사결정 | `Update` | [Squad.cs#L1894-L2034](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1894-L2034) |
-| `CalculateEnvelopmentSlot` | `bool (r, c, cols, rows, out pos, ...)` | 전열 폭 비례 U자형 포위망 슬롯 산출 | `AssignFormationPositions` | [Squad.cs#L2409-L2496](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2409-L2496) |
-| `CalculateCurvedSlotOffset` | `Vector3 (r, c, cols, rows, type)` | 2차 곡선 대형 오프셋 계산 (u^2 * H) | `GetSlotLocalOffset` | [Squad.cs#L2503-L2600](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2503-L2600) |
-| `GetFrontLineCenter` | `Vector3 ()` | 부대 맨 앞열(전열)의 물리적 중심 좌표 반환 | `UpdateEnemyTracking` | [Squad.cs#L2621-L2648](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2621-L2648) |
-| `GetVisualCenter` | `Vector3 ()` | 생존 부대원 전체의 실제 평균 중심 좌표 | `PlayerController`, `AI` | [Squad.cs#L2650-L2679](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2650-L2679) |
+| `CalculateSlotLocalOffset` | `Vector3 (r, c, count, rows, cols)` | 열과 행에 따른 슬롯 상대 좌표 계산 | `RebuildGridStructure` | [Squad.cs#L216-L238](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L216-L238) |
+| `CalculateSlotWorldPosition` | `Vector3 (r, c, ..., center, rot)` | 중심점 및 회전각 기반 슬롯 월드 좌표 산출 | `AssignFormationPositions` | [Squad.cs#L240-L255](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L240-L255) |
+| `SetRunMode` | `void (bool run)` | 구보/제식보행 속도 전환 및 엔티티 동기화 | `PlayerController`, `R키` | [Squad.cs#L591-L608](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L591-L608) |
+| `SetFormationType` | `void (SquadFormationType type)` | 진형 형태(일자, 사각방진, 쐐기 등) 변경 | `CommandUI`, 단축키 | [Squad.cs#L674-L695](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L674-L695) |
+| `RebuildGridStructure` | `void (int targetCols, bool sort)` | 부대 열 수 변경에 따른 내부 대형 격자 재구축 | `PlayerController`, `Awake` | [Squad.cs#L697-L779](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L697-L779) |
+| `CommandMoveWithFormation` | `void (dest, rot, cols, sort, state)` | 부대 전체 대형 이동 명령 및 ECS TargetSquadId 주입 | `PlayerController`, `Update` | [Squad.cs#L880-L1050](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L880-L1050) |
+| `CommandAttackSquad` | `void (Squad enemySquad)` | 지정 적 부대 타겟팅 및 포위 대형 쇄도 | `PlayerController`, `AI` | [Squad.cs#L1454-L1500](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1454-L1500) |
+| `SyncTargetSquadIdToSimulations` | `void (int targetSquadId)` | Job System & Pure ECS(직접 주입 폴백) targetId 동기화 | `CommandAttackSquad`, `Tracking` | [Squad.cs#L1507-L1550](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1507-L1550) |
+| `UpdateEnemyProjectionData` | `void (enemy, rot, center)` | 적 부대의 360도 투영 폭 및 접적면 계산 | `CommandAttackSquad`, `Tracking` | [Squad.cs#L1552-L1700](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1552-L1700) |
+| `UpdateTargetSquadTracking` | `void ()` | 공격 중인 적 부대 위치 추적 및 슬롯 갱신 | `Update` | [Squad.cs#L1815-L1910](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1815-L1910) |
+| `GetSquadFormationRadius` | `float (margin)` | 현재 인원수/열 수 기반 안전 방진 반경 계산 | `CalculateDeconflictedSquadPosition` | [Squad.cs#L1923-L1942](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1923-L1942) |
+| `CalculateDeconflictedSquadPosition`| `Vector3 (baseCenter)` | 주변 부대들과 겹치지 않는 새 방진 중심 좌표 산출 | `ReformSquadAfterCombat` | [Squad.cs#L1947-L2010](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1947-L2010) |
+| `HasNoEnemiesNearby` | `bool (searchRadius)` | 50m 내 살아있는 적 부대/자유 유닛 부재 검사 | `UpdatePostCombatAutoReform` | [Squad.cs#L2015-L2075](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2015-L2075) |
+| `UpdatePostCombatAutoReform` | `void ()` | 교전 종료 및 적 부재 감지 시 1초 타이머 후 재정비 발동 | `Update` | [Squad.cs#L2077-L2150](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2077-L2150) |
+| `ReformSquadAfterCombat` | `void ()` | 겹침 없는 새 위치에 방진 재형성 및 완전 정지(Idle) | `UpdatePostCombatAutoReform`, `AI` | [Squad.cs#L2152-L2180](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2152-L2180) |
+| `UpdateEnemySquadAI` | `void ()` | 적 부대의 1:1 전선 매칭 및 목표 부대 영구 고수(Sticky Lock) | `Update` | [Squad.cs#L2253-L2395](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2253-L2395) |
+| `CalculateEnvelopmentSlot` | `bool (r, c, cols, rows, out pos, ...)` | 전열 폭 비례 U자형 포위망 슬롯 산출 | `AssignFormationPositions` | [Squad.cs#L2790-L2885](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2790-L2885) |
+| `CalculateCurvedSlotOffset` | `Vector3 (r, c, cols, rows, type)` | 2차 곡선 대형 오프셋 계산 | `GetSlotLocalOffset` | [Squad.cs#L2892-L2945](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2892-L2945) |
+| `GetFrontLineCenter` | `Vector3 ()` | 부대 맨 앞열(전열)의 물리적 중심 좌표 반환 | `UpdateEnemyTracking` | [Squad.cs#L3000-L3040](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3000-L3040) |
+| `GetVisualCenter` | `Vector3 ()` | 생존 부대원 전체의 실제 평균 중심 좌표 | `PlayerController`, `AI` | [Squad.cs#L3041-L3070](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3041-L3070) |
 
 ---
 

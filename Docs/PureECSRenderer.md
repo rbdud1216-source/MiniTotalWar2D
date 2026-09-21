@@ -48,7 +48,7 @@ flowchart LR
 ## 🛠️ 5. 핵심 알고리즘, 물리/전투 수학 공식 & 조작법 (Algorithms, Math & Controls)
 
 *   **GPU Instancing 병목 해소 (1023 Batching)**: `Graphics.DrawMeshInstanced`는 한 번의 Draw Call에 최대 1023개의 행렬(Matrix)만을 허용합니다. 따라서 수만 기의 엔티티를 렌더링하기 위해 `RenderBatches` 메서드에서 `Mathf.Min(1023, 남은 수)` 만큼 배열을 쪼개어(Slice) CPU->GPU 대역폭 병목을 최소화하며 전송합니다.
-*   **변환 행렬 구축 (Transformation Matrix)**: `Matrix4x4.TRS(pos, rot, unitScale)` 공식을 사용하여 각 엔티티의 Translation(이동), Rotation(회전), Scale(크기) 정보를 하나의 4x4 행렬로 압축합니다.
+*   **변환 행렬 구축 (Transformation Matrix) & 쿼터니언 정규화 방어**: `Matrix4x4.TRS(pos, rot, unitScale)` 공식을 사용하여 각 엔티티의 Translation(이동), Rotation(회전), Scale(크기) 정보를 하나의 4x4 행렬로 압축합니다. 이때 부동소수점 누적 오차로 인해 `rot`의 크기가 어긋나거나 유효하지 않은 값(NaN/0)이 입력될 경우 유니티 C++ 내부 `Internal_TRS` 검증 실패가 발생하는 것을 방지하기 위해, `rot`를 `math.normalize` 및 `quaternion.identity` fallback으로 안전하게 정규화하여 전달합니다.
 
 ## 🔗 6. 다른 스크립트와의 연동 관계 (Dependencies & Pipeline)
 
