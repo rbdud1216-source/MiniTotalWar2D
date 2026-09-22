@@ -55,3 +55,23 @@ flowchart TD
     D --> E[TransformAccessArray: Unit GameObject 좌표 자동 갱신]
     D --> F[체력 0 사망 감지 -> Unit.TakeDamage 호출 -> Squad.OnUnitDied 통보]
 ```
+
+---
+
+## ⚙️ 5. 주요 상태 변수 & 인스펙터 옵션 (Inspector Fields)
+
+| 변수명 | 타입 | 기본값 | 상세 역할 & 튜닝 가이드 |
+| :--- | :--- | :--- | :--- |
+| `maxHp` | `float` | `100f` | 유닛 최대 체력 |
+| `currentHp` | `float` | `100f` | 유닛 현재 실시간 체력 |
+| `damage` | `float` | `10f` | 일반 백병전 기본 공격력 |
+| `attackCooldown` | `float` | `1.0f` | 공격 주기(초) |
+| `attackRange` | `float` | `1.45f` | 유닛 공격 유효 사거리 (기본 보병 1.45m, 창병 2.5m+, 원거리 사격 등 인스펙터에서 자유 조절) |
+| `combatStoppingDistance` | `float` | `1.05f` | 교전(백병전) 시 발을 멈추고 제자리에서 공격하는 정지 거리 (기본 보병: 1.05m, 장창병: 4.0m+, 사격병: 12m+) |
+| `engagementOffset` | `float` | `0.40f` | 적을 향해 전진할 때 적 중심으로부터 유지할 목표 교전 간격 (기본 보병: 0.4m, 장창병: 3.5m+, 사격병: 10m+) |
+| `walkSpeed` | `float` | `1.2f` | 기본 제식 걷기 속도 |
+| `runSpeed` | `float` | `2.8f` | 전술 구보(달리기) 속도 |
+| `chargeSpeed` | `float` | `4.8f` | 돌격 가속 최대 속도 |
+| `mass` | `float` | `100f` | 유닛 질량(kg, 넉백 및 충격량 계산용) |
+| `chargeBonus` | `float` | `15f` | 돌격 충격 추가 데미지 계수 |
+| `maxChargeDamage` | `float` | `35f` | 첫 충돌 시 최대 돌격 데미지 한계치 |

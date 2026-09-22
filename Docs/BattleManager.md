@@ -33,11 +33,11 @@
 
 | 메서드 (Key) | 반환형 / 파라미터 | 핵심 역할 & 기능 요약 (Value) | 호출자 (Callers) | 소스 줄 번호 (Line Range) |
 | :--- | :--- | :--- | :--- | :--- |
-| `UnregisterSquad` | `void (Squad squad)` | 부대 전멸/해체 시 전체 목록에서 제거 | `Squad.OnDestroy` | [BattleManager.cs#L90-L96](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L90-L96) |
-| `SpawnBattleScenario` | `void ()` | 인스펙터 설정에 따른 전장 군단 생성 & 렌더러/브릿지 보장 | `Start()` | [BattleManager.cs#L122-L148](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L122-L148) |
-| `OrderEnemiesToAttack` | `void ()` | 아군/적군 부대 X좌표 정렬 기반 1:1 정면 돌격 명령 하달 | `SpawnBattleScenario` | [BattleManager.cs#L150-L200](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L150-L200) |
-| `SpawnArmy` | `void (isPlayer, configs, center, angle)` | 진영별 다중 부대 및 병사 스폰 & 듀얼 모드 분기 | `SpawnBattleScenario` | [BattleManager.cs#L202-L440](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L202-L440) |
-| `ResetAllUnitsPhysics` | `void ()` | 전장 모든 유닛의 물리 속도 초기화 | 디버그 / UI | [BattleManager.cs#L450-L480](file:///A:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L450-L480) |
+| `UnregisterSquad` | `void (Squad squad)` | 부대 전멸/해체 시 전체 목록에서 제거 | `Squad.OnDestroy` | [BattleManager.cs#L90-L96](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L90-L96) |
+| `SpawnBattleScenario` | `void ()` | 인스펙터 설정에 따른 전장 군단 생성 & 렌더러/브릿지 보장 | `Start()` | [BattleManager.cs#L122-L148](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L122-L148) |
+| `OrderEnemiesToAttack` | `void ()` | 아군/적군 부대 X좌표 정렬 기반 1:1 정면 돌격 명령 하달 | `SpawnBattleScenario` | [BattleManager.cs#L150-L200](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L150-L200) |
+| `SpawnArmy` | `void (isPlayer, configs, center, angle)` | 진영별 다중 부대 및 병사 스폰 & 듀얼 모드 분기 (순수 ECS 프리팹 수치 1:1 주입) | `SpawnBattleScenario` | [BattleManager.cs#L202-L440](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L202-L440) |
+| `ResetAllUnitsPhysics` | `void ()` | 전장 모든 유닛의 물리 속도 초기화 | 디버그 / UI | [BattleManager.cs#L450-L480](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/BattleManager.cs#L450-L480) |
 
 ---
 

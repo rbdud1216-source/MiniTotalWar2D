@@ -336,6 +336,22 @@ public class BattleManager : MonoBehaviour
                     typeof(SpatialGridCell)
                 );
 
+                // 🎯 [프리팹 설정 1:1 동적 반영]: 인스펙터에서 조절한 유닛 능력치를 순수 ECS에도 100% 동일하게 전달
+                Unit prefabUnit = prefabToSpawn.GetComponent<Unit>();
+                float defaultMaxHp = (prefabUnit != null && prefabUnit.maxHp > 0f) ? prefabUnit.maxHp : 100f;
+                float defaultDamage = (prefabUnit != null && prefabUnit.damage > 0f) ? prefabUnit.damage : 10f;
+                float defaultCooldown = (prefabUnit != null && prefabUnit.attackCooldown > 0f) ? prefabUnit.attackCooldown : 1.0f;
+                float defaultDetectRange = (prefabUnit != null && prefabUnit.detectRange > 0f) ? prefabUnit.detectRange : 5.0f;
+                float defaultMass = (prefabUnit != null && prefabUnit.mass > 0f) ? prefabUnit.mass : 100f;
+                float defaultChargeSpeed = (prefabUnit != null && prefabUnit.chargeSpeed > 0f) ? prefabUnit.chargeSpeed : 4.8f;
+                float defaultChargeBonus = (prefabUnit != null && prefabUnit.chargeBonus > 0f) ? prefabUnit.chargeBonus : 15f;
+                float defaultMaxChargeDamage = (prefabUnit != null && prefabUnit.maxChargeDamage > 0f) ? prefabUnit.maxChargeDamage : 35f;
+                float defaultAttackRange = (prefabUnit != null && prefabUnit.attackRange > 0.1f) ? prefabUnit.attackRange : 1.45f;
+                float defaultStoppingDist = (prefabUnit != null && prefabUnit.combatStoppingDistance > 0.1f) ? prefabUnit.combatStoppingDistance : 1.05f;
+                float defaultEngageOffset = (prefabUnit != null && prefabUnit.engagementOffset > 0.05f) ? prefabUnit.engagementOffset : 0.40f;
+                float defaultMoveSpeed = squad.targetSpeed > 0 ? squad.targetSpeed : ((prefabUnit != null && prefabUnit.walkSpeed > 0f) ? prefabUnit.walkSpeed : 1.0f);
+                int defaultAutoAttack = (prefabUnit != null && !prefabUnit.autoAttackEnabled) ? 0 : 1;
+
                 for (int i = 0; i < unitCount; i++)
                 {
                     var slot = (i < spawnSlots.Count) ? spawnSlots[i] : default;
@@ -362,7 +378,7 @@ public class BattleManager : MonoBehaviour
                         Velocity = float3.zero,
                         TargetPosition = spawnPos,
                         TargetRotation = spawnRotation,
-                        MoveSpeed = squad.targetSpeed > 0 ? squad.targetSpeed : 1.0f,
+                        MoveSpeed = defaultMoveSpeed,
                         CurrentSpeed = 0f,
                         Acceleration = 5.5f,
                         StoppingDistance = 0.2f,
@@ -372,23 +388,25 @@ public class BattleManager : MonoBehaviour
 
                     em.SetComponentData(entity, new UnitCombatData
                     {
-                        CurrentHp = 100f,
-                        MaxHp = 100f,
-                        Damage = 10f,
-                        AttackCooldown = 1.0f,
+                        CurrentHp = defaultMaxHp,
+                        MaxHp = defaultMaxHp,
+                        Damage = defaultDamage,
+                        AttackCooldown = defaultCooldown,
                         LastAttackTime = -100f,
-                        DetectRange = 5.0f,
-                        AttackRange = 0.8f,
+                        DetectRange = defaultDetectRange,
+                        AttackRange = defaultAttackRange,
+                        CombatStoppingDistance = defaultStoppingDist,
+                        EngagementOffset = defaultEngageOffset,
                         CurrentState = 0,
                         TargetEntity = Entity.Null,
                         KnockbackVelocity = float3.zero,
-                        Mass = 100f,
-                        ChargeSpeed = 4.8f,
-                        ChargeBonus = 15f,
-                        MaxChargeDamage = 35f,
+                        Mass = defaultMass,
+                        ChargeSpeed = defaultChargeSpeed,
+                        ChargeBonus = defaultChargeBonus,
+                        MaxChargeDamage = defaultMaxChargeDamage,
                         ChargeImpactReady = 1,
                         EngagementStartTime = 0f,
-                        AutoAttackEnabled = 1,
+                        AutoAttackEnabled = defaultAutoAttack,
                         TargetSquadId = -1,
                         CachedEnemyPos = float3.zero,
                         TargetSearchTimer = (float)(i % 10) * 0.01f

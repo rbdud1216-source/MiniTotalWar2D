@@ -28,6 +28,8 @@ public struct UnitJobData
     public float stoppingDistance;
     public float detectRange;
     public float attackRange;
+    public float combatStoppingDistance; // 교전(백병전) 시 발을 멈추는 정지 거리 (m)
+    public float engagementOffset;       // 적을 향해 접근할 때 적 중심으로부터의 목표 교전 간격/위치 (m)
     public float personalRadius;
     public float engagementStartTime; // 교전 개시 시점
     public float freeCombatDuration;   // 자유교전 전환 타이머 (20초 +- 10초)
@@ -224,6 +226,9 @@ public class UnitJobSimulationManager : MonoBehaviour
                 oldData.isAlive = (u.currentHp > 0) ? 1 : 0;
                 oldData.currentHp = u.currentHp;
                 oldData.isFreeUnit = (u.mySquad == null) ? 1 : 0;
+                oldData.attackRange = (u.attackRange > 0.1f) ? u.attackRange : 1.45f;
+                oldData.combatStoppingDistance = (u.combatStoppingDistance > 0.1f) ? u.combatStoppingDistance : 1.05f;
+                oldData.engagementOffset = (u.engagementOffset > 0.05f) ? u.engagementOffset : 0.40f;
                 if (u.FixedTargetPos != Vector3.zero)
                 {
                     oldData.targetPosition = u.FixedTargetPos;
@@ -259,7 +264,9 @@ public class UnitJobSimulationManager : MonoBehaviour
                     acceleration = defaultAccel,
                     stoppingDistance = 0.2f,
                     detectRange = u.detectRange,
-                    attackRange = 0.8f,
+                    attackRange = (u.attackRange > 0.1f) ? u.attackRange : 1.45f,
+                    combatStoppingDistance = (u.combatStoppingDistance > 0.1f) ? u.combatStoppingDistance : 1.05f,
+                    engagementOffset = (u.engagementOffset > 0.05f) ? u.engagementOffset : 0.40f,
                     personalRadius = (u.mySquad == null) ? 1.15f : 1.00f,
                     engagementStartTime = 0f,
                     freeCombatDuration = Random.Range(2f, 8f),
@@ -698,8 +705,8 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                     isCharging = false;
                     isCombatRunning = false;
 
-                    // ⚔️ 지나가면서 사거리(1.45m) 내 적은 즉시 반격!
-                    if (distToEnemy <= 1.45f && currentTime >= data.lastAttackTime + data.attackCooldown)
+                    // ⚔️ 지나가면서 사거리 내 적은 즉시 반격!
+                    if (distToEnemy <= data.attackRange && currentTime >= data.lastAttackTime + data.attackCooldown)
                     {
                         data.lastAttackTime = currentTime;
                         float finalDamage = data.damage;
@@ -716,12 +723,12 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                 // 🛡️ [B. V 비활성화: 접촉 방어 모드]
                 else if (data.autoAttackEnabled == 0)
                 {
-                    bool isInMeleeContact = (distToEnemy <= 1.45f);
+                    bool isInMeleeContact = (distToEnemy <= data.attackRange);
                     if (isInMeleeContact)
                     {
                         data.currentState = 3; // MeleeEngaged
                         Vector3 toEnemy = (enemyPos - currentPos).normalized;
-                        targetDest = enemyPos - (toEnemy * 0.40f);
+                        targetDest = enemyPos - (toEnemy * data.engagementOffset);
                         isCharging = false;
                     }
                     else
@@ -740,7 +747,7 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                     if (data.isFreeUnit == 1)
                     {
                         Vector3 toEnemy = (enemyPos - currentPos).normalized;
-                        targetDest = enemyPos - (toEnemy * 0.70f);
+                        targetDest = enemyPos - (toEnemy * Mathf.Max(0.70f, data.engagementOffset));
 
                         if (distToEnemy <= 12.0f)
                         {
@@ -766,7 +773,7 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                             // 🦅 유저 요청 완벽 반영: 전투 시 억지로 대형(targetPosition)을 유지하려 들지 않고, 
                             // 완벽히 대형을 풀고 각자 가장 가까운 목표 부대원(enemyPos)에게 돌격!
                             Vector3 toEnemy = (enemyPos - currentPos).normalized;
-                            targetDest = enemyPos - (toEnemy * 0.40f);
+                            targetDest = enemyPos - (toEnemy * data.engagementOffset);
 
                             // 💥 공격 명령 시 전속력 돌격/추격
                             isCharging = true;
@@ -778,7 +785,7 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                             if (distToEnemy <= 12.0f && data.autoAttackEnabled == 1)
                             {
                                 Vector3 toEnemy = (enemyPos - currentPos).normalized;
-                                targetDest = enemyPos - (toEnemy * 0.40f);
+                                targetDest = enemyPos - (toEnemy * data.engagementOffset);
                                 isCharging = true;
                                 isCombatRunning = false;
                             }
@@ -799,7 +806,7 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                 }
 
                 // [A] 직접 칼이 닿는 유효 타격 사거리 판정
-                bool isInMelee = (distToEnemy <= 1.45f);
+                bool isInMelee = (distToEnemy <= data.attackRange);
                 if (isInMelee)
                 {
                     if (data.currentState != 1) data.currentState = 3; // MeleeEngaged
@@ -809,8 +816,8 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                     data.currentState = (data.autoAttackEnabled == 0) ? 1 : 2; // Hold vs AttackMove
                 }
 
-                // ⚔️ [일반 공격 판정]: 사거리(1.45m) 내 적 공격! (currentState != 1일 때)
-                if (data.currentState != 1 && distToEnemy <= 1.45f && currentTime >= data.lastAttackTime + data.attackCooldown)
+                // ⚔️ [일반 공격 판정]: 사거리 내 적 공격! (currentState != 1일 때)
+                if (data.currentState != 1 && distToEnemy <= data.attackRange && currentTime >= data.lastAttackTime + data.attackCooldown)
                 {
                     data.lastAttackTime = currentTime;
 
@@ -902,8 +909,8 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
             float baseSpeed = isCharging ? data.chargeSpeed : (isCombatRunning ? Mathf.Max(combatRunSpd, data.moveSpeed) : data.moveSpeed);
             float maxDesiredSpeed = baseSpeed * turnFactor;
 
-            // 🗡️ 백병전 중(칼 사거리 1.30m 이내)에는 발을 딛고 칼싸움 (미끄러짐 및 관통 방지)
-            if (distToEnemy <= 1.30f && data.currentState == 3)
+            // 🗡️ 백병전 중(정지 거리 combatStoppingDistance 이내)에는 발을 딛고 칼싸움 (미끄러짐 및 관통 방지)
+            if (distToEnemy <= data.combatStoppingDistance && data.currentState == 3)
             {
                 maxDesiredSpeed = 0f;
             }

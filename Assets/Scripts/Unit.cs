@@ -5,27 +5,69 @@ using UnityEngine.AI;
 public class Unit : MonoBehaviour
 {
     [Header("유닛 기본 설정")]
+    [Tooltip("플레이어 진영 여부 (체크 시 아군 Player, 해제 시 적군 Enemy)")]
     public bool isPlayer = false;
+
+    [Tooltip("유닛 최대 체력 (기본: 100)")]
     public float maxHp = 100f;
-    public float currentHp;
+
+    [Tooltip("유닛 실시간 현재 체력 (게임 시작 시 최대 체력으로 자동 초기화)")]
+    public float currentHp = 100f;
+
+    [Tooltip("일반 백병전 1회 타격 공격력")]
     public float damage = 10f;
+
+    [Tooltip("공격 쿨다운 주기 (초 단위, 수치가 작을수록 빠르게 공격)")]
     public float attackCooldown = 1.0f;
+
+    [Tooltip("공격 유효 사거리 (미터 단위, 기본 보병: 1.45m, 장창병: 2.5m+, 사격 유닛 확장 가능)")]
+    public float attackRange = 1.45f;
+
+    [Tooltip("교전(백병전) 시 발을 멈추고 제자리에서 공격하는 정지 거리 (m 단위, 기본 보병: 1.05m, 장창병: 4.0m+, 사격병: 12m+)")]
+    public float combatStoppingDistance = 1.05f;
+
+    [Tooltip("적을 향해 이동할 때 적 중심으로부터 유지할 목표 교전 간격/위치 (m 단위, 기본 보병: 0.4m, 장창병: 3.5m+, 사격병: 10m+)")]
+    public float engagementOffset = 0.40f;
+
+    [Tooltip("달리기(구보) 모드 활성화 여부")]
     public bool isRunning = false;
-    public float walkSpeed = 1.2f;   // 자유 유닛 기본 걷기 속도 (A안: 1.2m/s, 4.32km/h)
-    public float runSpeed = 2.8f;    // 자유 유닛 기본 달리기 속도 (A안: 2.8m/s, 10.08km/h)
-    public float chargeSpeed = 4.8f; // 돌격 속도 (4.8m/s, 17.28km/h)
+
+    [Tooltip("제식 걷기 속도 (m/s, 기본: 1.2m/s)")]
+    public float walkSpeed = 1.2f;
+
+    [Tooltip("전술 구보 달리기 속도 (m/s, 기본: 2.8m/s)")]
+    public float runSpeed = 2.8f;
+
+    [Tooltip("적을 향해 쇄도하는 돌격 이동 속도 (m/s, 기본: 4.8m/s)")]
+    public float chargeSpeed = 4.8f;
+
+    [Tooltip("물리 충격/가속 시 유닛의 한계 최고 속도 제한 (m/s, 기본: 5.5m/s)")]
     public float unitMaxSpeed = 5.5f;
 
     [Header("돌격 및 물리 충격 설정")]
-    public float mass = 100f;              // 유닛 질량/무게 (kg)
-    public float chargeBonus = 15f;         // 돌격 보너스 계수
-    public float maxChargeDamage = 35f;     // 첫 충돌 시 최대 데미지 한계치
+    [Tooltip("유닛 질량/무게 (kg 단위, 충돌 시 상대방을 밀쳐내는 넉백 거리 및 저항력에 영향)")]
+    public float mass = 100f;
+
+    [Tooltip("돌격 속도로 첫 충돌 시 기본 공격력에 추가되는 충격량 피해 계수")]
+    public float chargeBonus = 15f;
+
+    [Tooltip("돌격 첫 충돌 시 가해질 수 있는 최대 피해량 상한선")]
+    public float maxChargeDamage = 35f;
 
     [Header("지휘 및 상태 설정")]
+    [Tooltip("플레이어 마우스 선택 여부")]
     public bool isSelected = false;
+
+    [Tooltip("유닛 현재 명령 상태 (Idle: 대기, Move: 이동, AttackMove: 공격이동, MeleeEngaged: 백병전)")]
     public UnitCommandState currentState = UnitCommandState.Idle;
+
+    [Tooltip("유닛 전술 태세 (Aggressive: 공세, Defensive: 방어)")]
     public UnitStance currentStance = UnitStance.Aggressive;
+
+    [Tooltip("선제 돌격 요격 활성화 여부 (V키 토글, 해제 시 제자리 방어선 사수 반격)")]
     public bool autoAttackEnabled = true;
+
+    [Tooltip("자유 유닛 상태에서 주변 적을 탐지하는 시야 반경 (미터 단위)")]
     public float detectRange = 5.0f;
 
     public int Row { get; set; } = -1;
@@ -33,14 +75,20 @@ public class Unit : MonoBehaviour
     public int simulationIndex { get; set; } = -1;
 
     [Header("개별 복귀 설정")]
+    [Tooltip("대형 슬롯 위치에서 몇 미터 이상 벗어났을 때 복귀 카운트다운을 시작할지 결정하는 허용 오차")]
     [SerializeField] private float reformThreshold = 0.5f;
+
+    [Tooltip("대형에서 벗어난 뒤 복귀 기동을 시작하기까지의 대기 시간 (초 단위)")]
     [SerializeField] private float reformDelay = 2.0f;
     private float reformTimer = 0f;
     private bool isOutOfFormation = false;
     private bool isReturningToFormation = false;
 
     [Header("겹침 방지 (Separation) 설정")]
+    [Tooltip("유닛 간 물리적 겹침을 방지하기 위한 개인 방어 반경 (미터 단위)")]
     [SerializeField] private float separationRadius = 0.45f;
+
+    [Tooltip("유닛끼리 겹쳤을 때 서로를 밀어내는 물리 척력의 세기")]
     [SerializeField] private float separationForce = 1.2f;
     private static readonly Collider[] separationBuffer = new Collider[16];
 
@@ -132,6 +180,9 @@ public class Unit : MonoBehaviour
         if (chargeSpeed < 4.0f) chargeSpeed = 4.8f;
         if (runSpeed < 2.0f) runSpeed = 2.8f;
         if (walkSpeed < 1.0f) walkSpeed = 1.2f;
+        if (attackRange <= 0.1f) attackRange = 1.45f;
+        if (combatStoppingDistance <= 0.1f) combatStoppingDistance = 1.05f;
+        if (engagementOffset <= 0.05f) engagementOffset = 0.40f;
     }
 
     private void Start()

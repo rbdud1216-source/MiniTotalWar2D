@@ -47,6 +47,8 @@ namespace MiniTotalWar.ECS
         public float LastAttackTime;
         public float DetectRange;
         public float AttackRange;
+        public float CombatStoppingDistance; // 교전(백병전) 시 발을 멈추는 정지 거리 (m)
+        public float EngagementOffset;       // 적을 향해 접근할 때 적 중심으로부터의 목표 교전 간격/위치 (m)
         public int CurrentState;          // 0 = Idle, 1 = Move, 2 = AttackMove, 3 = MeleeEngaged
         public Entity TargetEntity;       // 현재 타겟팅된 적 엔티티 (Entity.Null = 없음) - 1.45m 내 근접 교전 중인 고정(Lock-on) 타겟용
         public Entity RadarTargetEntity;  // 시야(DetectRange) 내 가장 가까운 적 레이더 감지용 타겟 (UnitTargetSearchSystem 전용)

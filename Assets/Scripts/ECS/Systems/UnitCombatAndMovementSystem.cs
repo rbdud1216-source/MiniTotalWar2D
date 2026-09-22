@@ -141,6 +141,9 @@ namespace MiniTotalWar.ECS
             bool foundEnemy = false;
             Entity closestEnemyEntity = Entity.Null;
             float minEnemyDistSqr = 4000000f;
+            float effectiveAttackRange = (combat.AttackRange > 0.1f) ? combat.AttackRange : 1.45f;
+            float effectiveStoppingDist = (combat.CombatStoppingDistance > 0.1f) ? combat.CombatStoppingDistance : 1.05f;
+            float effectiveOffset = (combat.EngagementOffset > 0.05f) ? combat.EngagementOffset : 0.40f;
 
             bool isFreeUnit = (tag.IsFreeUnit == 1 || tag.SquadId == -1);
             int closestEnemyIsFreeUnit = 0;
@@ -317,12 +320,12 @@ namespace MiniTotalWar.ECS
                 // 🚨 주의: 부대가 이미 돌격/교전 중(CurrentState >= 2)이라면 후열 병사도 전방 지원을 위해 분기 C로 이동!
                 else if (combat.AutoAttackEnabled == 0 && tag.Faction != 0 && combat.CurrentState < 2)
                 {
-                    bool isInMeleeContact = (distToEnemy <= 1.45f);
+                    bool isInMeleeContact = (distToEnemy <= effectiveAttackRange);
                     if (isInMeleeContact)
                     {
                         combat.CurrentState = 3; // MeleeEngaged
                         float3 toEnemy = (math.lengthsq(diffToEnemy) > 0.001f) ? math.normalize(diffToEnemy) : new float3(0, 0, 1);
-                        targetDest = enemyPos - (toEnemy * 0.40f);
+                        targetDest = enemyPos - (toEnemy * effectiveOffset);
                         isCharging = false;
                         isCombatRunning = false;
                     }
@@ -341,7 +344,7 @@ namespace MiniTotalWar.ECS
                     if (isFreeUnit)
                     {
                         float3 toEnemy = (math.lengthsq(diffToEnemy) > 0.001f) ? math.normalize(diffToEnemy) : new float3(0, 0, 1);
-                        targetDest = enemyPos - (toEnemy * 0.70f);
+                        targetDest = enemyPos - (toEnemy * math.max(0.70f, effectiveOffset));
 
                         if (distToEnemy <= 12.0f)
                         {
@@ -370,7 +373,7 @@ namespace MiniTotalWar.ECS
                             // 💥 [1단계: 접촉 전 돌격 (부대원 전원 비교전 상태)]
                             // 적과 실제로 충돌하기 전까지는 대형 슬롯(movement.TargetPosition)을 유지하며 방진을 짠 채 일제히 전진 돌격!
                             // (원거리에서 개별 적에게 쏠려 사선으로 달리는 현상을 원천 방지하고 대형 유지)
-                            if (!isSquadEngaged && distToEnemy > 2.5f && combat.CurrentState != 3)
+                            if (!isSquadEngaged && distToEnemy > math.max(2.5f, effectiveAttackRange) && combat.CurrentState != 3)
                             {
                                 targetDest = movement.TargetPosition;
                                 isCharging = true;
@@ -382,7 +385,7 @@ namespace MiniTotalWar.ECS
                             else
                             {
                                 float3 toEnemy = (math.lengthsq(diffToEnemy) > 0.001f) ? math.normalize(diffToEnemy) : new float3(0, 0, 1);
-                                targetDest = enemyPos - (toEnemy * 0.40f);
+                                targetDest = enemyPos - (toEnemy * effectiveOffset);
                                 isCharging = true;
                                 isCombatRunning = false;
                             }
@@ -390,11 +393,11 @@ namespace MiniTotalWar.ECS
                         else
                         {
                             // 🛡️ [부대 조기 이탈 방지] 부대 지휘관의 일제 돌격 명령이 떨어지기 전(대기/이동 중)에는
-                            // 외곽 병사가 12m 밖으로 혼자 뛰어나가지 않고, 근접 접촉(1.45m) 시에만 반격하며 대형을 유지합니다!
-                            if (distToEnemy <= 1.45f && combat.AutoAttackEnabled == 1)
+                            // 외곽 병사가 12m 밖으로 혼자 뛰어나가지 않고, 근접 접촉 시에만 반격하며 대형을 유지합니다!
+                            if (distToEnemy <= effectiveAttackRange && combat.AutoAttackEnabled == 1)
                             {
                                 float3 toEnemy = (math.lengthsq(diffToEnemy) > 0.001f) ? math.normalize(diffToEnemy) : new float3(0, 0, 1);
-                                targetDest = enemyPos - (toEnemy * 0.40f);
+                                targetDest = enemyPos - (toEnemy * effectiveOffset);
                                 isCharging = false;
                                 isCombatRunning = false;
                             }
@@ -413,14 +416,14 @@ namespace MiniTotalWar.ECS
                     combat.ChargeImpactReady = 1;
                 }
 
-                // 🎯 [중간에 닿은 다른 적(사거리 1.85m 이내) 우선 타격 판정]:
+                // 🎯 [중간에 닿은 다른 적(사거리 이내) 우선 타격 판정]:
                 // 목표 부대를 추격하며 달려가는 도중, 몸이 닿는 다른 적 부대나 자유 유닛이 있으면 즉시 타격!
                 Entity meleeTargetEntity = closestEnemyEntity;
                 meleeTargetDist = distToEnemy;
                 float3 meleePushDir = diffToEnemy;
 
-                int meleeSearchCells = 1;
-                float localMeleeMinSqr = 3.42f; // 1.85m
+                int meleeSearchCells = math.max(1, (int)math.ceil(effectiveAttackRange * InvCellSize));
+                float localMeleeMinSqr = effectiveAttackRange * effectiveAttackRange;
                 int myMeleeCellHash = SpatialHashGridSystem.GetCellHash(currentPos, InvCellSize);
                 int3 myMeleeCoord = new int3((int)math.floor(currentPos.x * InvCellSize), 0, (int)math.floor(currentPos.z * InvCellSize));
 
@@ -456,8 +459,8 @@ namespace MiniTotalWar.ECS
                     }
                 }
 
-                // [A] 직접 칼이 닿는 유효 타격 사거리 판정 (1.85m)
-                bool isInMelee = (meleeTargetDist <= 1.85f);
+                // [A] 직접 칼이 닿는 유효 타격 사거리 판정
+                bool isInMelee = (meleeTargetDist <= effectiveAttackRange);
                 if (isInMelee)
                 {
                     if (combat.CurrentState != 1) combat.CurrentState = 3; // 💥 유저 이동 명령(Move=1)이 아닐 때만 MeleeEngaged로 전환!
@@ -467,9 +470,9 @@ namespace MiniTotalWar.ECS
                     combat.CurrentState = (combat.AutoAttackEnabled == 0) ? 1 : 2;
                 }
 
-                // ⚔️ [백병전 타격 판정]: 사거리(1.85m) 내 적이 있고 공격 쿨다운 만족 시 타격 이벤트 Enqueue!
-                // 접촉 방어 모드, 제자리 사수 반격, 돌격 교전, 스루 어택 모두 1.85m 내 적에게 정상 타격 적용
-                if (meleeTargetDist <= 1.85f && CurrentTime >= combat.LastAttackTime + combat.AttackCooldown)
+                // ⚔️ [백병전 타격 판정]: 사거리 내 적이 있고 공격 쿨다운 만족 시 타격 이벤트 Enqueue!
+                // 접촉 방어 모드, 제자리 사수 반격, 돌격 교전, 스루 어택 모두 사거리 내 적에게 정상 타격 적용
+                if (meleeTargetDist <= effectiveAttackRange && CurrentTime >= combat.LastAttackTime + combat.AttackCooldown)
                 {
                     combat.LastAttackTime = CurrentTime;
 
@@ -484,7 +487,8 @@ namespace MiniTotalWar.ECS
                     {
                         float speedRatio = movement.CurrentSpeed / math.max(0.1f, combat.ChargeSpeed);
                         float impactBonus = combat.ChargeBonus * speedRatio * massRatio;
-                        finalDamage = math.min(combat.Damage + impactBonus, 35f);
+                        float maxChargeLimit = (combat.MaxChargeDamage > 0f) ? combat.MaxChargeDamage : 35f;
+                        finalDamage = math.min(combat.Damage + impactBonus, maxChargeLimit);
                         combat.ChargeImpactReady = 0;
 
                         float knockbackSpeed = 4.5f * speedRatio * massRatio;
@@ -533,11 +537,11 @@ namespace MiniTotalWar.ECS
             float baseSpeed = isCharging ? combat.ChargeSpeed : (isCombatRunning ? math.max(combatRunSpd, movement.MoveSpeed) : movement.MoveSpeed);
             float maxDesiredSpeed = baseSpeed;
 
-            // 🗡️ 백병전 초근접(1.05m 이내)에서는 발을 딛고 칼싸움 (미끄러짐 및 스루 어택 방지)
+            // 🗡️ 백병전 정지 거리(effectiveStoppingDist 이내)에서는 발을 딛고 교전 (미끄러짐 및 스루 어택 방지)
             // 🚨 [옆 부대 적 접촉 시 정지 트랩 방지]:
             // 주 목표 부대가 지정되어 있다면(TargetSquadId != -1), 해당 목표 부대와의 거리(distToEnemy)가 유효할 때에만 제자리에 섭니다.
             // 옆 부대원과 우연히 몸이 스치더라도(meleeTargetDist), 자신의 목표를 향해 멈추지 않고 계속 전진합니다!
-            bool isMeleeStopped = (distToEnemy <= 1.05f) || (meleeTargetDist <= 1.35f && (combat.TargetSquadId == -1 || distToEnemy <= 2.2f));
+            bool isMeleeStopped = (distToEnemy <= effectiveStoppingDist) || (meleeTargetDist <= effectiveStoppingDist * 1.25f && (combat.TargetSquadId == -1 || distToEnemy <= effectiveStoppingDist * 1.8f));
             if (isMeleeStopped && combat.CurrentState == 3)
             {
                 maxDesiredSpeed = 0f;
@@ -611,7 +615,7 @@ namespace MiniTotalWar.ECS
             // 6. 회전 갱신 (5도 불감대 및 초당 180도 부드러운 회전)
             float3 lookDir = float3.zero;
 
-            if (foundEnemy && distToEnemy <= 8.0f && (combat.CurrentState == 3 || distToEnemy <= 1.45f))
+            if (foundEnemy && distToEnemy <= 8.0f && (combat.CurrentState == 3 || distToEnemy <= effectiveAttackRange))
             {
                 lookDir = enemyPos - movement.Position;
                 lookDir.y = 0f;

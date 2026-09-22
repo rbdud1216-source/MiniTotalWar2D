@@ -53,12 +53,16 @@ MonoBehaviour:
   maxHp: 100
   currentHp: 0
   damage: 10
-  attackCooldown: 1
+  attackCooldown: 2
+  attackRange: 1.45
   isRunning: 0
   walkSpeed: 1.2
   runSpeed: 2.8
   chargeSpeed: 4.8
   unitMaxSpeed: 5.5
+  mass: 100
+  chargeBonus: 15
+  maxChargeDamage: 35
   isSelected: 0
   currentState: 0
   currentStance: 0
