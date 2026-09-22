@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -37,7 +37,16 @@ public class Squad : MonoBehaviour
     public List<Unit> members = new List<Unit>();
     public int initialUnitCount = 0;
     public int currentAliveCount = 0;
-    public int MemberCount => (members != null && members.Count > 0) ? members.Count : ((currentAliveCount > 0) ? currentAliveCount : initialUnitCount);
+    [System.NonSerialized] public bool hasEcsInitialized = false;
+    public int MemberCount
+    {
+        get
+        {
+            if (members != null && members.Count > 0) return members.Count;
+            if (hasEcsInitialized) return currentAliveCount;
+            return (currentAliveCount > 0) ? currentAliveCount : initialUnitCount;
+        }
+    }
     public bool isRunning = false;
     public float walkSpeed = 1.0f;   // 부대 제식 걷기 속도 (C안: 1.0m/s, 3.6km/h)
     public float runSpeed = 2.4f;    // 부대 전술 구보 속도 (C안: 2.4m/s, 8.64km/h)
@@ -83,7 +92,7 @@ public class Squad : MonoBehaviour
 
     public float maxRotationSpeed = 360f;
     private Quaternion targetSquadRotation;
-    public UnitCommandState currentCommandState = UnitCommandState.Move;
+    public UnitCommandState currentCommandState = UnitCommandState.Idle;
     public UnitStance currentStance = UnitStance.Aggressive;
     public bool autoAttackEnabled = true;
 
@@ -196,6 +205,7 @@ public class Squad : MonoBehaviour
         if (members.Count == 0) return;
 
         if (initialUnitCount <= 0) initialUnitCount = members.Count;
+        currentAliveCount = members.Count;
 
         Vector3 sum = Vector3.zero;
         for (int i = 0; i < members.Count; i++)
@@ -208,6 +218,8 @@ public class Squad : MonoBehaviour
         transform.position = center;
         moveDestination = center;
         targetSquadRotation = transform.rotation;
+        currentCommandState = UnitCommandState.Idle;
+        isMoving = false;
 
         RebuildGridStructure(currentColumns, forceSpatialSort: true);
     }
@@ -1977,7 +1989,7 @@ public class Squad : MonoBehaviour
         // 아군(Player)이고, 요격 모드가 켜져 있으며, 현재 단순 이동 중이 아닐 때 작동
         if (!isPlayer || MemberCount <= 0 || !autoAttackEnabled) return;
         if (isMoving && currentCommandState != UnitCommandState.AttackMove) return;
-        if (currentTargetSquad != null) return; // 이미 목표가 지정되어 공격 중이면 통과
+        if (currentCommandState == UnitCommandState.AttackMove) return; // 이미 공격/돌격 명령 수행 중이면 통과
 
         autoAttackCheckTimer += Time.deltaTime;
         if (autoAttackCheckTimer < 0.25f) return;
@@ -2006,10 +2018,14 @@ public class Squad : MonoBehaviour
                 float dist = toEnemy.magnitude;
                 float dot = (dist > 0.001f) ? Vector3.Dot(myFwd, toEnemy / dist) : 1f;
 
-                // 🎯 방진 정면 22m 이내 또는 중심 기준 30m 이내에 적 접근 시, 시선 정면(dot > 0.15f) 적 부대 우선 요격
-                if (dot > 0.15f && (frontDist <= 22.0f || dist <= 30.0f))
+                // 🎯 방진 정면 22m 이내, 중심 기준 30m 이내, 또는 초근접 12m 이내 접근 시 우선 요격
+                bool isFrontApproach = dot > 0.15f && (frontDist <= 22.0f || dist <= 30.0f);
+                bool isCloseApproach = dist <= 12.0f;
+
+                if (isFrontApproach || isCloseApproach)
                 {
                     float score = (dot * 50f) - dist;
+                    if (enemySquad == currentTargetSquad) score += 25f; // 이미 조준 중인 전방 적 우선
                     if (score > bestScore)
                     {
                         bestScore = score;
@@ -2174,6 +2190,7 @@ public class Squad : MonoBehaviour
                 int squadId = GetInstanceID();
                 if (MiniTotalWar.ECS.SpatialHashGridSystem.TryGetSquadAggregateData(squadId, out Unity.Mathematics.float3 center, out int count, out int _))
                 {
+                    hasEcsInitialized = true;
                     currentAliveCount = count;
 
                     if (count > 0)
@@ -2186,18 +2203,21 @@ public class Squad : MonoBehaviour
                         if (isMoving && Vector3.Distance(vCenter, moveDestination) <= 0.25f)
                         {
                             isMoving = false;
+                            currentCommandState = UnitCommandState.Idle;
                             AutoAcquireFrontEnemyTarget();
                         }
                     }
                     else
                     {
-                        if (BattleManager.Instance != null)
-                        {
-                            BattleManager.Instance.UnregisterSquad(this);
-                        }
-                        DestroySquadObject();
+                        HandleSquadWipedOut();
                         return;
                     }
+                }
+                else if (hasEcsInitialized)
+                {
+                    // 🛡️ ECS 집계가 이미 활성화된 후 부대 ID가 해시맵에서 누락되었다면 생존 인원 0명(전멸) 확정
+                    HandleSquadWipedOut();
+                    return;
                 }
 
                 // 목표 적 부대가 전멸했거나 파괴되었는지 검사
@@ -2212,11 +2232,7 @@ public class Squad : MonoBehaviour
                 return;
             }
 
-            if (BattleManager.Instance != null)
-            {
-                BattleManager.Instance.UnregisterSquad(this);
-            }
-            DestroySquadObject();
+            HandleSquadWipedOut();
             return;
         }
 
@@ -2414,6 +2430,7 @@ public class Squad : MonoBehaviour
             {
                 hasAlignedThisArrival = true;
                 isMoving = false;
+                currentCommandState = UnitCommandState.Idle;
                 transform.position = moveDestination;
                 transform.rotation = targetSquadRotation;
                 AutoAcquireFrontEnemyTarget();
@@ -2480,7 +2497,7 @@ public class Squad : MonoBehaviour
 
         if (members.Count == 0)
         {
-            DestroySquadObject();
+            HandleSquadWipedOut();
             return;
         }
 
@@ -2723,7 +2740,7 @@ public class Squad : MonoBehaviour
     public List<(Vector3 position, Quaternion rotation)> GetPreviewSlotTransforms(Vector3 destination, Quaternion rotation, int columns)
     {
         List<(Vector3, Quaternion)> list = new List<(Vector3, Quaternion)>();
-        int count = (members != null && members.Count > 0) ? members.Count : ((currentAliveCount > 0) ? currentAliveCount : initialUnitCount);
+        int count = MemberCount;
         if (count <= 0) return list;
 
         int cols = Mathf.Clamp(columns, 1, count);
@@ -2743,7 +2760,7 @@ public class Squad : MonoBehaviour
     public List<Vector3> GetCurvedPreviewSlotPositions(Vector3 destination, Quaternion rotation, int columns, float curvatureHeight)
     {
         List<Vector3> positions = new List<Vector3>();
-        int count = (members != null && members.Count > 0) ? members.Count : ((currentAliveCount > 0) ? currentAliveCount : initialUnitCount);
+        int count = MemberCount;
         if (count <= 0) return positions;
 
         int cols = Mathf.Clamp(columns, 1, count);
@@ -2931,6 +2948,19 @@ public class Squad : MonoBehaviour
         DestroySquadObject();
     }
 
+    /// <summary>
+    /// 부대원 전멸 시 인원수를 0으로 확정하고 매니저 등록 해제 및 부대 오브젝트 파괴를 일괄 수행합니다.
+    /// </summary>
+    public void HandleSquadWipedOut()
+    {
+        currentAliveCount = 0;
+        if (BattleManager.Instance != null)
+        {
+            BattleManager.Instance.UnregisterSquad(this);
+        }
+        DestroySquadObject();
+    }
+
     private void DestroySquadObject()
     {
         Destroy(gameObject);
@@ -2952,7 +2982,7 @@ public class Squad : MonoBehaviour
         }
 
         List<Vector3> previewSlots = new List<Vector3>();
-        int memberCount = (members != null && members.Count > 0) ? members.Count : ((currentAliveCount > 0) ? currentAliveCount : initialUnitCount);
+        int memberCount = MemberCount;
         if (memberCount <= 0) return previewSlots;
 
         int cols = Mathf.Clamp(columns, 1, memberCount);

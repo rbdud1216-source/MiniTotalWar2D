@@ -85,7 +85,7 @@ namespace MiniTotalWar.ECS
                         Squad squad = squads[s];
                         if (squad == null) continue;
 
-                        if (squad.currentCommandState != UnitCommandState.AttackMove && squad.currentCommandState != UnitCommandState.Move)
+                        if (squad.autoAttackEnabled && squad.currentCommandState != UnitCommandState.AttackMove && squad.currentCommandState != UnitCommandState.Move)
                         {
                             int mySquadId = squad.GetInstanceID();
                             if (SpatialHashGridSystem.TryGetSquadAggregateData(mySquadId, out _, out _, out int meleeEngagedCount))

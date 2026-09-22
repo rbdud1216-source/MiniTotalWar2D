@@ -365,6 +365,7 @@ public class PlayerController : MonoBehaviour
                                 Squad newSquad = battleManager.SpawnSquad(true, 0, centerPos);
                                 int newSquadId = newSquad.GetInstanceID();
                                 newSquad.initialUnitCount = validCount;
+                                newSquad.currentAliveCount = validCount;
 
                                 for (int i = 0; i < selectedECSEntities.Count; i++)
                                 {

@@ -403,6 +403,7 @@ public class BattleManager : MonoBehaviour
             }
 
             squad.initialUnitCount = unitCount;
+            squad.currentAliveCount = unitCount;
             allSquads.Add(squad);
 
             if (isPlayer && SquadCardUIManager.Instance != null)
@@ -444,6 +445,7 @@ public class BattleManager : MonoBehaviour
         }
 
         squad.initialUnitCount = squad.members.Count;
+        squad.currentAliveCount = squad.members.Count;
         squad.RebuildGridStructure(cols, forceSpatialSort: false);
         allSquads.Add(squad);
 
