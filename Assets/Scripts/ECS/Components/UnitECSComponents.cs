@@ -47,6 +47,16 @@ namespace MiniTotalWar.ECS
         public float LastAttackTime;
         public float DetectRange;
         public float AttackRange;
+        public float MinAttackRange;           // 주무기 최소 사거리 (m, 0이면 제한 없음)
+        public float OptimalRangeMin;          // 주무기 최적 사거리 최소 기준거리 (m, 0이면 감쇠 없음)
+        public float CloseRangeDamageRatio;    // 최적 사거리 미만 피해량 비율 (0.1 ~ 1.0)
+        public float KnockbackPower;           // 주무기 넉백 세기 배율 (기본: 1.0)
+        public int UseSidearm;                 // 1 = 보조무기(단검) 자동 전환 활성, 0 = 비활성
+        public float SidearmSwitchDistance;    // 보조무기 전환 기준 거리 (m)
+        public float SidearmAttackRange;       // 보조무기 공격 사거리 (m)
+        public float SidearmDamage;            // 보조무기 공격력
+        public float SidearmAttackCooldown;    // 보조무기 공격 쿨다운 (초)
+        public float SidearmKnockbackPower;    // 보조무기 넉백 세기 배율 (기본: 0.1)
         public float CombatStoppingDistance; // 교전(백병전) 시 발을 멈추는 정지 거리 (m)
         public float EngagementOffset;       // 적을 향해 접근할 때 적 중심으로부터의 목표 교전 간격/위치 (m)
         public int CurrentState;          // 0 = Idle, 1 = Move, 2 = AttackMove, 3 = MeleeEngaged

@@ -347,6 +347,16 @@ public class BattleManager : MonoBehaviour
                 float defaultChargeBonus = (prefabUnit != null && prefabUnit.chargeBonus > 0f) ? prefabUnit.chargeBonus : 15f;
                 float defaultMaxChargeDamage = (prefabUnit != null && prefabUnit.maxChargeDamage > 0f) ? prefabUnit.maxChargeDamage : 35f;
                 float defaultAttackRange = (prefabUnit != null && prefabUnit.attackRange > 0.1f) ? prefabUnit.attackRange : 1.45f;
+                float defaultMinAttackRange = (prefabUnit != null) ? prefabUnit.minAttackRange : 0f;
+                float defaultOptimalRangeMin = (prefabUnit != null) ? prefabUnit.optimalRangeMin : 0f;
+                float defaultCloseRangeDamageRatio = (prefabUnit != null && prefabUnit.closeRangeDamageRatio > 0.05f) ? prefabUnit.closeRangeDamageRatio : 1.0f;
+                float defaultKnockbackPower = (prefabUnit != null && prefabUnit.knockbackPower > 0f) ? prefabUnit.knockbackPower : 1.0f;
+                int defaultUseSidearm = (prefabUnit != null && prefabUnit.useSidearm) ? 1 : 0;
+                float defaultSidearmSwitchDist = (prefabUnit != null && prefabUnit.sidearmSwitchDistance > 0.1f) ? prefabUnit.sidearmSwitchDistance : 1.2f;
+                float defaultSidearmAttackRange = (prefabUnit != null && prefabUnit.sidearmAttackRange > 0.1f) ? prefabUnit.sidearmAttackRange : 1.0f;
+                float defaultSidearmDamage = (prefabUnit != null && prefabUnit.sidearmDamage > 0f) ? prefabUnit.sidearmDamage : 4.0f;
+                float defaultSidearmCooldown = (prefabUnit != null && prefabUnit.sidearmAttackCooldown > 0.05f) ? prefabUnit.sidearmAttackCooldown : 0.8f;
+                float defaultSidearmKnockbackPower = (prefabUnit != null) ? prefabUnit.sidearmKnockbackPower : 0.1f;
                 float defaultStoppingDist = (prefabUnit != null && prefabUnit.combatStoppingDistance > 0.1f) ? prefabUnit.combatStoppingDistance : 1.05f;
                 float defaultEngageOffset = (prefabUnit != null && prefabUnit.engagementOffset > 0.05f) ? prefabUnit.engagementOffset : 0.40f;
                 float defaultMoveSpeed = squad.targetSpeed > 0 ? squad.targetSpeed : ((prefabUnit != null && prefabUnit.walkSpeed > 0f) ? prefabUnit.walkSpeed : 1.0f);
@@ -395,6 +405,16 @@ public class BattleManager : MonoBehaviour
                         LastAttackTime = -100f,
                         DetectRange = defaultDetectRange,
                         AttackRange = defaultAttackRange,
+                        MinAttackRange = defaultMinAttackRange,
+                        OptimalRangeMin = defaultOptimalRangeMin,
+                        CloseRangeDamageRatio = defaultCloseRangeDamageRatio,
+                        KnockbackPower = defaultKnockbackPower,
+                        UseSidearm = defaultUseSidearm,
+                        SidearmSwitchDistance = defaultSidearmSwitchDist,
+                        SidearmAttackRange = defaultSidearmAttackRange,
+                        SidearmDamage = defaultSidearmDamage,
+                        SidearmAttackCooldown = defaultSidearmCooldown,
+                        SidearmKnockbackPower = defaultSidearmKnockbackPower,
                         CombatStoppingDistance = defaultStoppingDist,
                         EngagementOffset = defaultEngageOffset,
                         CurrentState = 0,

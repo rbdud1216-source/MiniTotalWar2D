@@ -28,6 +28,16 @@ public struct UnitJobData
     public float stoppingDistance;
     public float detectRange;
     public float attackRange;
+    public float minAttackRange;
+    public float optimalRangeMin;
+    public float closeRangeDamageRatio;
+    public float knockbackPower;
+    public int useSidearm;
+    public float sidearmSwitchDistance;
+    public float sidearmAttackRange;
+    public float sidearmDamage;
+    public float sidearmAttackCooldown;
+    public float sidearmKnockbackPower;
     public float combatStoppingDistance; // 교전(백병전) 시 발을 멈추는 정지 거리 (m)
     public float engagementOffset;       // 적을 향해 접근할 때 적 중심으로부터의 목표 교전 간격/위치 (m)
     public float personalRadius;
@@ -227,6 +237,16 @@ public class UnitJobSimulationManager : MonoBehaviour
                 oldData.currentHp = u.currentHp;
                 oldData.isFreeUnit = (u.mySquad == null) ? 1 : 0;
                 oldData.attackRange = (u.attackRange > 0.1f) ? u.attackRange : 1.45f;
+                oldData.minAttackRange = u.minAttackRange;
+                oldData.optimalRangeMin = u.optimalRangeMin;
+                oldData.closeRangeDamageRatio = (u.closeRangeDamageRatio > 0.05f) ? u.closeRangeDamageRatio : 1.0f;
+                oldData.knockbackPower = (u.knockbackPower > 0f) ? u.knockbackPower : 1.0f;
+                oldData.useSidearm = u.useSidearm ? 1 : 0;
+                oldData.sidearmSwitchDistance = (u.sidearmSwitchDistance > 0.1f) ? u.sidearmSwitchDistance : 1.2f;
+                oldData.sidearmAttackRange = (u.sidearmAttackRange > 0.1f) ? u.sidearmAttackRange : 1.0f;
+                oldData.sidearmDamage = (u.sidearmDamage > 0f) ? u.sidearmDamage : 4.0f;
+                oldData.sidearmAttackCooldown = (u.sidearmAttackCooldown > 0.05f) ? u.sidearmAttackCooldown : 0.8f;
+                oldData.sidearmKnockbackPower = u.sidearmKnockbackPower;
                 oldData.combatStoppingDistance = (u.combatStoppingDistance > 0.1f) ? u.combatStoppingDistance : 1.05f;
                 oldData.engagementOffset = (u.engagementOffset > 0.05f) ? u.engagementOffset : 0.40f;
                 if (u.FixedTargetPos != Vector3.zero)
@@ -265,6 +285,16 @@ public class UnitJobSimulationManager : MonoBehaviour
                     stoppingDistance = 0.2f,
                     detectRange = u.detectRange,
                     attackRange = (u.attackRange > 0.1f) ? u.attackRange : 1.45f,
+                    minAttackRange = u.minAttackRange,
+                    optimalRangeMin = u.optimalRangeMin,
+                    closeRangeDamageRatio = (u.closeRangeDamageRatio > 0.05f) ? u.closeRangeDamageRatio : 1.0f,
+                    knockbackPower = (u.knockbackPower > 0f) ? u.knockbackPower : 1.0f,
+                    useSidearm = u.useSidearm ? 1 : 0,
+                    sidearmSwitchDistance = (u.sidearmSwitchDistance > 0.1f) ? u.sidearmSwitchDistance : 1.2f,
+                    sidearmAttackRange = (u.sidearmAttackRange > 0.1f) ? u.sidearmAttackRange : 1.0f,
+                    sidearmDamage = (u.sidearmDamage > 0f) ? u.sidearmDamage : 4.0f,
+                    sidearmAttackCooldown = (u.sidearmAttackCooldown > 0.05f) ? u.sidearmAttackCooldown : 0.8f,
+                    sidearmKnockbackPower = u.sidearmKnockbackPower,
                     combatStoppingDistance = (u.combatStoppingDistance > 0.1f) ? u.combatStoppingDistance : 1.05f,
                     engagementOffset = (u.engagementOffset > 0.05f) ? u.engagementOffset : 0.40f,
                     personalRadius = (u.mySquad == null) ? 1.15f : 1.00f,
@@ -733,7 +763,7 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                     }
                     else
                     {
-                        if (data.currentState == 3) data.currentState = 1; // Hold
+                        if (data.currentState == 3) data.currentState = 0; // Hold (제자리 대기)
                         targetDest = data.targetPosition;
                         isCharging = false;
                     }
@@ -805,47 +835,86 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                     data.chargeImpactReady = 1;
                 }
 
-                // [A] 직접 칼이 닿는 유효 타격 사거리 판정
-                bool isInMelee = (distToEnemy <= data.attackRange);
+                // [A] 직접 칼/창이 닿는 유효 타격 사거리 판정
+                bool isSidearmActive = (data.useSidearm == 1 && distToEnemy <= data.sidearmSwitchDistance);
+                float effectiveMeleeRange = isSidearmActive ? data.sidearmAttackRange : data.attackRange;
+
+                bool isInMelee = (distToEnemy <= effectiveMeleeRange);
                 if (isInMelee)
                 {
-                    if (data.currentState != 1) data.currentState = 3; // MeleeEngaged
+                    data.currentState = 3; // MeleeEngaged
                 }
                 else if (data.currentState == 3)
                 {
-                    data.currentState = (data.autoAttackEnabled == 0) ? 1 : 2; // Hold vs AttackMove
+                    data.currentState = (data.autoAttackEnabled == 0) ? 0 : 2; // Hold(Idle) vs AttackMove
                 }
 
-                // ⚔️ [일반 공격 판정]: 사거리 내 적 공격! (currentState != 1일 때)
-                if (data.currentState != 1 && distToEnemy <= data.attackRange && currentTime >= data.lastAttackTime + data.attackCooldown)
+                // ⚔️ [백병전 타격 판정]: 적이 근접 사거리 내에 있거나 교전 중일 때 타격!
+                if (isInMelee || data.currentState == 3)
                 {
-                    data.lastAttackTime = currentTime;
-
-                    float finalDamage = data.damage;
-                    Vector3 pushDir = (enemyPos - currentPos).normalized;
-                    if (pushDir.sqrMagnitude < 0.001f) pushDir = transform.rotation * Vector3.forward;
-
-                    float massRatio = data.mass / Mathf.Max(10f, enemyData.mass);
-
-                    if (data.chargeImpactReady == 1 && data.currentSpeed > 0.5f)
+                    if (isSidearmActive)
                     {
-                        float speedRatio = data.currentSpeed / Mathf.Max(0.1f, data.chargeSpeed);
-                        float impactBonus = data.chargeBonus * speedRatio * (data.mass / 100f);
+                        // 🗡️ [보조무기(단검) 공격]: 품 안으로 파고든 적에게 단검 타격
+                        if (distToEnemy <= data.sidearmAttackRange && currentTime >= data.lastAttackTime + data.sidearmAttackCooldown)
+                        {
+                            data.lastAttackTime = currentTime;
 
-                        finalDamage = Mathf.Min(data.damage + impactBonus, data.maxChargeDamage);
-                        data.chargeImpactReady = 0;
+                            float finalDamage = data.sidearmDamage;
+                            Vector3 pushDir = (enemyPos - currentPos).normalized;
+                            if (pushDir.sqrMagnitude < 0.001f) pushDir = transform.rotation * Vector3.forward;
 
-                        float knockbackSpeed = 4.5f * speedRatio * massRatio;
-                        enemyData.knockbackVelocity += pushDir * knockbackSpeed;
+                            float massRatio = data.mass / Mathf.Max(10f, enemyData.mass);
+                            float microKnockbackSpeed = 1.3f * massRatio * data.sidearmKnockbackPower;
+                            enemyData.knockbackVelocity += pushDir * microKnockbackSpeed;
+
+                            enemyData.currentHp -= finalDamage;
+                            unitData[targetIdx] = enemyData;
+                        }
                     }
                     else
                     {
-                        float microKnockbackSpeed = 1.3f * massRatio;
-                        enemyData.knockbackVelocity += pushDir * microKnockbackSpeed;
-                    }
+                        // ⚔️ [주무기 공격]: 최소 사거리 검사 및 스위트스팟 거리별 감쇠 계산
+                        bool isInsideMinRange = (data.minAttackRange > 0.05f && distToEnemy < data.minAttackRange);
+                        if (distToEnemy <= data.attackRange && currentTime >= data.lastAttackTime + data.attackCooldown)
+                        {
+                            data.lastAttackTime = currentTime;
 
-                    enemyData.currentHp -= finalDamage;
-                    unitData[targetIdx] = enemyData;
+                            float finalDamage = data.damage;
+
+                            // 🎯 최소 사거리 미만(초밀착)이거나 최적 사거리 미만 시 데미지 감쇠 적용 (보조무기가 꺼져있어도 창자루 밀치기로 반격 가능)
+                            if (isInsideMinRange || (data.optimalRangeMin > 0.05f && distToEnemy < data.optimalRangeMin))
+                            {
+                                finalDamage *= data.closeRangeDamageRatio;
+                            }
+
+                            Vector3 pushDir = (enemyPos - currentPos).normalized;
+                            if (pushDir.sqrMagnitude < 0.001f) pushDir = transform.rotation * Vector3.forward;
+
+                            float massRatio = data.mass / Mathf.Max(10f, enemyData.mass);
+                            // 🛡️ [창벽 버티기 저지력 (Bracing)]: 달려오는 적의 속도에 비례해 반동 넉백 추가
+                            float braceBonus = (enemyData.currentSpeed > 0.5f) ? (enemyData.currentSpeed / Mathf.Max(0.1f, enemyData.chargeSpeed)) * 2.0f : 0f;
+
+                            if (data.chargeImpactReady == 1 && data.currentSpeed > 0.5f)
+                            {
+                                float speedRatio = data.currentSpeed / Mathf.Max(0.1f, data.chargeSpeed);
+                                float impactBonus = data.chargeBonus * speedRatio * (data.mass / 100f);
+
+                                finalDamage = Mathf.Min(finalDamage + impactBonus, data.maxChargeDamage);
+                                data.chargeImpactReady = 0;
+
+                                float knockbackSpeed = (4.5f * speedRatio * massRatio + braceBonus) * data.knockbackPower;
+                                enemyData.knockbackVelocity += pushDir * knockbackSpeed;
+                            }
+                            else
+                            {
+                                float microKnockbackSpeed = (1.3f * massRatio + braceBonus) * data.knockbackPower;
+                                enemyData.knockbackVelocity += pushDir * microKnockbackSpeed;
+                            }
+
+                            enemyData.currentHp -= finalDamage;
+                            unitData[targetIdx] = enemyData;
+                        }
+                    }
                 }
             }
             else

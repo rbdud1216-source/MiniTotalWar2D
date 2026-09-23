@@ -54,7 +54,19 @@ MonoBehaviour:
   currentHp: 0
   damage: 10
   attackCooldown: 2
-  attackRange: 1.45
+  attackRange: 5
+  minAttackRange: 1.2
+  optimalRangeMin: 1.8
+  closeRangeDamageRatio: 0.35
+  knockbackPower: 1
+  useSidearm: 0
+  sidearmSwitchDistance: 1.2
+  sidearmAttackRange: 1
+  sidearmDamage: 4
+  sidearmAttackCooldown: 0.8
+  sidearmKnockbackPower: 0.1
+  combatStoppingDistance: 4
+  engagementOffset: 3.5
   isRunning: 0
   walkSpeed: 1.2
   runSpeed: 2.8

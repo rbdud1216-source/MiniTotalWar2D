@@ -14,6 +14,18 @@ public class UnitEditor : Editor
     private SerializedProperty damage;
     private SerializedProperty attackCooldown;
     private SerializedProperty attackRange;
+    private SerializedProperty minAttackRange;
+    private SerializedProperty optimalRangeMin;
+    private SerializedProperty closeRangeDamageRatio;
+    private SerializedProperty knockbackPower;
+
+    private SerializedProperty useSidearm;
+    private SerializedProperty sidearmSwitchDistance;
+    private SerializedProperty sidearmAttackRange;
+    private SerializedProperty sidearmDamage;
+    private SerializedProperty sidearmAttackCooldown;
+    private SerializedProperty sidearmKnockbackPower;
+
     private SerializedProperty combatStoppingDistance;
     private SerializedProperty engagementOffset;
     private SerializedProperty isRunning;
@@ -48,6 +60,18 @@ public class UnitEditor : Editor
         damage = serializedObject.FindProperty("damage");
         attackCooldown = serializedObject.FindProperty("attackCooldown");
         attackRange = serializedObject.FindProperty("attackRange");
+        minAttackRange = serializedObject.FindProperty("minAttackRange");
+        optimalRangeMin = serializedObject.FindProperty("optimalRangeMin");
+        closeRangeDamageRatio = serializedObject.FindProperty("closeRangeDamageRatio");
+        knockbackPower = serializedObject.FindProperty("knockbackPower");
+
+        useSidearm = serializedObject.FindProperty("useSidearm");
+        sidearmSwitchDistance = serializedObject.FindProperty("sidearmSwitchDistance");
+        sidearmAttackRange = serializedObject.FindProperty("sidearmAttackRange");
+        sidearmDamage = serializedObject.FindProperty("sidearmDamage");
+        sidearmAttackCooldown = serializedObject.FindProperty("sidearmAttackCooldown");
+        sidearmKnockbackPower = serializedObject.FindProperty("sidearmKnockbackPower");
+
         combatStoppingDistance = serializedObject.FindProperty("combatStoppingDistance");
         engagementOffset = serializedObject.FindProperty("engagementOffset");
         isRunning = serializedObject.FindProperty("isRunning");
@@ -91,14 +115,47 @@ public class UnitEditor : Editor
             EditorGUILayout.PropertyField(damage, new GUIContent("기본 공격력 (Damage)", "일반 백병전 근접 공격 시 1회당 입히는 피해량입니다."));
         if (attackCooldown != null)
             EditorGUILayout.PropertyField(attackCooldown, new GUIContent("공격 주기 (Attack Cooldown)", "다음 공격까지의 대기 시간(초)입니다. 수치가 낮을수록 더 자주 공격합니다."));
-        if (attackRange != null)
-            EditorGUILayout.PropertyField(attackRange, new GUIContent("공격 사거리 (Attack Range)", "유닛이 적을 타격할 수 있는 유효 사거리(미터)입니다. (기본 보병: 1.45m, 장창병: 2.5m+, 사격 유닛 등)"));
-        if (combatStoppingDistance != null)
-            EditorGUILayout.PropertyField(combatStoppingDistance, new GUIContent("교전 정지 거리 (Stopping Dist)", "적과 교전(백병전) 시 완전히 발을 멈추고 제자리에서 공격하는 거리(m)입니다. (기본 보병: 1.05m, 장창병: 4.0m+, 사격병: 12m+)"));
-        if (engagementOffset != null)
-            EditorGUILayout.PropertyField(engagementOffset, new GUIContent("교전 목표 간격 (Engage Offset)", "적을 향해 이동할 때 적의 중심으로부터 유지할 목표 교전 간격(m)입니다. (기본 보병: 0.4m, 장창병: 3.5m+, 사격병: 10m+)"));
 
-        EditorGUILayout.Space(4);
+        EditorGUILayout.Space(6);
+
+        // 2. 주무기 및 교전 사거리 설정
+        EditorGUILayout.LabelField("주무기 및 교전 사거리 설정", EditorStyles.boldLabel);
+        if (attackRange != null)
+            EditorGUILayout.PropertyField(attackRange, new GUIContent("공격 사거리 (Attack Range)", "유닛이 적을 타격할 수 있는 유효 사거리(m)입니다. (검병 권장: 1.45m, 장창병 권장: 3.0m)"));
+        if (minAttackRange != null)
+            EditorGUILayout.PropertyField(minAttackRange, new GUIContent("최소 사거리 (Min Attack Range)", "주무기 최소 사거리(m)입니다. 이보다 가까운 적은 주무기로 공격할 수 없습니다. 0이면 사각지대 없음. (검병: 0m, 장창병: 1.2m~1.5m 권장)"));
+        if (optimalRangeMin != null)
+            EditorGUILayout.PropertyField(optimalRangeMin, new GUIContent("최적 사거리 기준 (Optimal Min)", "주무기 최적 사거리(스위트스팟) 최소 기준거리(m)입니다. 이 거리 이상에서 100% 정상 피해를 줍니다. (검병: 0m, 장창병: 1.8m 권장)"));
+        if (closeRangeDamageRatio != null)
+            EditorGUILayout.PropertyField(closeRangeDamageRatio, new GUIContent("근접 피해 감쇠 비율 (Close Falloff)", "최적 사거리 미만(품 안)으로 파고든 적에게 가하는 주무기 피해량 비율(0.1~1.0)입니다. (검병: 1.0=감쇠 없음, 장창병: 0.35 권장)"));
+        if (knockbackPower != null)
+            EditorGUILayout.PropertyField(knockbackPower, new GUIContent("주무기 넉백 배율 (Knockback Power)", "타격 시 적을 밀쳐내는 넉백 세기 배율입니다. (검병: 1.0, 장창병: 2.0~2.5 권장)"));
+        if (combatStoppingDistance != null)
+            EditorGUILayout.PropertyField(combatStoppingDistance, new GUIContent("교전 정지 거리 (Stopping Dist)", "적과 교전(백병전) 시 완전히 발을 멈추고 제자리에서 공격하는 거리(m)입니다. (검병: 1.05m, 장창병: 2.5~3.0m)"));
+        if (engagementOffset != null)
+            EditorGUILayout.PropertyField(engagementOffset, new GUIContent("교전 목표 간격 (Engage Offset)", "적을 향해 이동할 때 적의 중심으로부터 유지할 목표 교전 간격(m)입니다. (검병: 0.4m, 장창병: 2.0~2.5m)"));
+
+        EditorGUILayout.Space(6);
+
+        // 3. 보조무기 (단검 / Sidearm) 설정
+        EditorGUILayout.LabelField("보조무기 (단검 / Sidearm) 설정", EditorStyles.boldLabel);
+        if (useSidearm != null)
+            EditorGUILayout.PropertyField(useSidearm, new GUIContent("보조무기 자동 전환 (Use Sidearm)", "적이 일정 거리 이내로 밀착 시 단검으로 자동 전환할지 여부입니다. (검병: 체크 해제, 장창병: 체크 권장)"));
+        if (sidearmSwitchDistance != null)
+            EditorGUILayout.PropertyField(sidearmSwitchDistance, new GUIContent("단검 전환 거리 (Switch Dist)", "단검으로 무기를 전환하는 적과의 거리 기준(m)입니다. (장창병: 1.2m 권장)"));
+        if (sidearmAttackRange != null)
+            EditorGUILayout.PropertyField(sidearmAttackRange, new GUIContent("단검 공격 사거리 (Attack Range)", "단검의 유효 타격 사거리(m)입니다. (단검 권장: 1.0m)"));
+        if (sidearmDamage != null)
+            EditorGUILayout.PropertyField(sidearmDamage, new GUIContent("단검 공격력 (Damage)", "단검 1회 타격 피해량입니다. (장창병 단검: 3.5~4.0 권장)"));
+        if (sidearmAttackCooldown != null)
+            EditorGUILayout.PropertyField(sidearmAttackCooldown, new GUIContent("단검 공격 주기 (Cooldown)", "단검 공격 쿨다운(초)입니다. (단검 연타 권장: 0.8s)"));
+        if (sidearmKnockbackPower != null)
+            EditorGUILayout.PropertyField(sidearmKnockbackPower, new GUIContent("단검 넉백 배율 (Knockback)", "단검 타격 시 적을 밀쳐내는 넉백 배율입니다. 단검은 밀치는 힘이 거의 없으므로 0.1 권장."));
+
+        EditorGUILayout.Space(6);
+
+        // 4. 기동 및 속도 설정
+        EditorGUILayout.LabelField("기동 및 속도 설정", EditorStyles.boldLabel);
         if (isRunning != null)
             EditorGUILayout.PropertyField(isRunning, new GUIContent("달리기 모드 여부", "현재 구보(달리기) 상태인지 여부입니다."));
         if (walkSpeed != null)

@@ -23,6 +23,38 @@ public class Unit : MonoBehaviour
     [Tooltip("공격 유효 사거리 (미터 단위, 기본 보병: 1.45m, 장창병: 2.5m+, 사격 유닛 확장 가능)")]
     public float attackRange = 1.45f;
 
+    [Tooltip("주무기 최소 사거리 (m 단위, 0이면 최소사거리 제한 없음. 검병 세팅: 0m, 장창병 세팅: 1.2m~1.5m 권장)")]
+    public float minAttackRange = 0f;
+
+    [Tooltip("주무기 최적 사거리(스위트스팟) 최소 기준거리 (m 단위, 이 거리 이상에서 100% 정상 데미지 적용. 0이면 거리 감쇠 없음. 검병 세팅: 0m, 장창병 세팅: 1.8m~2.0m 권장)")]
+    public float optimalRangeMin = 0f;
+
+    [Tooltip("최적 사거리 미만(품 안)으로 파고든 적에게 가하는 주무기 피해량 비율 (0.1 ~ 1.0, 1.0=감쇠 없음. 검병 세팅: 1.0, 장창병 세팅: 0.35 권장)")]
+    [Range(0.1f, 1.0f)]
+    public float closeRangeDamageRatio = 1.0f;
+
+    [Tooltip("주무기 타격 및 백병전 시 적을 밀쳐내는 넉백 세기 배율 (기본: 1.0, 검병 세팅: 1.0, 장창병 세팅: 2.0~2.5 권장)")]
+    public float knockbackPower = 1.0f;
+
+    [Header("보조무기 (단검 / Sidearm) 설정")]
+    [Tooltip("적이 일정 거리 이내로 밀착 시 보조무기(단검 등)로 자동 전환 여부 (검병 세팅: 체크 해제, 장창병 세팅: 체크 권장)")]
+    public bool useSidearm = false;
+
+    [Tooltip("보조무기(단검)로 전환하는 적과의 거리 기준 (m 단위, 검병 세팅: 무관, 장창병 세팅: 1.2m 권장)")]
+    public float sidearmSwitchDistance = 1.2f;
+
+    [Tooltip("보조무기 유효 공격 사거리 (m 단위, 검병 세팅: 무관, 장창병 단검: 1.0m 권장)")]
+    public float sidearmAttackRange = 1.0f;
+
+    [Tooltip("보조무기 1회 타격 공격력 (검병 세팅: 무관, 장창병 단검: 3.5f~4.0f 권장)")]
+    public float sidearmDamage = 4.0f;
+
+    [Tooltip("보조무기 공격 쿨다운 주기 (초 단위, 빠를수록 연타. 장창병 단검: 0.8s 권장)")]
+    public float sidearmAttackCooldown = 0.8f;
+
+    [Tooltip("보조무기 타격 시 적을 밀쳐내는 넉백 배율 (단검 등은 밀치는 힘이 매우 작음. 기본: 0.1 권장)")]
+    public float sidearmKnockbackPower = 0.1f;
+
     [Tooltip("교전(백병전) 시 발을 멈추고 제자리에서 공격하는 정지 거리 (m 단위, 기본 보병: 1.05m, 장창병: 4.0m+, 사격병: 12m+)")]
     public float combatStoppingDistance = 1.05f;
 
@@ -643,10 +675,30 @@ public class Unit : MonoBehaviour
                 }
             }
 
-            if (Time.time >= lastAttackTime + attackCooldown)
+            float distToEnemy = Vector3.Distance(transform.position, otherSoldier.transform.position);
+            bool isSidearmActive = (useSidearm && distToEnemy <= sidearmSwitchDistance);
+
+            if (isSidearmActive)
             {
-                otherSoldier.TakeDamage(damage);
-                lastAttackTime = Time.time;
+                if (distToEnemy <= sidearmAttackRange && Time.time >= lastAttackTime + sidearmAttackCooldown)
+                {
+                    otherSoldier.TakeDamage(sidearmDamage);
+                    lastAttackTime = Time.time;
+                }
+            }
+            else
+            {
+                bool isInsideMinRange = (minAttackRange > 0.05f && distToEnemy < minAttackRange);
+                if (!isInsideMinRange && distToEnemy <= attackRange && Time.time >= lastAttackTime + attackCooldown)
+                {
+                    float finalDamage = damage;
+                    if (optimalRangeMin > 0.05f && distToEnemy < optimalRangeMin)
+                    {
+                        finalDamage *= closeRangeDamageRatio;
+                    }
+                    otherSoldier.TakeDamage(finalDamage);
+                    lastAttackTime = Time.time;
+                }
             }
         }
     }

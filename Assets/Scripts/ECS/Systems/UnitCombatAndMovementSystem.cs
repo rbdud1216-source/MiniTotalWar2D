@@ -331,7 +331,7 @@ namespace MiniTotalWar.ECS
                     }
                     else
                     {
-                        if (combat.CurrentState == 3) combat.CurrentState = 1; // 대형 복귀
+                        if (combat.CurrentState == 3) combat.CurrentState = 0; // 대형 복귀 (제자리 대기)
                         targetDest = movement.TargetPosition;
                         isCharging = false;
                         isCombatRunning = false;
@@ -459,57 +459,100 @@ namespace MiniTotalWar.ECS
                     }
                 }
 
-                // [A] 직접 칼이 닿는 유효 타격 사거리 판정
-                bool isInMelee = (meleeTargetDist <= effectiveAttackRange);
+                // [A] 직접 칼/창이 닿는 유효 타격 사거리 판정
+                bool isSidearmActive = (combat.UseSidearm == 1 && meleeTargetDist <= combat.SidearmSwitchDistance);
+                float effectiveMeleeRange = isSidearmActive ? combat.SidearmAttackRange : effectiveAttackRange;
+
+                bool isInMelee = (meleeTargetDist <= effectiveMeleeRange);
                 if (isInMelee)
                 {
-                    if (combat.CurrentState != 1) combat.CurrentState = 3; // 💥 유저 이동 명령(Move=1)이 아닐 때만 MeleeEngaged로 전환!
+                    combat.CurrentState = 3; // MeleeEngaged
                 }
                 else if (combat.CurrentState == 3)
                 {
-                    combat.CurrentState = (combat.AutoAttackEnabled == 0) ? 1 : 2;
+                    combat.CurrentState = (combat.AutoAttackEnabled == 0) ? 0 : 2;
                 }
 
-                // ⚔️ [백병전 타격 판정]: 사거리 내 적이 있고 공격 쿨다운 만족 시 타격 이벤트 Enqueue!
-                // 접촉 방어 모드, 제자리 사수 반격, 돌격 교전, 스루 어택 모두 사거리 내 적에게 정상 타격 적용
-                if (meleeTargetDist <= effectiveAttackRange && CurrentTime >= combat.LastAttackTime + combat.AttackCooldown)
+                // ⚔️ [백병전 타격 판정]: 적이 근접 사거리 내에 있거나 교전 중일 때 타격!
+                if (isInMelee || combat.CurrentState == 3)
                 {
-                    combat.LastAttackTime = CurrentTime;
-
-                    float finalDamage = combat.Damage;
                     float3 pushDir = meleePushDir;
                     if (math.lengthsq(pushDir) > 0.001f) pushDir = math.normalize(pushDir);
                     else pushDir = new float3(0, 0, 1);
 
                     float massRatio = combat.Mass / 100f;
 
-                    if (combat.ChargeImpactReady == 1 && movement.CurrentSpeed > 0.5f)
+                    if (isSidearmActive)
                     {
-                        float speedRatio = movement.CurrentSpeed / math.max(0.1f, combat.ChargeSpeed);
-                        float impactBonus = combat.ChargeBonus * speedRatio * massRatio;
-                        float maxChargeLimit = (combat.MaxChargeDamage > 0f) ? combat.MaxChargeDamage : 35f;
-                        finalDamage = math.min(combat.Damage + impactBonus, maxChargeLimit);
-                        combat.ChargeImpactReady = 0;
-
-                        float knockbackSpeed = 4.5f * speedRatio * massRatio;
-                        DamageQueue.Enqueue(new DamageEvent
+                        // 🗡️ [보조무기(단검) 공격]: 품 안으로 파고든 적에게 단검 타격
+                        if (meleeTargetDist <= combat.SidearmAttackRange && CurrentTime >= combat.LastAttackTime + combat.SidearmAttackCooldown)
                         {
-                            Target = meleeTargetEntity,
-                            Damage = finalDamage,
-                            PushDir = pushDir,
-                            KnockbackSpeed = knockbackSpeed
-                        });
+                            combat.LastAttackTime = CurrentTime;
+
+                            float finalDamage = combat.SidearmDamage;
+                            float microKnockbackSpeed = 1.3f * massRatio * combat.SidearmKnockbackPower;
+
+                            DamageQueue.Enqueue(new DamageEvent
+                            {
+                                Target = meleeTargetEntity,
+                                Damage = finalDamage,
+                                PushDir = pushDir,
+                                KnockbackSpeed = microKnockbackSpeed
+                            });
+                        }
                     }
                     else
                     {
-                        float microKnockbackSpeed = 1.3f * massRatio;
-                        DamageQueue.Enqueue(new DamageEvent
+                        // ⚔️ [주무기 공격]: 최소 사거리 검사 및 스위트스팟 거리별 감쇠 계산
+                        bool isInsideMinRange = (combat.MinAttackRange > 0.05f && meleeTargetDist < combat.MinAttackRange);
+                        if (meleeTargetDist <= effectiveAttackRange && CurrentTime >= combat.LastAttackTime + combat.AttackCooldown)
                         {
-                            Target = meleeTargetEntity,
-                            Damage = finalDamage,
-                            PushDir = pushDir,
-                            KnockbackSpeed = microKnockbackSpeed
-                        });
+                            combat.LastAttackTime = CurrentTime;
+
+                            float finalDamage = combat.Damage;
+
+                            // 🎯 최소 사거리 미만(초밀착)이거나 최적 사거리 미만 시 데미지 감쇠 적용 (보조무기가 꺼져있어도 창자루 밀치기 반격 허용)
+                            if (isInsideMinRange || (combat.OptimalRangeMin > 0.05f && meleeTargetDist < combat.OptimalRangeMin))
+                            {
+                                finalDamage *= combat.CloseRangeDamageRatio;
+                            }
+
+                            // 🛡️ [창벽 버티기 저지력 (Bracing)]: 접촉 방어 모드 시 상대가 교전/돌격 중이면 반동 넉백 추가
+                            float braceBonus = 0f;
+                            if (AllAliveEntityMap.TryGetValue(meleeTargetEntity, out EntitySpatialData targetSpatial))
+                            {
+                                if (targetSpatial.CurrentState >= 2) braceBonus = 1.5f;
+                            }
+
+                            if (combat.ChargeImpactReady == 1 && movement.CurrentSpeed > 0.5f)
+                            {
+                                float speedRatio = movement.CurrentSpeed / math.max(0.1f, combat.ChargeSpeed);
+                                float impactBonus = combat.ChargeBonus * speedRatio * massRatio;
+                                float maxChargeLimit = (combat.MaxChargeDamage > 0f) ? combat.MaxChargeDamage : 35f;
+                                finalDamage = math.min(finalDamage + impactBonus, maxChargeLimit);
+                                combat.ChargeImpactReady = 0;
+
+                                float knockbackSpeed = (4.5f * speedRatio * massRatio + braceBonus) * combat.KnockbackPower;
+                                DamageQueue.Enqueue(new DamageEvent
+                                {
+                                    Target = meleeTargetEntity,
+                                    Damage = finalDamage,
+                                    PushDir = pushDir,
+                                    KnockbackSpeed = knockbackSpeed
+                                });
+                            }
+                            else
+                            {
+                                float microKnockbackSpeed = (1.3f * massRatio + braceBonus) * combat.KnockbackPower;
+                                DamageQueue.Enqueue(new DamageEvent
+                                {
+                                    Target = meleeTargetEntity,
+                                    Damage = finalDamage,
+                                    PushDir = pushDir,
+                                    KnockbackSpeed = microKnockbackSpeed
+                                });
+                            }
+                        }
                     }
                 }
             }
