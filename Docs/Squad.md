@@ -1,18 +1,18 @@
 # ⚔️ [Squad.cs] 부대 지휘 & 대형 기동 시스템 아키텍처 가이드
 
-> **원본 소스 파일**: [Squad.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs) (총 줄 수: 2,827줄)
+> **원본 소스 파일**: [Squad.cs](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs) (총 줄 수: 3,248줄)
 
 ---
 
 ## 💡 1. 핵심 요약 & 역할
-수백~수천 명의 병사(Unit)들을 하나의 전술 부대로 통솔하여, **진형 배치(Formation), 공간 정렬(Spatial Sort), 방향성 순차 출발(Wave), 포위 기동(Envelopment), 멀티코어/ECS 상태 동기화 및 부대 AI**를 총괄하는 핵심 지휘 스크립트입니다.
+수백~수천 명의 병사(Unit)들을 하나의 전술 부대로 통솔하여, **진형 배치(Formation), 방진 형성 기본 효과(Base)와 산개도 비례 추가 효과(Density Scaling)의 2단계 스탯 시스템, 간격 기반 연속 밀집도(Tightness) 계산, 공간 정렬(Spatial Sort), 방향성 순차 출발(Wave), 포위 기동(Envelopment), 멀티코어 Job 및 Pure ECS 듀얼 모드 실시간 동기화, 부대 AI**를 총괄하는 핵심 지휘 스크립트입니다.
 
 ---
 
 ## 🌳 2. 아키텍처 트리 맵 (Architecture Tree Map)
 
 - 📁 **1. 생명주기 및 초기화 (Lifecycle & Initialization)**
-  - `Start()`: 부대 컴포넌트 초기화 및 UI 생성
+  - `Start()`: 부대 컴포넌트 초기화, UI/미니맵 등록 및 초기 진형 실효 스탯 일괄 동기화
   - `OnDestroy()`: 부대 해체 및 리소스 정리 (부대 카드, 아이콘, 미니맵 마커 자동 철거)
   - `InitializeSquadOnStart()`: 시작 시 부대원 자동 등록 및 초기 중심점 계산
   - `HandleSquadWipedOut()`: 부대원 전멸 시 0명 확정, 매니저 등록 해제 및 부대 오브젝트 파괴 일괄 처리
@@ -26,7 +26,7 @@
     - `CalculateEnvelopmentSlot()`: 전열 폭 비례 U자형 포위망 슬롯 계산
     - `CalculateOrganicDefensiveSlot()`: 피포위 수비 시 방어선 슬롯 계산
 - 📁 **3. 이동 및 지휘 명령 (Movement & Command Dispatch)**
-  - `CommandMoveWithFormation()`: 지정 목적지로 부대 대형 이동 명령
+  - `CommandMoveWithFormation()`: 지정 목적지로 부대 대형 이동 명령 및 실효 스탯 최신화
   - `CommandAttackSquad()`: 지정 적 부대 타겟팅 및 쇄도 포위 돌격
   - `CommandStop()`: 전 부대원 즉시 정지 및 진형 사수
   - `CommandCurvedFormation()`: 곡선 대형 전개 명령
@@ -42,48 +42,68 @@
   - `UpdatePostCombatAutoReform()`, `ReformSquadAfterCombat()`: 전투 종료 후 전열 재정비
 - 📁 **6. 모드 전환 및 동기화 (Modes & Dual-Engine Sync)**
   - `ToggleRunMode()`, `SetRunMode()`: 달리기/걷기 모드 전환
-  - `ToggleLooseFormation()`, `SetFormationType()`: 산개진/밀집진/특수진 전환
-  - `SetAutoAttack()`, `SetStance()`: 자동 요격 및 부대 태세 전환
-  - `SyncTargetSquadIdToSimulations()`: Job System 및 Pure ECS 양방향 동기화 (Bridge 없을 시 EntityManager 직접 주입 폴백 포함)
+  - `ToggleLooseFormation()`, `SetFormationType()`: 산개진/밀집진/특수진 전환 및 스탯 재계산
+  - `SetAutoAttack()`, `SetStance()`: 자동 요격(V키 접촉 방어) 및 부대 태세 전환
+  - `SyncTargetSquadIdToSimulations()`: Job System 및 Pure ECS 양방향 동기화
   - `UpdateECSEntitiesTarget()`, `UpdateECSEntitiesSpeed()`: 순수 ECS 엔티티 1:1 동기화
+- 📁 **7. 🛡️ 방진 형성 및 산개도 인스펙터 스탯 시스템 (Formation & Density Inspector System)**
+  - `FormationStatModifier`: 방진 형성 기본 효과(Base)와 산개도 비례 추가 효과(Density) 2단계 분리 구조체
+  - `looseSpacingThreshold`, `tightSpacingThreshold`: 인스펙터에서 완전 산개/최대 밀집 간격 임계값 튜닝
+  - `GetFormationModifier()`: 현재 방진 타입에 대응하는 튜닝 파라미터 반환
+  - `GetFormationTightness()`: 인스펙터 임계값 기준 0.0(산개) ~ 1.0(초밀집) 연속 밀집도 계산
+  - `ApplyFormationAndStanceModifiers()`: 실효 방어력(0~10,000), 무게, 공격 쿨다운(공속 최대 70% 둔화) 계산 후 유닛, C# Job, Pure ECS 3계층 일괄 동기화
 
 ---
 
-## 🗂️ 3. 해시 테이블 메서드 색인표 (Method Fast-Index Table)
+## 🗂️ 3. 해시 테이블 메서드/구조체 색인표 (Method Fast-Index Table)
 
 > ⚡ **에이전트 지침**: 코드 수정 전 아래 색인표에서 줄 번호 링크를 확인하고, `view_file`로 해당 범위만 직접 조회하여 작업하십시오.
 
-| 메서드 / 프로퍼티 (Key) | 반환형 / 파라미터 | 핵심 역할 & 기능 요약 (Value) | 호출자 (Callers) | 소스 줄 번호 (Line Range) |
+| 메서드 / 구조체 (Key) | 반환형 / 파라미터 | 핵심 역할 & 기능 요약 (Value) | 호출자 (Callers) | 소스 줄 번호 (Line Range) |
 | :--- | :--- | :--- | :--- | :--- |
-| `MemberCount` | `int (get)` | 실시간 생존 부대원 수 반환 (Pure ECS / GameObject 완전 호환) | `UI`, `PlayerController`, `AI` | [Squad.cs#L41-L50](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L41-L50) |
-| `HandleSquadWipedOut` | `void ()` | 부대 전멸 시 0명 확정, 매니저 해제 및 오브젝트 파괴 일괄 처리 | `UpdateSquadCenter`, `OnUnitDied` | [Squad.cs#L2928-L2938](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2928-L2938) |
-| `CalculateSlotLocalOffset` | `Vector3 (r, c, count, rows, cols)` | 열과 행에 따른 슬롯 상대 좌표 계산 | `RebuildGridStructure` | [Squad.cs#L216-L238](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L216-L238) |
-| `CalculateSlotWorldPosition` | `Vector3 (r, c, ..., center, rot)` | 중심점 및 회전각 기반 슬롯 월드 좌표 산출 | `AssignFormationPositions` | [Squad.cs#L240-L255](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L240-L255) |
-| `SetRunMode` | `void (bool run)` | 구보/제식보행 속도 전환 및 엔티티 동기화 | `PlayerController`, `R키` | [Squad.cs#L591-L608](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L591-L608) |
-| `SetFormationType` | `void (SquadFormationType type)` | 진형 형태(일자, 사각방진, 쐐기 등) 변경 | `CommandUI`, 단축키 | [Squad.cs#L674-L695](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L674-L695) |
-| `RebuildGridStructure` | `void (int targetCols, bool sort)` | 부대 열 수 변경에 따른 내부 대형 격자 재구축 | `PlayerController`, `Awake` | [Squad.cs#L697-L779](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L697-L779) |
-| `CommandMoveWithFormation` | `void (dest, rot, cols, sort, state)` | 부대 전체 대형 이동 명령 및 ECS TargetSquadId 주입 | `PlayerController`, `Update` | [Squad.cs#L880-L1050](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L880-L1050) |
-| `CommandAttackSquad` | `void (Squad enemySquad)` | 지정 적 부대 타겟팅 및 포위 대형 쇄도 | `PlayerController`, `AI` | [Squad.cs#L1454-L1500](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1454-L1500) |
-| `SyncTargetSquadIdToSimulations` | `void (int targetSquadId)` | Job System & Pure ECS(직접 주입 폴백) targetId 동기화 | `CommandAttackSquad`, `Tracking` | [Squad.cs#L1507-L1550](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1507-L1550) |
-| `UpdateEnemyProjectionData` | `void (enemy, rot, center)` | 적 부대의 360도 투영 폭 및 접적면 계산 | `CommandAttackSquad`, `Tracking` | [Squad.cs#L1552-L1700](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1552-L1700) |
-| `UpdateTargetSquadTracking` | `void ()` | 공격 중인 적 부대 위치 추적 및 슬롯 갱신 | `Update` | [Squad.cs#L1815-L1910](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1815-L1910) |
-| `UpdateAutoAttack` | `void ()` | 적 접근 시(22m/30m/12m) 선제 돌격 요격 발동 | `Update` | [Squad.cs#L1987-L2040](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1987-L2040) |
-| `GetSquadFormationRadius` | `float (margin)` | 현재 인원수/열 수 기반 안전 방진 반경 계산 | `CalculateDeconflictedSquadPosition` | [Squad.cs#L1923-L1942](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1923-L1942) |
-| `CalculateDeconflictedSquadPosition`| `Vector3 (baseCenter)` | 주변 부대들과 겹치지 않는 새 방진 중심 좌표 산출 | `ReformSquadAfterCombat` | [Squad.cs#L1947-L2010](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1947-L2010) |
-| `HasNoEnemiesNearby` | `bool (searchRadius)` | 50m 내 살아있는 적 부대/자유 유닛 부재 검사 | `UpdatePostCombatAutoReform` | [Squad.cs#L2015-L2075](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2015-L2075) |
-| `UpdatePostCombatAutoReform` | `void ()` | 교전 종료 및 적 부재 감지 시 1초 타이머 후 재정비 발동 | `Update` | [Squad.cs#L2077-L2150](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2077-L2150) |
-| `ReformSquadAfterCombat` | `void ()` | 겹침 없는 새 위치에 방진 재형성 및 완전 정지(Idle) | `UpdatePostCombatAutoReform`, `AI` | [Squad.cs#L2152-L2180](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2152-L2180) |
-| `UpdateEnemySquadAI` | `void ()` | 적 부대의 1:1 전선 매칭 및 목표 부대 영구 고수(Sticky Lock) | `Update` | [Squad.cs#L2253-L2395](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2253-L2395) |
-| `CalculateEnvelopmentSlot` | `bool (r, c, cols, rows, out pos, ...)` | 전열 폭 비례 U자형 포위망 슬롯 산출 | `AssignFormationPositions` | [Squad.cs#L2790-L2885](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2790-L2885) |
-| `CalculateCurvedSlotOffset` | `Vector3 (r, c, cols, rows, type)` | 2차 곡선 대형 오프셋 계산 | `GetSlotLocalOffset` | [Squad.cs#L2892-L2945](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2892-L2945) |
-| `GetFrontLineCenter` | `Vector3 ()` | 부대 맨 앞열(전열)의 물리적 중심 좌표 반환 | `UpdateEnemyTracking` | [Squad.cs#L3000-L3040](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3000-L3040) |
-| `GetVisualCenter` | `Vector3 ()` | 생존 부대원 전체의 실제 평균 중심 좌표 | `PlayerController`, `AI` | [Squad.cs#L3041-L3070](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3041-L3070) |
+| `FormationStatModifier` | `struct` | 1단계: 방진 기본 효과(방어력, 무게), 2단계: 산개도 비례 추가 효과(방어, 무게, 공속) 저장 | `Squad.cs`, `BattleManager.cs` | [Squad.cs#L85-L113](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L85-L113) |
+| `looseSpacingThreshold` | `float` | 완전 산개 판정 간격(m) - 이 간격 이상이면 밀집 보너스 0% | `GetFormationTightness` | [Squad.cs#L116](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L116) |
+| `tightSpacingThreshold` | `float` | 최대 밀집 판정 간격(m) - 이 간격 이하이면 밀집 보너스 100% | `GetFormationTightness` | [Squad.cs#L119](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L119) |
+| `GetFormationModifier` | `FormationStatModifier (type)` | 현재 방진 타입(Normal, Wedge, Square 등)별 인스펙터 계수 반환 | `ApplyFormationAndStanceModifiers` | [Squad.cs#L757-L768](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L757-L768) |
+| `GetFormationTightness` | `float ()` | 인스펙터 임계값 기준 0.0~1.0 연속 밀집도 산출 | `ApplyFormationAndStanceModifiers` | [Squad.cs#L770-L790](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L770-L790) |
+| `ApplyFormationAndStanceModifiers` | `void ()` | 방진 기본 + 산개도 비례 + 태세 결합 실효 스탯 산출 및 3계층 동기화 | `Start`, `RebuildGrid`, `CommandMove`, `SetAutoAttack` | [Squad.cs#L792-L860](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L792-L860) |
+| `MemberCount` | `int (get)` | 실시간 생존 부대원 수 반환 (Pure ECS / GameObject 완전 호환) | `UI`, `PlayerController`, `AI` | [Squad.cs#L42-L57](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L42-L57) |
+| `HandleSquadWipedOut` | `void ()` | 부대 전멸 시 0명 확정, 매니저 해제 및 오브젝트 파괴 일괄 처리 | `UpdateSquadCenter`, `OnUnitDied` | [Squad.cs#L2928-L2938](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2928-L2938) |
+| `CalculateSlotLocalOffset` | `Vector3 (r, c, count, rows, cols)` | 열과 행에 따른 슬롯 상대 좌표 계산 | `RebuildGridStructure` | [Squad.cs#L216-L238](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L216-L238) |
+| `CalculateSlotWorldPosition` | `Vector3 (r, c, ..., center, rot)` | 중심점 및 회전각 기반 슬롯 월드 좌표 산출 | `AssignFormationPositions` | [Squad.cs#L240-L255](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L240-L255) |
+| `SetRunMode` | `void (bool run)` | 구보/제식보행 속도 전환 및 엔티티 동기화 | `PlayerController`, `R키` | [Squad.cs#L591-L608](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L591-L608) |
+| `SetFormationType` | `void (SquadFormationType type)` | 진형 형태(일자, 사각방진, 쐐기 등) 변경 및 스탯 갱신 | `CommandUI`, 단축키 | [Squad.cs#L862-L883](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L862-L883) |
+| `RebuildGridStructure` | `void (int targetCols, bool sort)` | 부대 열 수 변경에 따른 내부 대형 격자 재구축 및 스탯 갱신 | `PlayerController`, `Awake` | [Squad.cs#L885-L967](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L885-L967) |
+| `CommandMoveWithFormation` | `void (dest, rot, cols, sort, state)` | 부대 전체 대형 이동 명령 및 실효 스탯 최신화 | `PlayerController`, `Update` | [Squad.cs#L969-L1050](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L969-L1050) |
+| `CommandAttackSquad` | `void (Squad enemySquad)` | 지정 적 부대 타겟팅 및 포위 대형 쇄도 | `PlayerController`, `AI` | [Squad.cs#L1454-L1500](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1454-L1500) |
+| `SyncTargetSquadIdToSimulations` | `void (int targetSquadId)` | Job System & Pure ECS(직접 주입 폴백) targetId 동기화 | `CommandAttackSquad`, `Tracking` | [Squad.cs#L1507-L1550](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1507-L1550) |
+| `UpdateEnemyProjectionData` | `void (enemy, rot, center)` | 적 부대의 360도 투영 폭 및 접적면 계산 | `CommandAttackSquad`, `Tracking` | [Squad.cs#L1552-L1700](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1552-L1700) |
+| `UpdateTargetSquadTracking` | `void ()` | 공격 중인 적 부대 위치 추적 및 슬롯 갱신 | `Update` | [Squad.cs#L1815-L1910](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1815-L1910) |
+| `SetAutoAttack` | `void (bool enabled)` | 적 접근 시 자동 선제 요격 허용 및 접촉 방어(V키) 스탯 동기화 | `PlayerController`, `V키` | [Squad.cs#L1300-L1350](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1300-L1350) |
+| `GetFrontLineCenter` | `Vector3 ()` | 부대 맨 앞열(전열)의 물리적 중심 좌표 반환 | `UpdateEnemyTracking` | [Squad.cs#L3000-L3040](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3000-L3040) |
+| `GetVisualCenter` | `Vector3 ()` | 생존 부대원 전체의 실제 평균 중심 좌표 | `PlayerController`, `AI` | [Squad.cs#L3041-L3070](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3041-L3070) |
 
 ---
 
 ## 🔀 4. 유향 그래프 흐름도 (Data & Call Flow Graph)
 
-### 1) 부대 공격 명령 및 목표 부대 동기화 파이프라인
+### 1) 방진 형성 및 산개도 인스펙터 동기화 파이프라인
+```mermaid
+flowchart TD
+    A[조작 이벤트 발생: 진형 변경 / Alt 드래그 간격 조절 / 산개 토글 / V키 태세] --> B[Squad: ApplyFormationAndStanceModifiers]
+    B --> C[유효 평균 간격 산출: avgSpacing = effSpacingX + effSpacingZ * 0.5]
+    C --> D[인스펙터 임계값 기준 밀집도 계산: Tightness = InverseLerp looseSpacing -> tightSpacing]
+    B --> E[방진별 인스펙터 계수 로드: GetFormationModifier]
+    D & E --> F[실효 스탯 2단계 종합 계산]
+    F -->|1. 실효 방어력| G[baseArmor + mod.baseArmorBonus + mod.densityArmorBonus * tightness + stanceArmor: 0 ~ 10,000]
+    F -->|2. 실효 무게| H[baseMass * mod.baseMassMultiplier + densityMass-1 * tightness * stanceMass]
+    F -->|3. 실효 쿨다운| I["baseCooldown / Lerp(1.0, mod.densityAttackSpeedRatio, tightness) : 공속 50% 언저리(2초에 1회) 직관적 역산"]
+    G & H & I --> J[GameObject 소속 유닛 인스턴스 반영: armor, mass, attackCooldown]
+    G & H & I --> K[UnitJobSimulationManager: UpdateSquadCombatModifiers 버퍼 일괄 주입]
+    G & H & I --> L[SquadECSSimulationBridge: UpdateSquadCombatModifiers 엔티티 일괄 주입]
+```
+
+### 2) 부대 공격 명령 및 목표 부대 동기화 파이프라인
 ```mermaid
 flowchart TD
     A[플레이어 컨트롤러 - PlayerController: 적 부대 우클릭 공격 지휘] -->|공격 명령 전달| B[부대 - Squad: 공격 명령 수신 - CommandAttackSquad]
@@ -96,72 +116,62 @@ flowchart TD
     F -->|지정 부대원 타겟팅| I[순수 ECS 전투 시스템: 100% 지정 목표 부대원 격리 추격 - UnitCombatAndMovementSystem]
 ```
 
-### 2) 순차 기동 및 방향성 열 단위 출발 흐름
-```mermaid
-flowchart TD
-    A[대형 이동 명령 실행 - CommandMoveWithFormation] -->|부대원별 최적 슬롯 배정| B[슬롯 배정 및 공간 정렬 루틴 - AssignFormationPositionsRoutine]
-    B -->|전진 / 후진 판정| C{이동 방향과 부대 정면 벡터 내적 - Vector3.Dot}
-    C -->|전진 상태: Dot >= 0| D[맨 앞열 0행부터 전방 순차 출발]
-    C -->|후진 상태: Dot < 0| E[맨 뒷열 최대 행부터 후방 순차 출발]
-    D -->|열 간 0.08초 시간차 지연 적용| F[파동형 순차 출발 코루틴 - StartUnitsMovementStaggered]
-    E -->|열 간 0.08초 시간차 지연 적용| F
-```
-
 ---
 
 ## ⚙️ 5. 주요 상태 변수 및 설정 (State Variables)
 
-| 변수명 | 타입 | 설명 |
-| :--- | :--- | :--- |
-| `members` | `List<Unit>` | 부대 소속 유닛 인스턴스 목록 (GameObject 모드 전용) |
-| `initialUnitCount` | `int` | 부대 초기 창설 총 인원 수 |
-| `currentAliveCount` | `int` | 실시간 생존 부대원 수 (Pure ECS 집계 연동) |
-| `hasEcsInitialized` | `bool` | Pure ECS 첫 프레임 집계 완료 여부 플래그 |
-| `MemberCount` | `int (프로퍼티)` | 실시간 생존 인원수 (전멸 시 0명 정상 반환) |
-| `currentTargetSquad` | `Squad` | 현재 공격 목표로 지정된 적 부대 |
-| `currentCommandState` | `UnitCommandState` | 현재 명령 상태 (`Idle`, `Move`, `AttackMove`, `MeleeEngaged`) |
-| `currentColumns` | `int` | 부대의 현재 가로 열 수 (기본 15열, 5~40열 가변) |
-| `spacing` | `float` | 유닛 간 기본 격자 간격 (기본 1.2m, 산개진 시 2.4m) |
-| `currentFormationType` | `SquadFormationType` | 현재 진형 형태 (`Line`, `Loose`, `Wedge`, `Diamond`, `Square`, `Circle`) |
-| `isRunning` | `bool` | 부대 구보(달리기) 모드 활성화 여부 |
-| `autoAttackEnabled` | `bool` | 적 접근 시 자동 선제 요격 허용 여부 (`V`키) |
+| 변수명 | 타입 | 기본값 | 상세 설명 |
+| :--- | :--- | :--- | :--- |
+| `looseSpacingThreshold` | `float` | 2.2f | 완전 산개 판정 간격(m) - 이 간격 이상이면 밀집 보너스 0% |
+| `tightSpacingThreshold` | `float` | 0.7f | 최대 밀집 판정 간격(m) - 이 간격 이하이면 밀집 보너스 100% |
+| `normalBonus` | `FormationStatModifier` | (500, 1.2x) / (1000, 1.5x, 0.50) | 일반 방진 기본(+5%, 1.2배) / 밀집(+10%, 1.5배, 공속 50%로 감소 - 2.0초당 1회) |
+| `wedgeBonus` | `FormationStatModifier` | (200, 1.4x) / (500, 1.8x, 0.55) | 쐐기진 기본(+2%, 1.4배) / 밀집(+5%, 1.8배, 공속 55%로 감소 - 1.82초당 1회) |
+| `squareBonus` | `FormationStatModifier` | (1000, 1.5x) / (1500, 2.0x, 0.50) | 사각방진 기본(+10%, 1.5배) / 밀집(+15%, 2.0배, 공속 50%로 감소 - 2.0초당 1회) |
+| `circleBonus` | `FormationStatModifier` | (1200, 1.6x) / (1800, 2.2x, 0.45) | 원형진 기본(+12%, 1.6배) / 밀집(+18%, 2.2배, 공속 45%로 감소 - 2.22초당 1회) |
+| `diamondBonus` | `FormationStatModifier` | (400, 1.3x) / (600, 1.6x, 0.52) | 마름모진 기본(+4%, 1.3배) / 밀집(+6%, 1.6배, 공속 52%로 감소 - 1.92초당 1회) |
+| `bracingArmorBonus` | `int` | 2000 | 접촉 방어 태세(V키 꺼짐) 시 추가 방어력 (+20.00%) |
+| `bracingMassMultiplier` | `float` | 1.8f | 접촉 방어 태세(V키 꺼짐) 시 무게 배율 (+80% 돌격 저지) |
+| `baseArmor` | `int` | 0 | 유닛 프리팹 원본 기준 방어력 (0 ~ 10,000 만분율) |
+| `baseMass` | `float` | 100f | 유닛 프리팹 원본 기준 무게 (밀림 저항력) |
+| `baseAttackCooldown` | `float` | 1.0f | 유닛 프리팹 원본 기준 기본 공격 주기(초) |
+| `currentFormationType` | `SquadFormationType` | Normal | 현재 선택된 부대 진형 (`Normal`, `Loose`, `Wedge`, `Diamond`, `Square`, `Circle`) |
+| `isLooseFormation` | `bool` | false | 산개 대형 활성화 여부 (활성화 시 방진 보너스 0%, 자유 유닛 1.0배) |
+| `autoAttackEnabled` | `bool` | true | 자동 요격 허용 여부 (`false` 시 접촉 방어 태세 - Bracing 발동) |
 
 ---
 
-## 🛠️ 6. 핵심 알고리즘 & 전술 메커니즘 상세 해설
+## 🛠️ 6. 핵심 알고리즘, 물리/전투 수학 공식 & 조작법
 
-### 1. 공간 정렬 알고리즘 (O(N^2) Spatial Sorting)
-- **목적**: 부대가 대열을 바꿀 때 유닛들이 서로 꼬이거나 교차하지 않고, 현재 자신의 위치에서 가장 가까운 최적의 슬롯으로 질서정연하게 이동하도록 배정합니다.
-- **동작**:
-  1. 슬롯의 2D 평면 좌표와 유닛들의 현재 좌표 간 유클리드 거리를 계산합니다.
-  2. 행(Row) 단위로 전열부터 우선순위를 부여하여 최근접 슬롯을 그리디(Greedy) 매칭합니다.
-  3. 대형 회전 각도가 45도 이상 크게 꺾일 때(`isLargeTurn = true`)만 공간 정렬을 수행하여 프레임 드랍을 방지합니다.
+### 1. 방진 형성 기본 효과 vs 산개도 비례 추가 효과 2단계 공식
+- **1단계: 방진 형성 기본 효과 (Base)**:
+  - 방진을 형성하는 것만으로 부여되는 전술 대형 고유 이점.
+  - `formationBaseArmor = isLoose ? 0 : mod.baseArmorBonus;`
+  - `formationBaseMass = isLoose ? 1.0f : mod.baseMassMultiplier;`
+  - 산개진(`isLooseFormation || formType == Loose`)에서는 사용자의 요구사항에 따라 0% 가산 및 1.0배(일반 자유 유닛과 동일)가 됩니다.
+- **2단계: 산개도(밀집도) 비례 추가 효과 (Density Scaling)**:
+  - 대형을 좁힐수록 병사들이 밀착하여 방어력과 무게가 상승하고, 행동 반경 축소로 공속이 둔화됨.
+  - `densityArmorBonus = isLoose ? 0 : Mathf.RoundToInt(mod.densityArmorBonus * tightness);`
+  - `densityMassMultiplier = isLoose ? 0f : ((mod.densityMassMultiplier - 1.0f) * tightness);`
+  - `currentSpeedRatio = isLoose ? 1.0f : Mathf.Lerp(1.0f, mod.densityAttackSpeedRatio, tightness);`
+  - `effectiveCooldown = baseAttackCooldown / Mathf.Max(0.01f, currentSpeedRatio);` (공속 직관화 역산)
 
-### 2. 방향성 열 단위 순차 출발 (Wave Staggered Movement)
-- **목적**: 200명의 병사가 동시에 한꺼번에 출발하여 앞사람의 뒤통수를 들이받는 물리 충돌을 방지하고, 실제 군대 제식과 같은 유기적인 파동(Wave) 출발을 구현합니다.
-- **동작**:
-  - 목적지 방향 벡터와 부대 정면 벡터의 내적(`Vector3.Dot`)을 계산합니다.
-  - **전진 (`Dot >= 0`)**: 맨 앞열(0행)부터 출발 신호를 보내고, 0.08초 간격으로 뒷열(1행, 2행...)로 순차 전달합니다.
-  - **후진 (`Dot < 0`)**: 맨 뒷열부터 먼저 뒤로 물러나기 시작하여 전열의 퇴로를 확보합니다.
+### 2. 간격 기반 연속 밀집도 (Tightness Metric)
+- `평균 간격 = (유효 횡간격 + 유효 종간격) * 0.5f`
+- `Tightness = Mathf.Clamp01(Mathf.InverseLerp(looseSpacingThreshold, tightSpacingThreshold, 평균 간격))`
+- **완전 산개 (`avgSpacing >= looseSpacingThreshold`)**: `Tightness = 0.0`
+- **최대 밀집 (`avgSpacing <= tightSpacingThreshold`)**: `Tightness = 1.0`
 
-### 3. U자형 포위망 기동 (Envelopment Geometry)
-- **목적**: 아군 부대의 전열 폭이 적 부대보다 넓을 때, 양 날개(Flank) 병사들이 적의 측면과 후방을 감싸 쥐는 포위 대형을 자동으로 형성합니다.
-- **동작**:
-  - `UpdateEnemyProjectionData()`로 적 부대의 360도 투영 폭을 실시간 측정합니다.
-  - 아군 폭이 적 폭보다 1.2배 이상 넓을 경우, 양 끝단 열의 슬롯을 적 부대의 측면 및 후방을 향해 꺾어지는 둥근 U자 호 형태로 오프셋을 재계산합니다.
-
-### 4. 자동 선제 요격 돌격 및 상태 머신 (Auto-Intercept & Command State)
-- **목적**: 적이 접근할 때 기본 대기(Idle) 상태에서 정면 22m/30m 및 초근접 12m 이내로 들어오면 자동으로 전군 돌격(`CommandAttackSquad`)을 개시하고, V키를 눌러 접촉 방어 모드(`autoAttackEnabled = false`)로 전환했을 때만 제자리 진형을 사수하며 반격하도록 보장합니다.
-- **동작**:
-  - `currentCommandState`는 창설 시 및 이동 완료(`isMoving = false`) 시 정확하게 `UnitCommandState.Idle`로 복귀합니다.
-  - 정지 상태에서 전방 적을 락온(`currentTargetSquad != null`)하더라도 `currentCommandState == UnitCommandState.AttackMove`가 아닌 이상 요격 감시를 중단하지 않고 사거리 내 진입 시 즉시 전군 돌격을 발동합니다.
-  - `SquadECSSimulationBridge.cs`의 백병전 연계(Combat Cascade) 역시 `autoAttackEnabled`가 켜져 있을 때만 발동하여, V키 접촉 방어 모드의 고유 전술(진형 유지 대기 반격)을 침범하지 않습니다.
+### 3. 정수 만분율(0 ~ 10,000) 방어력 및 감쇄 공식
+- `실효 피해량 = (armor >= 10000) ? 0f : Mathf.Max(1.0f, rawDamage * (1.0f - armor / 10000.0f));`
+- 10,000 미만에서는 최소 1.0의 유효 피해를 보장하며, 10,000 달성 시 100% 무적 처리.
 
 ---
 
 ## 🔗 7. 다른 스크립트와의 연동 관계 (Dependencies)
 
-- **[PlayerController.cs](file:///c:/unityProject/MiniTotalWar2D/Docs/PlayerController.md)**: 마우스/키보드 입력을 받아 부대 이동/공격/진형 명령을 직접 수신
-- **[UnitJobSimulationManager.cs](file:///c:/unityProject/MiniTotalWar2D/Docs/UnitJobSimulationManager.md)**: 부대 이동 시 `UpdateUnitTargetPosition`, `UpdateSquadTargetSquadId`를 호출하여 Job System에 실시간 주입
-- **[SquadECSSimulationBridge.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/ECS/SquadECSSimulationBridge.cs)**: Pure ECS 모드 활성화 시 순수 엔티티의 목표 위치 및 속도를 1:1로 동기화
-- **[SquadIconUI.cs](file:///c:/unityProject/MiniTotalWar2D/Docs/SquadIconUI.md)** & **[SquadCardUI.cs](file:///c:/unityProject/MiniTotalWar2D/Docs/SquadCardUI.md)**: 부대 상태(체력, 병력 수, 선택 상태)를 UI에 실시간 전달
+- **[BattleManager.cs](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/BattleManager.cs)**: 씬의 전역 매니저 인스펙터에서 전체 방진 및 산개도 계수를 일괄 조절하고 스폰 부대에 주입.
+- **[Unit.cs](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Unit.cs)**: 기본 스탯(`baseArmor`, `baseMass`, `baseAttackCooldown`) 제공 및 실효 스탯 반영 수신.
+- **[UnitEditor.cs](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Editor/UnitEditor.cs)**: 0~10,000 만분율 방어력 인스펙터 슬라이더 및 실시간 감쇄율 UI 연동.
+- **[UnitJobSimulationManager.cs](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/UnitJobSimulationManager.cs)**: `UpdateSquadCombatModifiers`를 통해 C# Job System NativeArray 버퍼에 실효 스탯 일괄 주입.
+- **[SquadECSSimulationBridge.cs](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/ECS/SquadECSSimulationBridge.cs)**: Pure ECS `UnitCombatData` 컴포넌트에 실효 스탯 일괄 주입.
+- **[PlayerController.cs](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/PlayerController.cs)**: 진형 변경, 간격 드래그 조절, V키 태세 전환 명령 하달.

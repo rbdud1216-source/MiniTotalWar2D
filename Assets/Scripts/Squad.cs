@@ -30,27 +30,45 @@ public struct SlotInfo
 public class Squad : MonoBehaviour
 {
     [Header("부대 정보")]
+    [Tooltip("부대의 고유 식별 명칭 (UI 카드 및 전황 로그 표시용)")]
     public string squadName = "보병대";
+    [Tooltip("플레이어 진영 부대 여부 (체크 시 아군, 해제 시 적군)")]
     public bool isPlayer = true;
 
     [Header("부대원 목록 및 이동 속도")]
+    [Tooltip("부대에 소속된 개별 유닛(GameObject) 인스턴스 목록")]
     public List<Unit> members = new List<Unit>();
+    [Tooltip("부대 창설 시 초기 총 병력 수")]
     public int initialUnitCount = 0;
+    [Tooltip("현재 실시간 생존 병력 수 (전멸 시 0)")]
     public int currentAliveCount = 0;
     [System.NonSerialized] public bool hasEcsInitialized = false;
+    [System.NonSerialized] public bool isPureECS = false;
     public int MemberCount
     {
         get
         {
-            if (members != null && members.Count > 0) return members.Count;
+            // 1. 일반 GameObject 모드: members 리스트의 크기가 100% 정확한 생존자 수 (전멸 시 0 반환 보장)
+            bool pureEcsMode = isPureECS || (BattleManager.Instance != null && BattleManager.Instance.usePureECS);
+            if (!pureEcsMode)
+            {
+                return (members != null) ? members.Count : 0;
+            }
+
+            // 2. Pure ECS 모드: 엔티티 집계 초기화 완료 후 currentAliveCount 반환 (전멸 시 0 반환 보장)
             if (hasEcsInitialized) return currentAliveCount;
             return (currentAliveCount > 0) ? currentAliveCount : initialUnitCount;
         }
     }
+    [Tooltip("현재 구보(달리기) 모드 활성화 여부 (R키로 토글)")]
     public bool isRunning = false;
+    [Tooltip("부대 제식 보행 속도 (대형을 유지하며 행진할 때의 기준 속도, 기본 1.0m/s = 3.6km/h)")]
     public float walkSpeed = 1.0f;   // 부대 제식 걷기 속도 (C안: 1.0m/s, 3.6km/h)
+    [Tooltip("부대 전술 구보 속도 (R키 구보 모드 시의 전술 이동 속도, 기본 2.4m/s = 8.64km/h)")]
     public float runSpeed = 2.4f;    // 부대 전술 구보 속도 (C안: 2.4m/s, 8.64km/h)
+    [Tooltip("부대의 현재 실시간 목표 이동 속도 (구보/보행 전환에 따라 자동 동기화)")]
     public float targetSpeed = 1.0f;
+    [Tooltip("병사의 물리적 최고 한계 속도 (대형에서 뒤처진 병사가 슬롯으로 복귀하기 위한 최대 가속력, 기본 5.5m/s)")]
     public float unitMaxSpeed = 5.5f;
 
     [Header("방진 간격 설정")]
@@ -59,24 +77,94 @@ public class Squad : MonoBehaviour
     public const float DEFAULT_LOOSE_SPACING_X = 2.0f;
     public const float DEFAULT_LOOSE_SPACING_Z = 2.2f;
 
+    [Tooltip("부대원 슬롯 간의 기본 표준 격자 간격 (기본 1.15m)")]
     public float spacing = 1.15f;
+    [Tooltip("부대원 좌우(횡방향) 슬롯 간격 (기본 1.1m)")]
     public float spacingX = 1.1f;
+    [Tooltip("부대원 앞뒤(종방향) 열 간격 (기본 1.2m)")]
     public float spacingZ = 1.2f;
+    [Tooltip("커스텀 간격 배율")]
     public float customSpacingMultiplier = 1.0f;
+    [Tooltip("체커보드 지그재그 배치 여부 (체크 시 뒷열 병사가 앞열 병사 사이 빈틈에 엇갈려 서서 시야와 무기 거리를 확보)")]
     public bool useStaggeredFormation = true; // 지그재그(체커보드) 엇갈림 배치
 
-    [Tooltip("열(Rank)과 열 사이의 순차적 출발 반응 지연 시간(초)")]
+    [Tooltip("열(Rank)과 열 사이의 순차적 출발 반응 지연 시간(초) - 전진/후진 시 파동형 출발 제어 (기본 0.08초)")]
     public float rowReactionDelay = 0.08f;
 
     [Header("대형 좌표 설정")]
+    [Tooltip("부대 중심 이동 목표 좌표")]
     public Vector3 moveDestination;
+    [Tooltip("부대 전면 가로 열(Columns) 수 (Alt 드래그 또는 명령 시 조절)")]
     public int currentColumns = 5;
 
     private int totalGridRows = 0;
 
+    [System.Serializable]
+    public struct FormationStatModifier
+    {
+        [Header("1. 방진 형성 기본 효과 (진형 변환 시 기본 적용)")]
+        [Tooltip("방진 형성 시 기본 부여되는 방어력 보너스 (+만분율, 예: 500 = +5.00%)")]
+        public int baseArmorBonus;
+
+        [Tooltip("방진 형성 시 기본 적용되는 무게 배율 (예: 1.2 = +20% 증가)")]
+        public float baseMassMultiplier;
+
+        [Header("2. 산개/밀집도 비례 추가 효과 (밀집할수록 점진적 적용)")]
+        [Tooltip("최대 밀집 시 추가 가산되는 방어력 (+만분율, 예: 1000 = +10.00%)")]
+        public int densityArmorBonus;
+
+        [Tooltip("최대 밀집 시 추가 가산되는 무게 배율 (예: 1.5 = +50% 추가 증가)")]
+        public float densityMassMultiplier;
+
+        [Tooltip("최대 밀집 시 최종 공격 속도 비율 (0.70 = -30% 둔화되어 원래 공속의 70% 수준으로 감속, 0.50 = -50% 둔화되어 반감)")]
+        public float densityAttackSpeedRatio;
+
+        public FormationStatModifier(int baseArmor, float baseMass, int densityArmor, float densityMass, float attackSpeedRatio)
+        {
+            baseArmorBonus = baseArmor;
+            baseMassMultiplier = baseMass;
+            densityArmorBonus = densityArmor;
+            densityMassMultiplier = densityMass;
+            densityAttackSpeedRatio = attackSpeedRatio;
+        }
+    }
+
+    [Header("산개도(간격) 기준 설정 (인스펙터 조절)")]
+    [Tooltip("완전 산개 기준 간격(m) - 이 간격 이상이면 밀집 보너스가 0% 적용 (기본: 2.2m)")]
+    public float looseSpacingThreshold = 2.2f;
+
+    [Tooltip("최대 밀집 기준 간격(m) - 이 간격 이하이면 밀집 보너스가 100% 최대로 적용 (기본: 0.7m)")]
+    public float tightSpacingThreshold = 0.7f;
+
+    [Header("방진별 스탯 보너스 설정 (인스펙터 조절)")]
+    public FormationStatModifier normalBonus = new FormationStatModifier(500, 1.2f, 1000, 1.5f, 0.50f);     // 일반 방진 (공속 50% - 2.0초당 1회)
+    public FormationStatModifier wedgeBonus = new FormationStatModifier(200, 1.4f, 500, 1.8f, 0.55f);        // 쐐기진 (돌격 특화, 공속 55% - 1.82초당 1회)
+    public FormationStatModifier squareBonus = new FormationStatModifier(1000, 1.5f, 1500, 2.0f, 0.50f);      // 사각방진 (방어 특화, 공속 50% - 2.0초당 1회)
+    public FormationStatModifier circleBonus = new FormationStatModifier(1200, 1.6f, 1800, 2.2f, 0.45f);      // 원형진 (결사항전, 공속 45% - 2.22초당 1회)
+    public FormationStatModifier diamondBonus = new FormationStatModifier(400, 1.3f, 600, 1.6f, 0.52f);     // 마름모진 (기동 돌파, 공속 52% - 1.92초당 1회)
+
+    [Header("접촉 방어 태세 (Bracing - V키) 보너스 설정")]
+    [Tooltip("접촉 방어 태세(V키 꺼짐) 시 추가 방어력 (+만분율, 예: 2000 = +20.00%)")]
+    public int bracingArmorBonus = 2000;
+
+    [Tooltip("접촉 방어 태세(V키 꺼짐) 시 무게 배율 (예: 1.8 = +80% 증가)")]
+    public float bracingMassMultiplier = 1.8f;
+
+    [Header("부대 기준 기본 스탯")]
+    [Tooltip("유닛 프리팹 원본 기준 기본 방어력 (0 ~ 10,000 만분율, 예: 2812 = 28.12% 피해 감쇄)")]
+    public int baseArmor = 0;
+    [Tooltip("유닛 프리팹 원본 기준 기본 무게 (밀림 저항력 및 돌격 충격량의 기초 질량, 기본 100.0)")]
+    public float baseMass = 100f;
+    [Tooltip("유닛 프리팹 원본 기준 기본 공격 주기 (1회 공격 후 대기 쿨다운 시간, 기본 1.0초)")]
+    public float baseAttackCooldown = 1.0f;
+    private bool baseStatsInitialized = false;
+
     [Header("진형 및 상태 변수")]
+    [Tooltip("현재 취하고 있는 전술 진형 (Normal: 일반 일자진, Wedge: 쐐기진, Square: 사각방진, Circle: 원형진, Diamond: 마름모진)")]
     public SquadFormationType currentFormationType = SquadFormationType.Normal;
+    [Tooltip("산개 대형(Loose) 토글 여부 (산개 시 간격 2배 확대 및 방진 밀집 보너스 0% 해제)")]
     public bool isLooseFormation = false;
+    [Tooltip("현재 부대가 이동 중인지 여부")]
     public bool isMoving = false;
     public bool isSelected => PlayerController.Instance != null && PlayerController.Instance.IsSquadSelected(this);
     private bool hasAlignedThisArrival = false;
@@ -90,10 +178,14 @@ public class Squad : MonoBehaviour
     private Coroutine formationAssignmentCoroutine;
     private Coroutine staggeredMovementCoroutine;
 
+    [Tooltip("부대의 최대 회전 선회 속도 (초당 각도, 기본 360도/초)")]
     public float maxRotationSpeed = 360f;
     private Quaternion targetSquadRotation;
+    [Tooltip("현재 부대의 지휘 명령 상태 (Idle: 대기, Move: 이동, AttackMove: 공격 이동, MeleeEngaged: 백병전)")]
     public UnitCommandState currentCommandState = UnitCommandState.Idle;
+    [Tooltip("현재 부대의 전술 태세 (Aggressive: 공격적, Defensive: 방어적)")]
     public UnitStance currentStance = UnitStance.Aggressive;
+    [Tooltip("자동 선제 요격 허용 여부 (V키 해제 시 제자리를 사수하며 돌격을 버티는 접촉 방어 태세 발동)")]
     public bool autoAttackEnabled = true;
 
     private Vector3 ecsVisualCenter = Vector3.zero;
@@ -135,6 +227,9 @@ public class Squad : MonoBehaviour
         {
             MinimapManager.Instance.RegisterSquad(this);
         }
+
+        // 🛡️ 부대 생성 초기 진형 밀집도 및 실효 스탯 일괄 동기화
+        ApplyFormationAndStanceModifiers();
     }
 
     private void OnDestroy()
@@ -266,12 +361,17 @@ public class Squad : MonoBehaviour
     }
 
     [Header("진형 가로/세로 비율 (Width & Length Multipliers)")]
+    [Tooltip("횡방향 대형 폭 배율 (Alt+우클릭 조절). 좁힐수록 가로 밀집도가 상승합니다. (기본 1.0x, 범위 0.15x ~ 3.0x)")]
     public float formationWidthMultiplier = 1.0f;   // 횡방향 밀집/산개 (Alt+우클릭)
+    [Tooltip("종방향 대형 깊이 배율 (Alt+좌클릭 조절). 좁힐수록 전후 밀집도가 상승합니다. (기본 1.0x, 범위 0.15x ~ 3.0x)")]
     public float formationLengthMultiplier = 1.0f;  // 종방향 길이/종심 (Alt+좌클릭)
 
     [Header("사각방진/원형진 겹수 및 크기")]
+    [Tooltip("사각방진 및 원형진의 두께(겹수) (Alt+좌클릭 드래그 시 크기에 맞춰 자동 연동)")]
     public int formationLayers = 2;                         // 방진 겹수 (Alt+좌클릭 드래그 시 크기에 맞춰 자동 연동)
+    [Tooltip("사각방진/원형진 내부 빈 공간 크기 배율")]
     public float hollowRadiusMultiplier = 1.0f;             // 내부 빈 공간 크기 배율 (Alt+좌클릭)
+    [Tooltip("방진 겹과 겹 사이의 층간 거리 배율 (Alt+우클릭 조절, 기본 1.0x, 범위 0.3x ~ 4.0x)")]
     public float formationLayersSpacingMultiplier = 1.0f;   // 🛡️ 방진 열(층간) 거리 배율 (Alt+우클릭, 기본 1.0x, 범위 0.3x ~ 4.0x)
 
     public List<SlotInfo> GenerateFormationSlots(int memberCount, int columns, out int outTotalRows, SquadFormationType formType)
@@ -683,6 +783,113 @@ public class Squad : MonoBehaviour
         return Mathf.Clamp(Mathf.FloorToInt(Mathf.Sqrt(memberCount * 0.22f)), 1, 16);
     }
 
+    /// <summary>
+    /// 현재 방진의 기준 밀집 계수를 반환합니다.
+    /// </summary>
+    public FormationStatModifier GetFormationModifier(SquadFormationType formType)
+    {
+        switch (formType)
+        {
+            case SquadFormationType.Wedge: return wedgeBonus;
+            case SquadFormationType.Square: return squareBonus;
+            case SquadFormationType.Circle: return circleBonus;
+            case SquadFormationType.Diamond: return diamondBonus;
+            default: return normalBonus;
+        }
+    }
+
+    /// <summary>
+    /// 현재 간격을 기준으로 0.0(완전 산개) ~ 1.0(최대 밀집) 사이의 밀집도를 계산합니다.
+    /// looseSpacingThreshold 이상(완전 산개) = 0.0, tightSpacingThreshold 이하(초밀집) = 1.0
+    /// </summary>
+    public float GetFormationTightness()
+    {
+        if (isLooseFormation || currentFormationType == SquadFormationType.Loose)
+        {
+            return 0.0f; // 산개 상태에서는 밀집 보너스 일절 없음 (배율 1.0)
+        }
+
+        // 현재 횡/종 유효 간격 계산
+        float effSpacingX = spacingX * formationWidthMultiplier;
+        float effSpacingZ = spacingZ * formationLengthMultiplier;
+        float avgSpacing = (effSpacingX + effSpacingZ) * 0.5f;
+
+        float looseThresh = (looseSpacingThreshold > 0.1f) ? looseSpacingThreshold : 2.2f;
+        float tightThresh = (tightSpacingThreshold > 0.05f) ? tightSpacingThreshold : 0.7f;
+
+        // 2.2m -> 0.0, 0.7m -> 1.0 (인스펙터 임계값 기준)
+        return Mathf.Clamp01(Mathf.InverseLerp(looseThresh, tightThresh, avgSpacing));
+    }
+
+    /// <summary>
+    /// 방진 종류별 기본 효과, 산개도/밀집도 비례 효과, 전투 태세(접촉 방어)를 종합 계산하여
+    /// 소속 유닛, C# Job 시뮬레이션, Pure ECS에 일괄 동기화합니다.
+    /// </summary>
+    public void ApplyFormationAndStanceModifiers()
+    {
+        // 1. 기준 기본 스탯 확보
+        if (!baseStatsInitialized)
+        {
+            if (members != null && members.Count > 0 && members[0] != null)
+            {
+                baseArmor = members[0].baseArmor;
+                baseMass = members[0].baseMass;
+                baseAttackCooldown = members[0].baseAttackCooldown;
+                baseStatsInitialized = true;
+            }
+        }
+
+        // 2. 방진 계수 및 산개도(밀집도) 산출
+        FormationStatModifier mod = GetFormationModifier(currentFormationType);
+        float tightness = GetFormationTightness();
+        bool isLoose = (isLooseFormation || currentFormationType == SquadFormationType.Loose);
+
+        // 3. 실효 방어력 (Armor: 0 ~ 10,000 만분율)
+        // 산개진에서는 방진 보너스 0, 일반 방진에서는 기본 효과 + 밀집도 비례 추가 효과
+        int formationArmorBonus = isLoose ? 0 : (mod.baseArmorBonus + Mathf.RoundToInt(mod.densityArmorBonus * tightness));
+        int stanceArmorBonus = (!autoAttackEnabled) ? bracingArmorBonus : 0; // 접촉 방어 태세(V 꺼짐)
+        int effectiveArmor = Mathf.Clamp(baseArmor + formationArmorBonus + stanceArmorBonus, 0, 10000);
+
+        // 4. 실효 무게 (Mass)
+        // 산개진에서는 무게 배율 1.0배 (자유 유닛과 동일), 방진 시 기본 배율 + 밀집도 비례 추가 배율
+        float formationMassMultiplier = isLoose ? 1.0f : (mod.baseMassMultiplier + ((mod.densityMassMultiplier - 1.0f) * tightness));
+        float stanceMassMultiplier = (!autoAttackEnabled) ? bracingMassMultiplier : 1.0f; // 접촉 방어 태세
+        float effectiveMass = baseMass * formationMassMultiplier * stanceMassMultiplier;
+
+        // 5. 실효 공격 쿨다운 (Attack Cooldown) - 밀집 시 협소한 공간으로 인해 공속 감소 (인스펙터의 직관적 공격 속도 비율 반영)
+        // densityAttackSpeedRatio가 0.70이면 최대 밀집 시 공속 70% 수준으로 둔화 (쿨다운 1/0.7배로 자동 역산)
+        float targetSpeedRatio = (mod.densityAttackSpeedRatio > 0.05f) ? mod.densityAttackSpeedRatio : 0.70f;
+        float currentSpeedRatio = isLoose ? 1.0f : Mathf.Lerp(1.0f, targetSpeedRatio, tightness);
+        float effectiveCooldown = baseAttackCooldown / Mathf.Max(0.01f, currentSpeedRatio);
+
+        // 6. GameObject 유닛 인스턴스 반영
+        if (members != null)
+        {
+            for (int i = 0; i < members.Count; i++)
+            {
+                Unit u = members[i];
+                if (u != null)
+                {
+                    u.armor = effectiveArmor;
+                    u.mass = effectiveMass;
+                    u.attackCooldown = effectiveCooldown;
+                }
+            }
+        }
+
+        // 7. UnitJobSimulationManager (C# Job System 버퍼) 일괄 갱신
+        if (UnitJobSimulationManager.Instance != null)
+        {
+            UnitJobSimulationManager.Instance.UpdateSquadCombatModifiers(this, effectiveArmor, effectiveMass, effectiveCooldown);
+        }
+
+        // 8. SquadECSSimulationBridge (Pure ECS World Entity) 일괄 갱신
+        if (SquadECSSimulationBridge.Instance != null)
+        {
+            SquadECSSimulationBridge.Instance.UpdateSquadCombatModifiers(this, effectiveArmor, effectiveMass, effectiveCooldown);
+        }
+    }
+
     public void SetFormationType(SquadFormationType formType)
     {
         currentFormationType = formType;
@@ -788,6 +995,9 @@ public class Squad : MonoBehaviour
 
             u.SetInitialFormationPosition(this, currentWorldPos, localOffset, i, r, c);
         }
+
+        // 🛡️ 대형 슬롯 재구성 시 진형 밀집도/스탯 일괄 갱신
+        ApplyFormationAndStanceModifiers();
     }
 
     public void CommandMoveWithFormation(Vector3 destination, Quaternion rotation, int columns = -1, bool forceSort = false, UnitCommandState cmdState = UnitCommandState.Move)
@@ -795,6 +1005,9 @@ public class Squad : MonoBehaviour
         int targetCols = (columns > 0) ? columns : currentColumns;
         bool colChanged = (targetCols != currentColumns);
         if (targetCols > 0) currentColumns = targetCols;
+
+        // 🛡️ 대형 이동/변형 명령 시 진형 밀집도 및 실효 스탯 최신화
+        ApplyFormationAndStanceModifiers();
 
         if (alignmentCoroutine != null) { StopCoroutine(alignmentCoroutine); alignmentCoroutine = null; }
         if (formationAssignmentCoroutine != null) { StopCoroutine(formationAssignmentCoroutine); formationAssignmentCoroutine = null; }
@@ -1169,6 +1382,9 @@ public class Squad : MonoBehaviour
                 }
             }
         }
+
+        // 🛡️ 접촉 방어 태세(V키) 토글 시 실효 방어력/무게 보너스 즉시 일괄 갱신
+        ApplyFormationAndStanceModifiers();
     }
 
     public void SetStance(UnitStance stance)
@@ -1466,7 +1682,7 @@ public class Squad : MonoBehaviour
     /// </summary>
     public void CommandAttackSquad(Squad enemySquad)
     {
-        if (enemySquad == null || (enemySquad.members.Count == 0 && enemySquad.initialUnitCount == 0)) return;
+        if (enemySquad == null || enemySquad.MemberCount <= 0) return;
 
         currentTargetSquad = enemySquad;
 
@@ -1801,7 +2017,7 @@ public class Squad : MonoBehaviour
         // 🛡️ 사각방진/원형진은 고유한 진지 사수 방어진형이므로 적을 향해 슬롯을 강제로 이동시키지 않고 제자리 방패벽 유지
         if (currentFormationType == SquadFormationType.Square || currentFormationType == SquadFormationType.Circle) return;
 
-        if (currentTargetSquad == null || currentTargetSquad.MemberCount == 0)
+        if (currentTargetSquad == null || currentTargetSquad.MemberCount <= 0)
         {
             if (hasActiveEnemyTarget || currentTargetSquad != null)
             {
@@ -1811,12 +2027,13 @@ public class Squad : MonoBehaviour
                 SyncTargetSquadIdToSimulations(-1);
             }
 
-            // ⚔️ 어택땅(AttackMove) 중 전방 30m 내 적 부대 마주침 감지 -> 자동 락온 및 일제 집중 타격
+            // ⚔️ 어택땅(AttackMove) 중 적 부대 마주침 감지 -> 자동 락온 및 일제 집중 타격
             if (BattleManager.Instance != null)
             {
                 var allSquads = BattleManager.Instance.GetAllSquads();
                 Squad closestEnemy = null;
-                float minSqr = 70.0f * 70.0f; // 🎯 전멸 후 70m 내 다른 적 부대로 즉시 자동 연계 돌격
+                // 🎯 적군 AI는 전 맵 무제한(float.MaxValue)으로 다음 아군을 찾아 연계 돌격, 플레이어는 70m 내 자동 연계
+                float minSqr = (!isPlayer) ? float.MaxValue : (70.0f * 70.0f);
                 Vector3 myCenter = GetVisualCenter();
 
                 foreach (var s in allSquads)
@@ -1947,12 +2164,13 @@ public class Squad : MonoBehaviour
     public void ReformSquadAfterCombat()
     {
         members.RemoveAll(m => m == null);
-        if (members.Count == 0) return;
+        if (MemberCount <= 0) return;
 
         targetEnemyWidth = -1f;
         hasActiveEnemyTarget = false;
         currentTargetSquad = null;
         currentEncirclementFactor = 0f;
+        SyncTargetSquadIdToSimulations(-1);
 
         Vector3 visualCenter = GetVisualCenter();
         Quaternion currentRot = transform.rotation;
@@ -1975,6 +2193,19 @@ public class Squad : MonoBehaviour
         else
         {
             hasAttackMoveDestination = false;
+
+            // 🎯 [적군 부대 연속 진격 보장]: 적 부대(!isPlayer)는 교전 종료 후 제자리에 멈추지 않고 즉시 다음 아군 탐색 및 돌격!
+            if (!isPlayer && BattleManager.Instance != null)
+            {
+                enemyAiCheckTimer = 1.0f; // AI 타이머 즉시 만료시켜 UpdateEnemySquadAI가 바로 동작하도록 트리거
+                AutoAcquireFrontEnemyTarget();
+                if (currentTargetSquad != null && currentTargetSquad.MemberCount > 0)
+                {
+                    CommandAttackSquad(currentTargetSquad);
+                    return;
+                }
+            }
+
             CommandMoveWithFormation(visualCenter, currentRot, currentColumns, forceSort: true, cmdState: UnitCommandState.Idle);
         }
     }
@@ -2060,6 +2291,19 @@ public class Squad : MonoBehaviour
             return;
         }
 
+        // 🚨 [목표 전멸/해제 즉시 반영]: 목표가 파괴되었거나 전멸했으면 잔여 참조 및 ID를 완전히 리셋
+        if (currentTargetSquad != null && currentTargetSquad.MemberCount <= 0)
+        {
+            currentTargetSquad = null;
+            hasActiveEnemyTarget = false;
+            SyncTargetSquadIdToSimulations(-1);
+        }
+        else if (currentTargetSquad == null && hasActiveEnemyTarget)
+        {
+            hasActiveEnemyTarget = false;
+            SyncTargetSquadIdToSimulations(-1);
+        }
+
         float minScore = float.MaxValue;
         Squad bestTargetSquad = null;
 
@@ -2080,12 +2324,12 @@ public class Squad : MonoBehaviour
 
                 float lateralOffset = Mathf.Abs(Vector3.Dot(toTarget, transform.right)); // 좌우 벌어짐
 
-                // 다른 적 부대가 이미 이 아군 부대를 타겟팅하고 있는지 카운트
+                // 다른 적 부대가 이미 이 아군 부대를 타겟팅하고 있는지 카운트 (살아있는 적 부대만 카운트)
                 int alreadyTargetedCount = 0;
                 for (int j = 0; j < squads.Count; j++)
                 {
                     Squad otherEnemy = squads[j];
-                    if (otherEnemy != null && otherEnemy != this && !otherEnemy.isPlayer && otherEnemy.currentTargetSquad == s)
+                    if (otherEnemy != null && otherEnemy != this && !otherEnemy.isPlayer && otherEnemy.MemberCount > 0 && otherEnemy.currentTargetSquad == s)
                     {
                         alreadyTargetedCount++;
                     }
@@ -2449,6 +2693,9 @@ public class Squad : MonoBehaviour
 
         Squad bestEnemy = null;
         float bestScore = float.MinValue;
+        Squad fallbackClosestEnemy = null;
+        float minFallbackDist = float.MaxValue;
+
         Vector3 myPos = GetVisualCenter();
         Vector3 myFwd = transform.forward;
 
@@ -2461,6 +2708,13 @@ public class Squad : MonoBehaviour
             Vector3 toEnemy = enemy.GetVisualCenter() - myPos;
             toEnemy.y = 0f;
             float dist = toEnemy.magnitude;
+
+            if (dist < minFallbackDist)
+            {
+                minFallbackDist = dist;
+                fallbackClosestEnemy = enemy;
+            }
+
             if (dist > 80f) continue;
 
             float dot = (dist > 0.001f) ? Vector3.Dot(myFwd, toEnemy / dist) : 1f;
@@ -2474,6 +2728,12 @@ public class Squad : MonoBehaviour
                     bestEnemy = enemy;
                 }
             }
+        }
+
+        // 🎯 정면에 적이 없더라도, 적군 부대(!isPlayer)라면 전장의 가장 가까운 아군 부대를 fallback으로 락온!
+        if (bestEnemy == null && !isPlayer && fallbackClosestEnemy != null)
+        {
+            bestEnemy = fallbackClosestEnemy;
         }
 
         if (bestEnemy != null)

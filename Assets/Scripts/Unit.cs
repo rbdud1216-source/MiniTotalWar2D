@@ -14,6 +14,14 @@ public class Unit : MonoBehaviour
     [Tooltip("유닛 실시간 현재 체력 (게임 시작 시 최대 체력으로 자동 초기화)")]
     public float currentHp = 100f;
 
+    [Tooltip("유닛 기본 방어력 (0 ~ 10000 정수 입력, 10000 = 100.00% 완전 방어. 예: 2812 입력 시 28.12% 피해 감쇄)")]
+    [Range(0, 10000)]
+    public int armor = 0;
+
+    [System.NonSerialized] public int baseArmor = 0;
+    [System.NonSerialized] public float baseMass = 100f;
+    [System.NonSerialized] public float baseAttackCooldown = 1.0f;
+
     [Tooltip("일반 백병전 1회 타격 공격력")]
     public float damage = 10f;
 
@@ -36,24 +44,36 @@ public class Unit : MonoBehaviour
     [Tooltip("주무기 타격 및 백병전 시 적을 밀쳐내는 넉백 세기 배율 (기본: 1.0, 검병 세팅: 1.0, 장창병 세팅: 2.0~2.5 권장)")]
     public float knockbackPower = 1.0f;
 
-    [Header("보조무기 (단검 / Sidearm) 설정")]
-    [Tooltip("적이 일정 거리 이내로 밀착 시 보조무기(단검 등)로 자동 전환 여부 (검병 세팅: 체크 해제, 장창병 세팅: 체크 권장)")]
+    [Tooltip("돌격이 아닌 일반 백병전 평타(창 찌르기, 칼질) 시 발생하는 기본 저지 넉백 속도(m/s)입니다. 수치가 낮을수록 적이 덜 밀려나며 창벽을 파고들기 쉬워집니다. (기본: 0.45m/s)")]
+    public float baseMeleeKnockback = 0.45f;
+
+    [Tooltip("여러 아군이 동시에 한 명의 적을 집중 공격할 때, 피격 유닛에게 누적될 수 있는 평타 넉백 물리 속도의 최대 상한선(m/s)입니다. 수십 미터 튕겨나가는 것을 원천 차단합니다. (기본: 1.2m/s, 밀림 거리 약 9~15cm)")]
+    public float maxMeleeKnockbackCap = 1.2f;
+
+    [Header("보조무기 (Sidearm) 설정")]
+    [Tooltip("적이 일정 거리 이내로 밀착 시 보조무기로 자동 전환 여부 (검병 세팅: 체크 해제, 장창병 세팅: 체크 권장)")]
     public bool useSidearm = false;
 
-    [Tooltip("보조무기(단검)로 전환하는 적과의 거리 기준 (m 단위, 검병 세팅: 무관, 장창병 세팅: 1.2m 권장)")]
+    [Tooltip("보조무기로 전환하는 적과의 거리 기준 (m 단위, 권장: 1.2m)")]
     public float sidearmSwitchDistance = 1.2f;
 
-    [Tooltip("보조무기 유효 공격 사거리 (m 단위, 검병 세팅: 무관, 장창병 단검: 1.0m 권장)")]
+    [Tooltip("보조무기 유효 공격 사거리 (m 단위, 권장: 1.0m)")]
     public float sidearmAttackRange = 1.0f;
 
-    [Tooltip("보조무기 1회 타격 공격력 (검병 세팅: 무관, 장창병 단검: 3.5f~4.0f 권장)")]
+    [Tooltip("보조무기 1회 타격 공격력 (권장: 4.0f)")]
     public float sidearmDamage = 4.0f;
 
-    [Tooltip("보조무기 공격 쿨다운 주기 (초 단위, 빠를수록 연타. 장창병 단검: 0.8s 권장)")]
+    [Tooltip("보조무기 공격 쿨다운 주기 (초 단위, 빠를수록 연타. 권장: 0.8s)")]
     public float sidearmAttackCooldown = 0.8f;
 
-    [Tooltip("보조무기 타격 시 적을 밀쳐내는 넉백 배율 (단검 등은 밀치는 힘이 매우 작음. 기본: 0.1 권장)")]
+    [Tooltip("보조무기 타격 시 적을 밀쳐내는 넉백 배율 (기본: 0.1 권장)")]
     public float sidearmKnockbackPower = 0.1f;
+
+    [Tooltip("보조무기 평타 타격 시 발생하는 기본 저지 넉백 속도(m/s)입니다. 보조무기는 품 안에서 호신용으로 휘두르므로 밀치는 힘이 매우 미약합니다. (기본: 0.2m/s)")]
+    public float sidearmBaseKnockback = 0.2f;
+
+    [Tooltip("여러 아군이 보조무기로 동시에 한 명의 적을 집중 타격할 때 누적될 수 있는 넉백 속도의 최대 상한선(m/s)입니다. (기본: 0.8m/s, 밀림 거리 약 5cm)")]
+    public float sidearmMaxKnockbackCap = 0.8f;
 
     [Tooltip("교전(백병전) 시 발을 멈추고 제자리에서 공격하는 정지 거리 (m 단위, 기본 보병: 1.05m, 장창병: 4.0m+, 사격병: 12m+)")]
     public float combatStoppingDistance = 1.05f;
@@ -77,14 +97,26 @@ public class Unit : MonoBehaviour
     public float unitMaxSpeed = 5.5f;
 
     [Header("돌격 및 물리 충격 설정")]
-    [Tooltip("유닛 질량/무게 (kg 단위, 충돌 시 상대방을 밀쳐내는 넉백 거리 및 저항력에 영향)")]
+    [Tooltip("돌격 반사 (창벽 방어) 능력 보유 여부입니다. 체크 시 제자리에서 적의 돌격을 받을 때 적의 돌격 피해를 역으로 반사하여 큰 피해를 주고 적의 돌격을 분쇄합니다. (검병: 체크 해제, 장창병: 체크 권장)")]
+    public bool canReflectCharge = false;
+
+    [Tooltip("유닛 질량/무게 (kg 단위, 넉백 저항력 및 충돌 시 상대방을 밀쳐내는 물리 충격량의 기준 분모/분자)")]
     public float mass = 100f;
 
-    [Tooltip("돌격 속도로 첫 충돌 시 기본 공격력에 추가되는 충격량 피해 계수")]
+    [Tooltip("돌격 충격 보너스 계수입니다. 돌격 속도가 빠를수록 피해량이 증가합니다.\n공식: [돌격 추가 피해 = 돌격 보너스 × (돌격 쇄도 속도 ÷ 4.8m/s)]\n예: 기본 속도 4.8m/s 충돌 시 15.0 추가 피해, 기병 등 8.0m/s 충돌 시 25.0 추가 피해")]
     public float chargeBonus = 15f;
 
-    [Tooltip("돌격 첫 충돌 시 가해질 수 있는 최대 피해량 상한선")]
+    [Tooltip("돌격 첫 충돌 시 가해질 수 있는 1회 최대 피해량 상한선입니다. (기본 공격력 + 돌격 추가 피해의 최대 상한선)")]
     public float maxChargeDamage = 35f;
+
+    [Tooltip("넘어짐(무력화) 판정 넉백 속도 임계값 (m/s)입니다. 피격 넉백 속도가 이 기준 이상이면 충격을 이기지 못하고 그 자리에 넘어져 무력화 상태가 됩니다. (기본: 2.0 m/s)")]
+    public float knockdownSpeedThreshold = 2.0f;
+
+    [Tooltip("넘어져서 무력화되었을 때 다시 일어나서 전열로 복귀하기까지 걸리는 시간(초)입니다. 무력화 중에는 이동 및 공격이 정지됩니다. (기본: 3.0초)")]
+    public float knockdownDuration = 3.0f;
+
+    [Tooltip("넘어짐/무력화 면역 특수능력 보유 여부입니다. 체크(V) 시 아무리 강한 넉백 충격을 받아도 넘어지거나 무력화되지 않고 굳건히 버팁니다. (정예 보병, 중기병, 괴수, 영웅 등 특수능력 유닛용)")]
+    public bool isImmuneToKnockdown = false;
 
     [Header("지휘 및 상태 설정")]
     [Tooltip("플레이어 마우스 선택 여부")]
@@ -215,6 +247,9 @@ public class Unit : MonoBehaviour
         if (attackRange <= 0.1f) attackRange = 1.45f;
         if (combatStoppingDistance <= 0.1f) combatStoppingDistance = 1.05f;
         if (engagementOffset <= 0.05f) engagementOffset = 0.40f;
+        baseArmor = armor;
+        baseMass = mass;
+        baseAttackCooldown = attackCooldown;
     }
 
     private void Start()
@@ -627,9 +662,16 @@ public class Unit : MonoBehaviour
         return closest;
     }
 
-    public void TakeDamage(float amount)
+    public void TakeDamage(float amount, bool ignoreArmor = false)
     {
-        currentHp -= amount;
+        float effectiveDamage = amount;
+        if (!ignoreArmor && amount < 9000f)
+        {
+            float damageReduction = Mathf.Clamp(armor, 0, 10000) / 10000f;
+            effectiveDamage = (armor >= 10000) ? 0f : Mathf.Max(1.0f, amount * (1.0f - damageReduction));
+        }
+
+        currentHp -= effectiveDamage;
         if (currentHp <= 0)
         {
             if (mySquad != null)

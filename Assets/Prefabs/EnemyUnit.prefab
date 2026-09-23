@@ -52,17 +52,33 @@ MonoBehaviour:
   isPlayer: 0
   maxHp: 100
   currentHp: 0
+  armor: 0
   damage: 10
   attackCooldown: 2
   attackRange: 1.45
+  minAttackRange: 0
+  optimalRangeMin: 0
+  closeRangeDamageRatio: 1
+  knockbackPower: 1
+  useSidearm: 0
+  sidearmSwitchDistance: 1.2
+  sidearmAttackRange: 1
+  sidearmDamage: 4
+  sidearmAttackCooldown: 0.8
+  sidearmKnockbackPower: 0.1
+  combatStoppingDistance: 1.05
+  engagementOffset: 0.4
   isRunning: 0
   walkSpeed: 1.2
   runSpeed: 2.8
   chargeSpeed: 4.8
   unitMaxSpeed: 5.5
-  mass: 100
+  canReflectCharge: 0
+  mass: 80
   chargeBonus: 15
   maxChargeDamage: 35
+  knockdownSpeedThreshold: 2
+  knockdownDuration: 3
   isSelected: 0
   currentState: 0
   currentStance: 0

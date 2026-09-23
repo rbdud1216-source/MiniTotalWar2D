@@ -20,6 +20,7 @@ public struct UnitJobData
     public float currentHp;
     public float maxHp;
     public float damage;
+    public int armor;                 // 기본 방어력 (0 ~ 10000, 10000 = 100.00% 완전 방어)
     public float attackCooldown;
     public float lastAttackTime;
     public float moveSpeed;
@@ -52,6 +53,15 @@ public struct UnitJobData
     public float chargeBonus;          // 돌격 보너스 계수
     public float maxChargeDamage;      // 첫 충돌 시 최대 데미지 한계치
     public int chargeImpactReady;      // 1 = 돌격 충격 장전 완료, 0 = 충격 소진
+    public int canReflectCharge;       // 1 = 돌격 반사 가능(장창병), 0 = 불가능(검병)
+    public float knockdownThreshold;  // 넘어짐 판정 넉백 속도 임계값 (m/s)
+    public float knockdownDuration;   // 무력화 유지 시간 (초, 기본 3.0초)
+    public float knockdownTimer;      // 현재 남은 무력화 시간 (0보다 크면 이동/공격 불가)
+    public int isImmuneToKnockdown;   // 1 = 넘어짐/무력화 면역(불굴 특수능력), 0 = 넘어짐 가능
+    public float baseMeleeKnockback;   // 평타 넉백 기본 세기 (기본: 0.45m/s)
+    public float maxMeleeKnockbackCap; // 다대일 평타 넉백 상한 속도 (기본: 1.2m/s)
+    public float sidearmBaseKnockback; // 보조무기 평타 넉백 기본 세기 (기본: 0.2m/s)
+    public float sidearmMaxKnockbackCap; // 보조무기 다대일 넉백 상한 속도 (기본: 0.8m/s)
     public Vector3 knockbackVelocity;  // 넉백/충격 물리 속도
 }
 
@@ -235,6 +245,7 @@ public class UnitJobSimulationManager : MonoBehaviour
             {
                 oldData.isAlive = (u.currentHp > 0) ? 1 : 0;
                 oldData.currentHp = u.currentHp;
+                oldData.armor = u.armor;
                 oldData.isFreeUnit = (u.mySquad == null) ? 1 : 0;
                 oldData.attackRange = (u.attackRange > 0.1f) ? u.attackRange : 1.45f;
                 oldData.minAttackRange = u.minAttackRange;
@@ -277,6 +288,7 @@ public class UnitJobSimulationManager : MonoBehaviour
                     currentHp = u.currentHp,
                     maxHp = u.maxHp,
                     damage = u.damage,
+                    armor = u.armor,
                     attackCooldown = u.attackCooldown,
                     lastAttackTime = Time.time - Random.Range(0f, u.attackCooldown),
                     moveSpeed = defaultSpeed,
@@ -309,6 +321,15 @@ public class UnitJobSimulationManager : MonoBehaviour
                     chargeBonus = (u.chargeBonus > 0f) ? u.chargeBonus : 15f,
                     maxChargeDamage = (u.maxChargeDamage > 0f) ? u.maxChargeDamage : 35f,
                     chargeImpactReady = 1,
+                    canReflectCharge = u.canReflectCharge ? 1 : 0,
+                    knockdownThreshold = (u.knockdownSpeedThreshold > 0f) ? u.knockdownSpeedThreshold : 2.0f,
+                    knockdownDuration = (u.knockdownDuration > 0f) ? u.knockdownDuration : 3.0f,
+                    knockdownTimer = 0f,
+                    isImmuneToKnockdown = u.isImmuneToKnockdown ? 1 : 0,
+                    baseMeleeKnockback = (u.baseMeleeKnockback > 0f) ? u.baseMeleeKnockback : 0.45f,
+                    maxMeleeKnockbackCap = (u.maxMeleeKnockbackCap > 0f) ? u.maxMeleeKnockbackCap : 1.2f,
+                    sidearmBaseKnockback = (u.sidearmBaseKnockback > 0f) ? u.sidearmBaseKnockback : 0.2f,
+                    sidearmMaxKnockbackCap = (u.sidearmMaxKnockbackCap > 0f) ? u.sidearmMaxKnockbackCap : 0.8f,
                     knockbackVelocity = Vector3.zero
                 };
 
@@ -387,6 +408,35 @@ public class UnitJobSimulationManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 진형/태세/밀집도에 따라 계산된 부대 소속 유닛들의 방어력, 무게(질량), 공격 쿨다운을 일괄 갱신합니다.
+    /// </summary>
+    public void UpdateSquadCombatModifiers(Squad squad, int effectiveArmor, float effectiveMass, float effectiveCooldown)
+    {
+        if (squad == null || !isNativeArraysAllocated || !unitDataArray.IsCreated) return;
+
+        simulationJobHandle.Complete();
+
+        int count = registeredUnits.Count;
+        for (int i = 0; i < count; i++)
+        {
+            Unit u = registeredUnits[i];
+            if (u != null && u.mySquad == squad)
+            {
+                UnitJobData data = unitDataArray[i];
+                data.armor = effectiveArmor;
+                data.mass = effectiveMass;
+                data.attackCooldown = effectiveCooldown;
+                unitDataArray[i] = data;
+
+                // 유닛 자체 필드도 함께 동기화
+                u.armor = effectiveArmor;
+                u.mass = effectiveMass;
+                u.attackCooldown = effectiveCooldown;
+            }
+        }
+    }
+
     private void Update()
     {
         int unitCount = registeredUnits.Count;
@@ -410,6 +460,14 @@ public class UnitJobSimulationManager : MonoBehaviour
             data.chargeSpeed = (u.chargeSpeed > 0f) ? u.chargeSpeed : 4.8f;
             data.chargeBonus = (u.chargeBonus > 0f) ? u.chargeBonus : 15f;
             data.maxChargeDamage = (u.maxChargeDamage > 0f) ? u.maxChargeDamage : 35f;
+            data.canReflectCharge = u.canReflectCharge ? 1 : 0;
+            data.knockdownThreshold = (u.knockdownSpeedThreshold > 0f) ? u.knockdownSpeedThreshold : 2.0f;
+            data.knockdownDuration = (u.knockdownDuration > 0f) ? u.knockdownDuration : 3.0f;
+            data.isImmuneToKnockdown = u.isImmuneToKnockdown ? 1 : 0;
+            data.baseMeleeKnockback = (u.baseMeleeKnockback > 0f) ? u.baseMeleeKnockback : 0.45f;
+            data.maxMeleeKnockbackCap = (u.maxMeleeKnockbackCap > 0f) ? u.maxMeleeKnockbackCap : 1.2f;
+            data.sidearmBaseKnockback = (u.sidearmBaseKnockback > 0f) ? u.sidearmBaseKnockback : 0.2f;
+            data.sidearmMaxKnockbackCap = (u.sidearmMaxKnockbackCap > 0f) ? u.sidearmMaxKnockbackCap : 0.8f;
             data.damage = u.damage;
             data.isFreeUnit = (u.mySquad == null) ? 1 : 0;
             data.squadId = (u.mySquad != null) ? u.mySquad.GetInstanceID() : -1;
@@ -709,6 +767,13 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
         UnitJobData data = unitData[index];
         if (data.isAlive == 0) return;
 
+        // 💫 넘어짐(무력화) 상태 타이머 업데이트 (타겟 유무와 무관하게 유닛 전체 적용)
+        bool isKnockedDown = (data.knockdownTimer > 0f);
+        if (isKnockedDown)
+        {
+            data.knockdownTimer = Mathf.Max(0f, data.knockdownTimer - deltaTime);
+        }
+
         Vector3 currentPos = transform.position;
         Vector3 targetDest = data.targetPosition;
         int targetIdx = targetIndices[index];
@@ -744,9 +809,17 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                         if (pushDir.sqrMagnitude < 0.001f) pushDir = transform.rotation * Vector3.forward;
 
                         float massRatio = data.mass / Mathf.Max(10f, enemyData.mass);
-                        float microKnockbackSpeed = 1.3f * massRatio;
-                        enemyData.knockbackVelocity += pushDir * microKnockbackSpeed;
-                        enemyData.currentHp -= finalDamage;
+                        float microKnockbackSpeed = 0.4f * massRatio;
+                        Vector3 combinedKnockback = enemyData.knockbackVelocity + (pushDir * microKnockbackSpeed);
+                        if (combinedKnockback.sqrMagnitude > 1.2f * 1.2f)
+                        {
+                            combinedKnockback = combinedKnockback.normalized * 1.2f;
+                        }
+                        enemyData.knockbackVelocity = combinedKnockback;
+
+                        float damageReduction = Mathf.Clamp(enemyData.armor, 0, 10000) / 10000f;
+                        float effectiveDamage = (enemyData.armor >= 10000) ? 0f : Mathf.Max(1.0f, finalDamage * (1.0f - damageReduction));
+                        enemyData.currentHp -= effectiveDamage;
                         unitData[targetIdx] = enemyData;
                     }
                 }
@@ -849,12 +922,12 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                     data.currentState = (data.autoAttackEnabled == 0) ? 0 : 2; // Hold(Idle) vs AttackMove
                 }
 
-                // ⚔️ [백병전 타격 판정]: 적이 근접 사거리 내에 있거나 교전 중일 때 타격!
-                if (isInMelee || data.currentState == 3)
+                // ⚔️ [백병전 타격 판정]: 무력화 상태가 아니고, 근접 사거리 내에 있거나 교전 중일 때 타격!
+                if (!isKnockedDown && (isInMelee || data.currentState == 3))
                 {
                     if (isSidearmActive)
                     {
-                        // 🗡️ [보조무기(단검) 공격]: 품 안으로 파고든 적에게 단검 타격
+                        // 🗡️ [보조무기 공격]: 품 안으로 파고든 적에게 보조무기 타격
                         if (distToEnemy <= data.sidearmAttackRange && currentTime >= data.lastAttackTime + data.sidearmAttackCooldown)
                         {
                             data.lastAttackTime = currentTime;
@@ -864,10 +937,19 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                             if (pushDir.sqrMagnitude < 0.001f) pushDir = transform.rotation * Vector3.forward;
 
                             float massRatio = data.mass / Mathf.Max(10f, enemyData.mass);
-                            float microKnockbackSpeed = 1.3f * massRatio * data.sidearmKnockbackPower;
-                            enemyData.knockbackVelocity += pushDir * microKnockbackSpeed;
+                            float baseSidearmKnock = (data.sidearmBaseKnockback > 0f) ? data.sidearmBaseKnockback : 0.2f;
+                            float microKnockbackSpeed = baseSidearmKnock * massRatio * data.sidearmKnockbackPower;
+                            Vector3 combinedKnockback = enemyData.knockbackVelocity + (pushDir * microKnockbackSpeed);
+                            float maxCap = (data.sidearmMaxKnockbackCap > 0f) ? data.sidearmMaxKnockbackCap : 0.8f;
+                            if (combinedKnockback.sqrMagnitude > maxCap * maxCap)
+                            {
+                                combinedKnockback = combinedKnockback.normalized * maxCap;
+                            }
+                            enemyData.knockbackVelocity = combinedKnockback;
 
-                            enemyData.currentHp -= finalDamage;
+                            float damageReduction = Mathf.Clamp(enemyData.armor, 0, 10000) / 10000f;
+                            float effectiveDamage = (enemyData.armor >= 10000) ? 0f : Mathf.Max(1.0f, finalDamage * (1.0f - damageReduction));
+                            enemyData.currentHp -= effectiveDamage;
                             unitData[targetIdx] = enemyData;
                         }
                     }
@@ -881,7 +963,7 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
 
                             float finalDamage = data.damage;
 
-                            // 🎯 최소 사거리 미만(초밀착)이거나 최적 사거리 미만 시 데미지 감쇠 적용 (보조무기가 꺼져있어도 창자루 밀치기로 반격 가능)
+                            // 🎯 최소 사거리 미만(초밀착)이거나 최적 사거리 미만 시 데미지 감쇠 적용
                             if (isInsideMinRange || (data.optimalRangeMin > 0.05f && distToEnemy < data.optimalRangeMin))
                             {
                                 finalDamage *= data.closeRangeDamageRatio;
@@ -891,27 +973,62 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                             if (pushDir.sqrMagnitude < 0.001f) pushDir = transform.rotation * Vector3.forward;
 
                             float massRatio = data.mass / Mathf.Max(10f, enemyData.mass);
-                            // 🛡️ [창벽 버티기 저지력 (Bracing)]: 달려오는 적의 속도에 비례해 반동 넉백 추가
-                            float braceBonus = (enemyData.currentSpeed > 0.5f) ? (enemyData.currentSpeed / Mathf.Max(0.1f, enemyData.chargeSpeed)) * 2.0f : 0f;
 
-                            if (data.chargeImpactReady == 1 && data.currentSpeed > 0.5f)
+                            // 🛡️ [창벽 저지 및 돌격 반사 피해 (Charge Reflection)]:
+                            // 유닛이 돌격 반사 능력(canReflectCharge == 1)을 보유하고 있고,
+                            // 제자리에 버티는 상태(접촉방어태세 autoAttackEnabled == 0 또는 정지 상태)에서 적이 돌격해올 경우 발동
+                            bool isBracing = (data.autoAttackEnabled == 0 || data.currentSpeed < 1.0f);
+                            bool isEnemyCharging = (enemyData.currentSpeed > 2.0f || enemyData.chargeImpactReady == 1);
+                            if (data.canReflectCharge == 1 && isBracing && isEnemyCharging)
                             {
-                                float speedRatio = data.currentSpeed / Mathf.Max(0.1f, data.chargeSpeed);
-                                float impactBonus = data.chargeBonus * speedRatio * (data.mass / 100f);
+                                float enemySpeedScale = enemyData.chargeSpeed / 4.8f;
+                                float reflectedChargeDamage = ((enemyData.chargeBonus > 0f) ? enemyData.chargeBonus : 15f) * enemySpeedScale;
+                                finalDamage += reflectedChargeDamage;
+                                enemyData.chargeImpactReady = 0; // 적의 돌격 충격 분쇄
+                            }
 
-                                finalDamage = Mathf.Min(finalDamage + impactBonus, data.maxChargeDamage);
+                            // 💥 [돌격 쇄도 속도 비례 돌격 피해]:
+                            // 돌격 속도가 빠를수록(예: 기병) 더 큰 충돌 피해를 입힘
+                            // 공식: 돌격 추가 피해 = 돌격 보너스 × (돌격 쇄도 속도 ÷ 4.8m/s)
+                            if (data.chargeImpactReady == 1 && data.currentSpeed > 2.0f)
+                            {
+                                float speedScale = data.chargeSpeed / 4.8f;
+                                finalDamage += data.chargeBonus * speedScale;
                                 data.chargeImpactReady = 0;
-
-                                float knockbackSpeed = (4.5f * speedRatio * massRatio + braceBonus) * data.knockbackPower;
-                                enemyData.knockbackVelocity += pushDir * knockbackSpeed;
                             }
-                            else
+
+                            // 최대 돌격 충돌 피해 상한 적용
+                            if (data.maxChargeDamage > 0f)
                             {
-                                float microKnockbackSpeed = (1.3f * massRatio + braceBonus) * data.knockbackPower;
-                                enemyData.knockbackVelocity += pushDir * microKnockbackSpeed;
+                                finalDamage = Mathf.Min(finalDamage, data.maxChargeDamage);
                             }
 
-                            enemyData.currentHp -= finalDamage;
+                            // 💨 [현실적인 물리 넉백 & 넘어짐(무력화) 판정]:
+                            // 일반 평타(창 찌르기)는 적을 튕겨내지 않고 인스펙터 설정 미세 저지(baseMeleeKnockback, 기본 0.45m/s) 부여.
+                            // 오직 전력 돌격 충돌(기병/보병 돌격 들이받기) 시에만 큰 넉백(1.8m/s) 부여.
+                            bool isChargeHit = (data.chargeImpactReady == 1 && data.currentSpeed > 2.0f);
+                            float baseKnockback = isChargeHit ? 1.8f : data.baseMeleeKnockback;
+                            float knockbackSpeed = Mathf.Clamp(baseKnockback * massRatio, 0.2f, 2.0f) * data.knockbackPower;
+
+                            // 🚨 [다대일 집중 공격 시 넉백 폭증 원천 차단]:
+                            // 창병 여러 명이 동시에 한 명을 찔러도 넉백 속도가 무한 누적되지 않도록 인스펙터 상한선(maxMeleeKnockbackCap) 엄격 제한
+                            Vector3 combinedKnockback = enemyData.knockbackVelocity + (pushDir * knockbackSpeed);
+                            float maxAllowedKnockback = isChargeHit ? 2.2f : data.maxMeleeKnockbackCap;
+                            if (combinedKnockback.sqrMagnitude > maxAllowedKnockback * maxAllowedKnockback)
+                            {
+                                combinedKnockback = combinedKnockback.normalized * maxAllowedKnockback;
+                            }
+                            enemyData.knockbackVelocity = combinedKnockback;
+
+                            // 💫 넘어짐(Knockdown)은 일반 평타가 아닌 '돌격 충돌 피격'이면서 넘어짐 면역이 아닐 때만 발동!
+                            if (isChargeHit && enemyData.isImmuneToKnockdown == 0 && knockbackSpeed >= enemyData.knockdownThreshold)
+                            {
+                                enemyData.knockdownTimer = enemyData.knockdownDuration; // 인스펙터 설정 시간 (기본 3.0초)
+                            }
+
+                            float damageReduction = Mathf.Clamp(enemyData.armor, 0, 10000) / 10000f;
+                            float effectiveDamage = (enemyData.armor >= 10000) ? 0f : Mathf.Max(1.0f, finalDamage * (1.0f - damageReduction));
+                            enemyData.currentHp -= effectiveDamage;
                             unitData[targetIdx] = enemyData;
                         }
                     }
@@ -980,6 +1097,12 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
 
             // 🗡️ 백병전 중(정지 거리 combatStoppingDistance 이내)에는 발을 딛고 칼싸움 (미끄러짐 및 관통 방지)
             if (distToEnemy <= data.combatStoppingDistance && data.currentState == 3)
+            {
+                maxDesiredSpeed = 0f;
+            }
+
+            // 💫 넘어짐 무력화 중에는 이동 불가 (제자리에 쓰러짐)
+            if (isKnockedDown)
             {
                 maxDesiredSpeed = 0f;
             }

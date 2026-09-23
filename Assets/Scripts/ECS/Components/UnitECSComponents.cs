@@ -43,6 +43,7 @@ namespace MiniTotalWar.ECS
         public float CurrentHp;
         public float MaxHp;
         public float Damage;
+        public int Armor;                      // 기본 방어력 (0 ~ 10000, 10000 = 100.00% 완전 방어)
         public float AttackCooldown;
         public float LastAttackTime;
         public float DetectRange;
@@ -70,6 +71,15 @@ namespace MiniTotalWar.ECS
         public int ChargeImpactReady;     // 1 = 첫 충돌 넉백 펄스 장전, 0 = 소진
         public float EngagementStartTime; // 교전 시작 시간 (0f = 비교전)
         public int AutoAttackEnabled;     // 1 = 자동 선제 돌격 On, 0 = 근접 접촉 방어 Off (V)
+        public int CanReflectCharge;       // 1 = 돌격 반사 가능(장창병), 0 = 불가능(검병)
+        public float KnockdownThreshold;   // 넘어짐 판정 넉백 속도 임계값 (m/s)
+        public float KnockdownDuration;    // 무력화 유지 시간 (초, 기본 3.0초)
+        public float KnockdownTimer;       // 현재 남은 무력화 시간 (초)
+        public int IsImmuneToKnockdown;    // 1 = 넘어짐/무력화 면역(불굴 특수능력), 0 = 넘어짐 가능
+        public float BaseMeleeKnockback;   // 평타 넉백 기본 세기 (기본: 0.45m/s)
+        public float MaxMeleeKnockbackCap; // 다대일 평타 넉백 상한 속도 (기본: 1.2m/s)
+        public float SidearmBaseKnockback; // 보조무기 평타 넉백 기본 세기 (기본: 0.2m/s)
+        public float SidearmMaxKnockbackCap; // 보조무기 다대일 넉백 상한 속도 (기본: 0.8m/s)
         public int TargetSquadId;         // 부대 지휘관이 지정한 목표 적 부대 InstanceID (-1 = 없음/자유)
         public float3 CachedEnemyPos;     // 0.1초 주기로 갱신되는 타겟 적의 위치 캐시 (최적화)
         public float TargetSearchTimer;   // 적 위치/타겟 탐색 주기 타이머 (0.1초 주기 분산)

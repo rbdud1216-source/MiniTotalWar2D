@@ -68,6 +68,22 @@ public class BattleManager : MonoBehaviour
     [Tooltip("자동 배치 시 부대와 부대 사이 가로 여유 간격 (미터)")]
     [SerializeField] private float squadSpacing = 4.0f;
 
+    [Header("전역 방진 및 산개도 스탯 튜닝 (전체 부대 공통 인스펙터 조절)")]
+    [Tooltip("체크 시 부대 생성 시 아래의 전역 방진/산개도 스탯 계수를 부대에 덮어씁니다.")]
+    public bool overrideSquadFormationSettings = true;
+
+    [Tooltip("완전 산개 기준 간격(m) - 이 간격 이상이면 밀집 보너스가 0% 적용 (기본: 2.2m)")]
+    public float globalLooseSpacingThreshold = 2.2f;
+
+    [Tooltip("최대 밀집 기준 간격(m) - 이 간격 이하이면 밀집 보너스가 100% 최대로 적용 (기본: 0.7m)")]
+    public float globalTightSpacingThreshold = 0.7f;
+
+    public Squad.FormationStatModifier globalNormalBonus = new Squad.FormationStatModifier(500, 1.2f, 1000, 1.5f, 0.50f);     // 일반 방진 (공속 50% - 2.0초당 1회)
+    public Squad.FormationStatModifier globalWedgeBonus = new Squad.FormationStatModifier(200, 1.4f, 500, 1.8f, 0.55f);        // 쐐기진 (돌격 특화, 공속 55% - 1.82초당 1회)
+    public Squad.FormationStatModifier globalSquareBonus = new Squad.FormationStatModifier(1000, 1.5f, 1500, 2.0f, 0.50f);      // 사각방진 (방어 특화, 공속 50% - 2.0초당 1회)
+    public Squad.FormationStatModifier globalCircleBonus = new Squad.FormationStatModifier(1200, 1.6f, 1800, 2.2f, 0.45f);      // 원형진 (결사항전, 공속 45% - 2.22초당 1회)
+    public Squad.FormationStatModifier globalDiamondBonus = new Squad.FormationStatModifier(400, 1.3f, 600, 1.6f, 0.52f);     // 마름모진 (기동 돌파, 공속 52% - 1.92초당 1회)
+
     [Header("플레이어 군단 편성 (Player Army)")]
     [SerializeField] private List<SquadSpawnConfig> playerArmyConfigs = new List<SquadSpawnConfig>()
     {
@@ -308,6 +324,18 @@ public class BattleManager : MonoBehaviour
         squad.isPlayer = isPlayer;
         squad.currentColumns = cols;
         squad.currentFormationType = config.formationType;
+
+        // 🛡️ 인스펙터에 조절한 전역 방진 형성 및 산개도 스탯 계수 일괄 전달
+        if (overrideSquadFormationSettings)
+        {
+            squad.looseSpacingThreshold = globalLooseSpacingThreshold;
+            squad.tightSpacingThreshold = globalTightSpacingThreshold;
+            squad.normalBonus = globalNormalBonus;
+            squad.wedgeBonus = globalWedgeBonus;
+            squad.squareBonus = globalSquareBonus;
+            squad.circleBonus = globalCircleBonus;
+            squad.diamondBonus = globalDiamondBonus;
+        }
 
         GameObject prefabToSpawn = (config.customUnitPrefab != null)
             ? config.customUnitPrefab

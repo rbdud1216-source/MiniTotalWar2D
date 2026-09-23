@@ -306,8 +306,16 @@ namespace MiniTotalWar.ECS
                 ChargeBonus = (unit.chargeBonus > 0f) ? unit.chargeBonus : 15f,
                 MaxChargeDamage = (unit.maxChargeDamage > 0f) ? unit.maxChargeDamage : 35f,
                 ChargeImpactReady = 1,
-                EngagementStartTime = 0f,
                 AutoAttackEnabled = unit.autoAttackEnabled ? 1 : 0,
+                CanReflectCharge = unit.canReflectCharge ? 1 : 0,
+                KnockdownThreshold = (unit.knockdownSpeedThreshold > 0f) ? unit.knockdownSpeedThreshold : 2.0f,
+                KnockdownDuration = (unit.knockdownDuration > 0f) ? unit.knockdownDuration : 3.0f,
+                KnockdownTimer = 0f,
+                IsImmuneToKnockdown = unit.isImmuneToKnockdown ? 1 : 0,
+                BaseMeleeKnockback = (unit.baseMeleeKnockback > 0f) ? unit.baseMeleeKnockback : 0.45f,
+                MaxMeleeKnockbackCap = (unit.maxMeleeKnockbackCap > 0f) ? unit.maxMeleeKnockbackCap : 1.2f,
+                SidearmBaseKnockback = (unit.sidearmBaseKnockback > 0f) ? unit.sidearmBaseKnockback : 0.2f,
+                SidearmMaxKnockbackCap = (unit.sidearmMaxKnockbackCap > 0f) ? unit.sidearmMaxKnockbackCap : 0.8f,
                 TargetSquadId = (unit.mySquad != null && unit.mySquad.currentTargetSquad != null) ? unit.mySquad.currentTargetSquad.GetInstanceID() : -1,
                 CachedEnemyPos = float3.zero,
                 TargetSearchTimer = (float)(entity.Index % 10) * 0.01f
@@ -441,6 +449,59 @@ namespace MiniTotalWar.ECS
                     {
                         var combat = entityManager.GetComponentData<UnitCombatData>(entities[i]);
                         combat.TargetSquadId = targetSquadId;
+                        entityManager.SetComponentData(entities[i], combat);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 진형 밀집도 및 전투 태세에 따른 실효 스탯(방어력, 무게, 공격 쿨다운)을 소속 ECS 부대원 전원에게 일괄 주입합니다.
+        /// </summary>
+        public void UpdateSquadCombatModifiers(Squad squad, int effectiveArmor, float effectiveMass, float effectiveCooldown)
+        {
+            if (squad == null) return;
+            if (!isInitialized) InitializeECS();
+
+            int mySquadId = squad.GetInstanceID();
+
+            // 1. 하이브리드 모드 유닛 갱신
+            if (squad.members != null && squad.members.Count > 0)
+            {
+                for (int i = 0; i < squad.members.Count; i++)
+                {
+                    Unit u = squad.members[i];
+                    if (u != null && unitToEntityMap.TryGetValue(u, out Entity entity))
+                    {
+                        if (entityManager.Exists(entity))
+                        {
+                            var combat = entityManager.GetComponentData<UnitCombatData>(entity);
+                            combat.Armor = effectiveArmor;
+                            combat.Mass = effectiveMass;
+                            combat.AttackCooldown = effectiveCooldown;
+                            entityManager.SetComponentData(entity, combat);
+                        }
+                    }
+                }
+            }
+
+            // 2. 순수 ECS 모드 Entity 일괄 갱신 (GameObject가 0개여도 전체 엔티티 100% 동기화)
+            var query = entityManager.CreateEntityQuery(
+                ComponentType.ReadOnly<UnitEntityTag>(),
+                ComponentType.ReadWrite<UnitCombatData>()
+            );
+
+            using (var entities = query.ToEntityArray(Allocator.Temp))
+            {
+                for (int i = 0; i < entities.Length; i++)
+                {
+                    var tag = entityManager.GetComponentData<UnitEntityTag>(entities[i]);
+                    if (tag.SquadId == mySquadId && tag.IsAlive == 1)
+                    {
+                        var combat = entityManager.GetComponentData<UnitCombatData>(entities[i]);
+                        combat.Armor = effectiveArmor;
+                        combat.Mass = effectiveMass;
+                        combat.AttackCooldown = effectiveCooldown;
                         entityManager.SetComponentData(entities[i], combat);
                     }
                 }

@@ -148,6 +148,13 @@ namespace MiniTotalWar.ECS
             bool isFreeUnit = (tag.IsFreeUnit == 1 || tag.SquadId == -1);
             int closestEnemyIsFreeUnit = 0;
 
+            // 💫 넘어짐(무력화) 상태 타이머 업데이트
+            bool isKnockedDown = (combat.KnockdownTimer > 0f);
+            if (isKnockedDown)
+            {
+                combat.KnockdownTimer = math.max(0f, combat.KnockdownTimer - DeltaTime);
+            }
+
             // 🎯 [최적화] 매 프레임 적의 위치를 무차별 탐색하지 않고, 0.1초(10Hz)마다 1번씩만 적 위치 탐색/갱신!
             combat.TargetSearchTimer += DeltaTime;
             bool shouldSearchTarget = (combat.TargetSearchTimer >= 0.1f) || (combat.TargetEntity == Entity.Null && math.lengthsq(combat.CachedEnemyPos) < 0.001f);
@@ -473,8 +480,8 @@ namespace MiniTotalWar.ECS
                     combat.CurrentState = (combat.AutoAttackEnabled == 0) ? 0 : 2;
                 }
 
-                // ⚔️ [백병전 타격 판정]: 적이 근접 사거리 내에 있거나 교전 중일 때 타격!
-                if (isInMelee || combat.CurrentState == 3)
+                // ⚔️ [백병전 타격 판정]: 무력화 상태가 아니고, 근접 사거리 내에 있거나 교전 중일 때 타격!
+                if (!isKnockedDown && (isInMelee || combat.CurrentState == 3))
                 {
                     float3 pushDir = meleePushDir;
                     if (math.lengthsq(pushDir) > 0.001f) pushDir = math.normalize(pushDir);
@@ -484,13 +491,14 @@ namespace MiniTotalWar.ECS
 
                     if (isSidearmActive)
                     {
-                        // 🗡️ [보조무기(단검) 공격]: 품 안으로 파고든 적에게 단검 타격
+                        // 🗡️ [보조무기 공격]: 품 안으로 파고든 적에게 보조무기 타격
                         if (meleeTargetDist <= combat.SidearmAttackRange && CurrentTime >= combat.LastAttackTime + combat.SidearmAttackCooldown)
                         {
                             combat.LastAttackTime = CurrentTime;
 
                             float finalDamage = combat.SidearmDamage;
-                            float microKnockbackSpeed = 1.3f * massRatio * combat.SidearmKnockbackPower;
+                            float baseSidearmKnock = (combat.SidearmBaseKnockback > 0f) ? combat.SidearmBaseKnockback : 0.2f;
+                            float microKnockbackSpeed = baseSidearmKnock * massRatio * combat.SidearmKnockbackPower;
 
                             DamageQueue.Enqueue(new DamageEvent
                             {
@@ -511,47 +519,52 @@ namespace MiniTotalWar.ECS
 
                             float finalDamage = combat.Damage;
 
-                            // 🎯 최소 사거리 미만(초밀착)이거나 최적 사거리 미만 시 데미지 감쇠 적용 (보조무기가 꺼져있어도 창자루 밀치기 반격 허용)
+                            // 🎯 최소 사거리 미만(초밀착)이거나 최적 사거리 미만 시 데미지 감쇠 적용
                             if (isInsideMinRange || (combat.OptimalRangeMin > 0.05f && meleeTargetDist < combat.OptimalRangeMin))
                             {
                                 finalDamage *= combat.CloseRangeDamageRatio;
                             }
 
-                            // 🛡️ [창벽 버티기 저지력 (Bracing)]: 접촉 방어 모드 시 상대가 교전/돌격 중이면 반동 넉백 추가
-                            float braceBonus = 0f;
-                            if (AllAliveEntityMap.TryGetValue(meleeTargetEntity, out EntitySpatialData targetSpatial))
+                            // 🛡️ [창벽 저지 및 돌격 반사 피해 (Charge Reflection)]:
+                            // 유닛이 돌격 반사 능력(CanReflectCharge == 1)을 보유하고 있고,
+                            // 제자리에 버티는 상태(접촉방어태세 또는 정지 상태)에서 적이 돌격해올 경우 발동
+                            bool isBracing = (combat.AutoAttackEnabled == 0 || movement.CurrentSpeed < 1.0f);
+                            if (combat.CanReflectCharge == 1 && isBracing && AllAliveEntityMap.TryGetValue(meleeTargetEntity, out EntitySpatialData targetSpatial))
                             {
-                                if (targetSpatial.CurrentState >= 2) braceBonus = 1.5f;
+                                if (targetSpatial.CurrentState >= 2)
+                                {
+                                    float reflectedChargeDamage = 15f;
+                                    finalDamage += reflectedChargeDamage;
+                                }
                             }
 
-                            if (combat.ChargeImpactReady == 1 && movement.CurrentSpeed > 0.5f)
+                            // 💥 [돌격 쇄도 속도 비례 돌격 피해]:
+                            // 돌격 속도가 빠를수록 더 큰 충돌 피해를 입힘
+                            // 공식: 돌격 추가 피해 = 돌격 보너스 × (돌격 쇄도 속도 ÷ 4.8m/s)
+                            if (combat.ChargeImpactReady == 1 && movement.CurrentSpeed > 2.0f)
                             {
-                                float speedRatio = movement.CurrentSpeed / math.max(0.1f, combat.ChargeSpeed);
-                                float impactBonus = combat.ChargeBonus * speedRatio * massRatio;
-                                float maxChargeLimit = (combat.MaxChargeDamage > 0f) ? combat.MaxChargeDamage : 35f;
-                                finalDamage = math.min(finalDamage + impactBonus, maxChargeLimit);
+                                float speedScale = combat.ChargeSpeed / 4.8f;
+                                finalDamage += combat.ChargeBonus * speedScale;
                                 combat.ChargeImpactReady = 0;
+                            }
 
-                                float knockbackSpeed = (4.5f * speedRatio * massRatio + braceBonus) * combat.KnockbackPower;
-                                DamageQueue.Enqueue(new DamageEvent
-                                {
-                                    Target = meleeTargetEntity,
-                                    Damage = finalDamage,
-                                    PushDir = pushDir,
-                                    KnockbackSpeed = knockbackSpeed
-                                });
-                            }
-                            else
+                            // 최대 돌격 충돌 피해 상한 적용
+                            if (combat.MaxChargeDamage > 0f)
                             {
-                                float microKnockbackSpeed = (1.3f * massRatio + braceBonus) * combat.KnockbackPower;
-                                DamageQueue.Enqueue(new DamageEvent
-                                {
-                                    Target = meleeTargetEntity,
-                                    Damage = finalDamage,
-                                    PushDir = pushDir,
-                                    KnockbackSpeed = microKnockbackSpeed
-                                });
+                                finalDamage = math.min(finalDamage, combat.MaxChargeDamage);
                             }
+
+                            // 💨 [현실적인 물리 넉백]: 일반 평타는 인스펙터 미세 저지(BaseMeleeKnockback), 전력 돌격 시에만 큰 넉백(1.8m/s)
+                            bool isChargeHit = (combat.ChargeImpactReady == 1 && movement.CurrentSpeed > 2.0f);
+                            float baseKnockback = isChargeHit ? 1.8f : ((combat.BaseMeleeKnockback > 0f) ? combat.BaseMeleeKnockback : 0.45f);
+                            float knockbackSpeed = math.clamp(baseKnockback * massRatio, 0.2f, 2.0f) * combat.KnockbackPower;
+                            DamageQueue.Enqueue(new DamageEvent
+                            {
+                                Target = meleeTargetEntity,
+                                Damage = finalDamage,
+                                PushDir = pushDir,
+                                KnockbackSpeed = knockbackSpeed
+                            });
                         }
                     }
                 }
@@ -586,6 +599,12 @@ namespace MiniTotalWar.ECS
             // 옆 부대원과 우연히 몸이 스치더라도(meleeTargetDist), 자신의 목표를 향해 멈추지 않고 계속 전진합니다!
             bool isMeleeStopped = (distToEnemy <= effectiveStoppingDist) || (meleeTargetDist <= effectiveStoppingDist * 1.25f && (combat.TargetSquadId == -1 || distToEnemy <= effectiveStoppingDist * 1.8f));
             if (isMeleeStopped && combat.CurrentState == 3)
+            {
+                maxDesiredSpeed = 0f;
+            }
+
+            // 💫 넘어짐 무력화 중에는 이동 불가 (제자리에 쓰러짐)
+            if (isKnockedDown)
             {
                 maxDesiredSpeed = 0f;
             }
@@ -738,13 +757,35 @@ namespace MiniTotalWar.ECS
 
                     if (tag.IsAlive == 1)
                     {
-                        combat.KnockbackVelocity += evt.PushDir * evt.KnockbackSpeed;
-                        combat.CurrentHp -= evt.Damage;
+                        // 🚨 [다대일 집중 공격 시 넉백 폭증 원천 차단]: 피격 유닛의 MaxMeleeKnockbackCap(기본 1.2m/s) 엄격 제한
+                        float3 combinedKnockback = combat.KnockbackVelocity + (evt.PushDir * evt.KnockbackSpeed);
+                        float maxAllowedKnockback = (combat.MaxMeleeKnockbackCap > 0f) ? combat.MaxMeleeKnockbackCap : 1.2f;
+                        if (evt.KnockbackSpeed > 1.5f) maxAllowedKnockback = 2.2f; // 돌격 피격 시 상한 확대
+                        if (math.lengthsq(combinedKnockback) > maxAllowedKnockback * maxAllowedKnockback)
+                        {
+                            combinedKnockback = math.normalize(combinedKnockback) * maxAllowedKnockback;
+                        }
+                        combat.KnockbackVelocity = combinedKnockback;
+
+                        float damageReduction = math.clamp(combat.Armor, 0, 10000) / 10000f;
+                        float effectiveDamage = (combat.Armor >= 10000) ? 0f : math.max(1.0f, evt.Damage * (1.0f - damageReduction));
+                        combat.CurrentHp -= effectiveDamage;
 
                         if (combat.CurrentHp <= 0f)
                         {
                             combat.CurrentHp = 0f;
                             tag.IsAlive = 0;
+                        }
+                        else
+                        {
+                            // 💫 [강한 충격 피격 시 넘어짐 및 무력화 (Knockdown)]
+                            // 넘어짐 면역(불굴 특수능력)이 아닐 때에만 넘어짐 발동!
+                            float effectiveKnockdownThreshold = (combat.KnockdownThreshold > 0f) ? combat.KnockdownThreshold : 2.0f;
+                            if (combat.IsImmuneToKnockdown == 0 && evt.KnockbackSpeed >= effectiveKnockdownThreshold)
+                            {
+                                float duration = (combat.KnockdownDuration > 0f) ? combat.KnockdownDuration : 3.0f;
+                                combat.KnockdownTimer = duration;
+                            }
                         }
 
                         CombatLookup[evt.Target] = combat;
