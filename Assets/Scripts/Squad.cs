@@ -34,6 +34,21 @@ public class Squad : MonoBehaviour
     public string squadName = "보병대";
     [Tooltip("플레이어 진영 부대 여부 (체크 시 아군, 해제 시 적군)")]
     public bool isPlayer = true;
+    [Tooltip("부대의 병과 및 전술 역할 (보병, 창병, 궁병, 기병 등)")]
+    public UnitType unitType = UnitType.MeleeInfantry;
+
+    /// <summary>
+    /// 부대가 원거리(궁병) 병과인지 여부를 반환합니다.
+    /// </summary>
+    public bool IsRangedSquad
+    {
+        get
+        {
+            if (unitType == UnitType.Archer) return true;
+            if (members != null && members.Count > 0 && members[0] != null && members[0].isRangedUnit) return true;
+            return false;
+        }
+    }
 
     [Header("부대원 목록 및 이동 속도")]
     [Tooltip("부대에 소속된 개별 유닛(GameObject) 인스턴스 목록")]
@@ -187,6 +202,8 @@ public class Squad : MonoBehaviour
     public UnitStance currentStance = UnitStance.Aggressive;
     [Tooltip("자동 선제 요격 허용 여부 (V키 해제 시 제자리를 사수하며 돌격을 버티는 접촉 방어 태세 발동)")]
     public bool autoAttackEnabled = true;
+    [Tooltip("🏹 자유 사격 (Fire at Will - F키) 활성화 여부 (체크 시 사거리 내 적에게 자동 일제사격, 해제 시 지정 공격 명령 시에만 사격)")]
+    public bool fireAtWill = true;
 
     private Vector3 ecsVisualCenter = Vector3.zero;
     private bool hasEcsVisualCenter = false;
@@ -383,10 +400,9 @@ public class Squad : MonoBehaviour
             return slots;
         }
 
-        // 산개 대형 토글 여부에 따라 간격 2배 확대 및 가로/세로 독립 비율 적용
-        float baseSpacing = isLooseFormation ? (spacing * 2.0f) : spacing;
-        float currentSpacingX = baseSpacing * formationWidthMultiplier;
-        float currentSpacingZ = baseSpacing * formationLengthMultiplier;
+        // 📐 [진형 간격 산출]: 산개(Loose) 여부에 따라 spacingX/Z가 이미 결정되어 있으므로 중복 2배 연산 배제
+        float currentSpacingX = spacingX * customSpacingMultiplier * formationWidthMultiplier;
+        float currentSpacingZ = spacingZ * customSpacingMultiplier * formationLengthMultiplier;
 
         if (formType == SquadFormationType.Diamond)
         {
@@ -590,8 +606,8 @@ public class Squad : MonoBehaviour
             // - 유닛 간격 1.0m 초밀착 방패벽 고정
             // - Alt+좌클릭: 1열 단위로 얇아지면서 넓어짐
             // - Alt+우클릭: 층간 거리(stepD)만 벌림
-            float stepD = baseSpacing * formationLayersSpacingMultiplier;
-            float spacingS = Mathf.Max(0.75f, baseSpacing * 0.85f); // 어깨 맞댄 초밀착 방패벽 ~1.0m
+            float stepD = currentSpacingZ * formationLayersSpacingMultiplier;
+            float spacingS = Mathf.Max(0.75f, currentSpacingX * 0.85f); // 어깨 맞댄 초밀착 방패벽 ~1.0m
 
             int maxPossibleLayers = Mathf.Clamp(memberCount / 4, 1, 32);
             int numLayers = Mathf.Clamp(formationLayers, 1, maxPossibleLayers);
@@ -759,6 +775,22 @@ public class Squad : MonoBehaviour
         spacingZ = isLooseFormation ? DEFAULT_LOOSE_SPACING_Z : DEFAULT_SPACING_Z;
         spacing = (spacingX + spacingZ) * 0.5f;
 
+        // 🛡️ [진형 동기화]: 산개 토글 시 진형 타입도 상호 연동
+        if (isLooseFormation)
+        {
+            if (currentFormationType == SquadFormationType.Normal || currentFormationType == SquadFormationType.Line)
+            {
+                currentFormationType = SquadFormationType.Loose;
+            }
+        }
+        else
+        {
+            if (currentFormationType == SquadFormationType.Loose)
+            {
+                currentFormationType = SquadFormationType.Normal;
+            }
+        }
+
         RebuildGridStructure(currentColumns, forceSpatialSort: true);
         if (!isMoving)
         {
@@ -893,6 +925,21 @@ public class Squad : MonoBehaviour
     public void SetFormationType(SquadFormationType formType)
     {
         currentFormationType = formType;
+
+        if (formType == SquadFormationType.Loose)
+        {
+            isLooseFormation = true;
+            spacingX = DEFAULT_LOOSE_SPACING_X;
+            spacingZ = DEFAULT_LOOSE_SPACING_Z;
+            spacing = (spacingX + spacingZ) * 0.5f;
+        }
+        else
+        {
+            isLooseFormation = false;
+            spacingX = DEFAULT_SPACING_X;
+            spacingZ = DEFAULT_SPACING_Z;
+            spacing = (spacingX + spacingZ) * 0.5f;
+        }
 
         if (formType == SquadFormationType.Square || formType == SquadFormationType.Circle)
         {
@@ -1679,12 +1726,20 @@ public class Squad : MonoBehaviour
 
     /// <summary>
     /// 목표 적 부대를 향해 정상 대형으로 직진 돌격한 뒤, 충돌 시 포위망을 발동합니다.
+    /// (원거리 궁병 부대의 경우 무모하게 돌격하지 않고 사거리를 유지하며 일제사격을 퍼붓습니다)
     /// </summary>
     public void CommandAttackSquad(Squad enemySquad)
     {
         if (enemySquad == null || enemySquad.MemberCount <= 0) return;
 
         currentTargetSquad = enemySquad;
+
+        // 🏹 [원거리 궁병 부대 전술 분기]: 적진으로 뛰어들지 않고 사거리 유지 일제사격 태세 발동!
+        if (IsRangedSquad)
+        {
+            CommandRangedAttackSquad(enemySquad);
+            return;
+        }
 
         // ⚔️ [돌격 개편] 공격 명령 즉시 전군 돌격/달리기 모드(Run Mode) 강제 가동 (도보 걷기 배제)
         if (!isRunning)
@@ -1724,6 +1779,215 @@ public class Squad : MonoBehaviour
         // 포위 대형으로 돌격 시작 (양쪽 시뮬레이션 매니저 모두에 목표 부대 ID 확실하게 주입)
         SyncTargetSquadIdToSimulations(enemySquad.GetInstanceID());
         CommandMoveWithFormation(chargeDestination, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.AttackMove);
+    }
+
+    /// <summary>
+    /// 🏹 [원거리 궁병 부대전술] 목표 적 부대를 향해 유효 사거리(150m)를 유지하며 정면 일제사격을 수행합니다.
+    /// 적이 사거리 밖이면 유효 사거리 내로 전술 전진하고, 사거리 안이면 제자리에 멈춰 서서 집중 사격을 퍼붓습니다.
+    /// </summary>
+    public void CommandRangedAttackSquad(Squad enemySquad)
+    {
+        if (enemySquad == null || enemySquad.MemberCount <= 0) return;
+
+        currentTargetSquad = enemySquad;
+        hasActiveEnemyTarget = true;
+
+        Vector3 enemyCenter = enemySquad.GetVisualCenter();
+        Vector3 myPos = GetVisualCenter();
+        Vector3 dirToEnemy = enemyCenter - myPos;
+        dirToEnemy.y = 0f;
+        float distToEnemy = dirToEnemy.magnitude;
+
+        Quaternion faceRot = (dirToEnemy.sqrMagnitude > 0.001f)
+            ? Quaternion.LookRotation(dirToEnemy.normalized)
+            : transform.rotation;
+
+        SyncTargetSquadIdToSimulations(enemySquad.GetInstanceID());
+
+        // 궁병 유효 사거리 (기본 150m, 적정 교전 거리 약 100m)
+        float maxRange = 150f;
+        if (members != null && members.Count > 0 && members[0] != null && members[0].rangedAttackRange > 10f)
+        {
+            maxRange = members[0].rangedAttackRange;
+        }
+
+        float optimalEngageDist = maxRange * 0.70f; // 약 105m 거리에서 사격 포지션 유지
+
+        if (distToEnemy > maxRange * 0.90f)
+        {
+            // 🚶‍♂️ 사거리 밖(> 135m): 적을 향해 사격 최적 거리까지 정규 대형으로 전술 전진 (돌격하지 않고 도보 전진)
+            Vector3 targetStandPos = enemyCenter - (dirToEnemy.normalized * optimalEngageDist);
+            lastTrackedTargetPos = targetStandPos;
+            CommandMoveWithFormation(targetStandPos, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.Move);
+        }
+        else
+        {
+            // 🎯 사거리 안(<= 135m): 적진으로 무모하게 뛰어들지 않고, 현재 위치에서 제자리에 서서 일제사격 유지!
+            lastTrackedTargetPos = myPos;
+            CommandRangedHaltAndFire(faceRot, enemySquad);
+        }
+
+        if (currentTargetSquad != enemySquad || !hasActiveEnemyTarget)
+        {
+            Debug.Log($"<color=#00FFAA><b>[Squad] 🏹 궁병 부대({squadName})가 적 부대({enemySquad.name})를 목표로 제자리 사격 자세를 취합니다. (거리: {distToEnemy:F1}m, 사거리: {maxRange}m)</b></color>");
+        }
+    }
+
+    /// <summary>
+    /// 🏹 [궁병 제자리 사격 태세]: 적진으로 뛰어가지 않고, 현재 위치에서 제자리에 멈춰 서서 적 방향으로 회전만 정렬하고 일제사격을 가합니다.
+    /// </summary>
+    public void CommandRangedHaltAndFire(Quaternion faceRot, Squad enemySquad)
+    {
+        isMoving = false;
+        ClearWaypoints();
+
+        if (alignmentCoroutine != null) { StopCoroutine(alignmentCoroutine); alignmentCoroutine = null; }
+        if (formationAssignmentCoroutine != null) { StopCoroutine(formationAssignmentCoroutine); formationAssignmentCoroutine = null; }
+        if (staggeredMovementCoroutine != null) { StopCoroutine(staggeredMovementCoroutine); staggeredMovementCoroutine = null; }
+
+        Vector3 actualCenter = GetVisualCenter();
+        transform.position = actualCenter;
+        moveDestination = actualCenter;
+        targetSquadRotation = faceRot;
+        transform.rotation = faceRot;
+
+        currentTargetSquad = enemySquad;
+        hasActiveEnemyTarget = (enemySquad != null);
+        SyncTargetSquadIdToSimulations(enemySquad != null ? enemySquad.GetInstanceID() : -1);
+
+        if (members != null && members.Count > 0)
+        {
+            List<SlotInfo> slots = GenerateFormationSlots(members.Count, currentColumns, out totalGridRows, currentFormationType);
+
+            for (int i = 0; i < members.Count; i++)
+            {
+                var member = members[i];
+                if (member == null) continue;
+
+                member.currentState = UnitCommandState.Idle; // 대기/사격 유지
+                member.hasSquadCommand = false;
+
+                var slot = (i < slots.Count) ? slots[i] : default;
+                Vector3 localOffset = (i < slots.Count) ? slot.localOffset : Vector3.zero;
+                Vector3 inPlaceSlotPos = actualCenter + (faceRot * localOffset);
+
+                member.fixedTargetPos = inPlaceSlotPos;
+                member.formationOffset = localOffset;
+                member.targetRotation = faceRot * (i < slots.Count ? slot.localRotation : Quaternion.identity);
+
+                var agent = member.GetComponent<NavMeshAgent>();
+                if (agent != null && agent.isActiveAndEnabled && agent.isOnNavMesh)
+                {
+                    agent.isStopped = true;
+                    agent.ResetPath();
+                    agent.velocity = Vector3.zero;
+                }
+
+                if (UnitJobSimulationManager.HasInstance)
+                {
+                    UnitJobSimulationManager.Instance.UpdateUnitTargetPosition(member, inPlaceSlotPos, member.targetRotation, UnitCommandState.Idle);
+                }
+                if (MiniTotalWar.ECS.SquadECSSimulationBridge.Instance != null)
+                {
+                    MiniTotalWar.ECS.SquadECSSimulationBridge.Instance.UpdateEntityTarget(member, inPlaceSlotPos, member.targetRotation, UnitCommandState.Idle);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// ⚔️ [Alt + 우클릭 강제 근접 돌격]: 활을 접고 보조무기(단검/칼)를 뽑아 적진 한가운데로 전속력 돌격을 감행합니다.
+    /// </summary>
+    public void CommandMeleeChargeSquad(Squad enemySquad)
+    {
+        if (enemySquad == null || enemySquad.MemberCount <= 0) return;
+
+        currentTargetSquad = enemySquad;
+        hasActiveEnemyTarget = true;
+        if (!isRunning) SetRunMode(true);
+
+        Vector3 enemyCenter = enemySquad.GetVisualCenter();
+        Vector3 myPos = GetVisualCenter();
+        Vector3 dirToEnemy = enemyCenter - myPos;
+        dirToEnemy.y = 0f;
+        Quaternion faceRot = (dirToEnemy.sqrMagnitude > 0.001f) ? Quaternion.LookRotation(dirToEnemy.normalized) : transform.rotation;
+
+        SyncTargetSquadIdToSimulations(enemySquad.GetInstanceID());
+        Debug.Log($"<color=#FF5555><b>[Squad] ⚔️ [Alt+우클릭] 궁병 부대({squadName})가 활을 접고 적 부대({enemySquad.name})를 향해 강제 백병전 돌격을 개시합니다!</b></color>");
+        CommandMoveWithFormation(enemyCenter, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.AttackMove);
+    }
+
+    /// <summary>
+    /// 🏹 자유 사격 (Fire at Will - F키) 모드를 토글합니다.
+    /// 켜짐: 사거리 내에 적이 들어오면 자동으로 일제사격.
+    /// 꺼짐: 화살을 아끼며 대기하고, 오직 플레이어가 직접 특정 적 부대를 우클릭하여 타겟팅했을 때만 일제사격.
+    /// </summary>
+    public void ToggleFireAtWill()
+    {
+        SetFireAtWill(!fireAtWill);
+    }
+
+    public void SetFireAtWill(bool enable)
+    {
+        fireAtWill = enable;
+
+        // 🛑 [사용자 요구 반영: 자유 사격 OFF 시 즉시 공격 정지 & 화살 보류]:
+        // 플레이어가 F키를 눌러 자유사격을 끄는 순간, 현재 조준/사격 중이던 타겟을 즉시 해제하고 전원 사격 중단!
+        if (!enable)
+        {
+            currentTargetSquad = null;
+            hasActiveEnemyTarget = false;
+            SyncTargetSquadIdToSimulations(-1);
+            CommandStop();
+        }
+
+        for (int i = 0; i < members.Count; i++)
+        {
+            if (members[i] != null)
+            {
+                members[i].fireAtWill = enable;
+                if (!enable)
+                {
+                    members[i].Stop();
+                }
+            }
+        }
+
+        if (members.Count == 0 && initialUnitCount > 0)
+        {
+            var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
+            if (world != null && world.IsCreated)
+            {
+                var em = world.EntityManager;
+                var query = em.CreateEntityQuery(
+                    typeof(MiniTotalWar.ECS.UnitEntityTag),
+                    typeof(MiniTotalWar.ECS.UnitCombatData)
+                );
+
+                using (var entities = query.ToEntityArray(Unity.Collections.Allocator.Temp))
+                using (var tags = query.ToComponentDataArray<MiniTotalWar.ECS.UnitEntityTag>(Unity.Collections.Allocator.Temp))
+                {
+                    int squadId = GetInstanceID();
+                    for (int i = 0; i < tags.Length; i++)
+                    {
+                        if (tags[i].SquadId == squadId && tags[i].IsAlive == 1)
+                        {
+                            Entity ent = entities[i];
+                            var combat = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(ent);
+                            combat.FireAtWill = enable ? 1 : 0;
+                            if (!enable)
+                            {
+                                combat.TargetSquadId = -1;
+                            }
+                            em.SetComponentData(ent, combat);
+                        }
+                    }
+                }
+            }
+        }
+
+        string stateText = fireAtWill ? "<color=#00FFAA><b>[ON - 자동 사격]</b></color>" : "<color=#FF6666><b>[OFF - 즉시 사격 중지 / 화살 절약]</b></color>";
+        Debug.Log($"[Squad] 🏹 부대({squadName}) 자유 사격(Fire at Will) -> {stateText}");
     }
 
     /// <summary>
@@ -2011,8 +2275,11 @@ public class Squad : MonoBehaviour
 
     private void UpdateTargetSquadTracking()
     {
-        // 🚨 핵심: 플레이어가 이동/후퇴(Move) 명령을 내린 상태라면 적 부대 추적 및 포위 슬롯 갱신을 즉시 중단하여 탈출 보장!
-        if (currentCommandState != UnitCommandState.AttackMove) return;
+        // 🏹 원거리 궁병 부대가 활 공격 대상(currentTargetSquad)을 갖고 있는 경우, 사거리 추적 및 제자리 사격 전환을 위해 추적 허용!
+        bool isRangedTracking = IsRangedSquad && hasActiveEnemyTarget && currentTargetSquad != null;
+
+        // 🚨 일반 부대: 플레이어가 이동/후퇴(Move) 명령을 내린 상태라면 적 부대 추적 및 포위 슬롯 갱신을 즉시 중단하여 탈출 보장!
+        if (!isRangedTracking && currentCommandState != UnitCommandState.AttackMove) return;
 
         // 🛡️ 사각방진/원형진은 고유한 진지 사수 방어진형이므로 적을 향해 슬롯을 강제로 이동시키지 않고 제자리 방패벽 유지
         if (currentFormationType == SquadFormationType.Square || currentFormationType == SquadFormationType.Circle) return;
@@ -2071,6 +2338,42 @@ public class Squad : MonoBehaviour
             : transform.rotation;
 
         UpdateEnemyProjectionData(currentTargetSquad, faceRot, enemyCenter);
+
+        // 🏹 [원거리 궁병 부대 실시간 전술 제어]:
+        if (IsRangedSquad)
+        {
+            float maxRange = 150f;
+            if (members != null && members.Count > 0 && members[0] != null && members[0].rangedAttackRange > 10f)
+            {
+                maxRange = members[0].rangedAttackRange;
+            }
+
+            // 🚨 적 보병이 15m 코앞까지 쇄도해오면, 사격을 멈추고 전원 백병전 돌격 전환!
+            if (distToEnemy <= 15.0f)
+            {
+                if (!isRunning) SetRunMode(true);
+                Vector3 meleeChargeDestination = enemyCenter;
+                CommandMoveWithFormation(meleeChargeDestination, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.AttackMove);
+                return;
+            }
+
+            // 사거리 밖(> 135m)이면 사거리 내(약 105m)로 전술 전진 (돌격이 아닌 정규 대형 도보 이동)
+            if (distToEnemy > maxRange * 0.90f)
+            {
+                float optimalEngageDist = maxRange * 0.70f;
+                Vector3 targetStandPos = enemyCenter - (dirToEnemy.normalized * optimalEngageDist);
+                CommandMoveWithFormation(targetStandPos, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.Move);
+            }
+            else
+            {
+                // 이미 사거리 내이면 전진을 멈추고 제자리 사격 태세 유지!
+                if (isMoving)
+                {
+                    CommandRangedHaltAndFire(faceRot, currentTargetSquad);
+                }
+            }
+            return;
+        }
 
         float frontlineDist = Vector3.Distance(myFront, contactSurfaceCenter);
 
@@ -2219,6 +2522,7 @@ public class Squad : MonoBehaviour
     {
         // 아군(Player)이고, 요격 모드가 켜져 있으며, 현재 단순 이동 중이 아닐 때 작동
         if (!isPlayer || MemberCount <= 0 || !autoAttackEnabled) return;
+        if (IsRangedSquad) return; // 🏹 원거리 궁병 부대는 근접 맞돌격을 하지 않고 제자리 사격 태세 유지!
         if (isMoving && currentCommandState != UnitCommandState.AttackMove) return;
         if (currentCommandState == UnitCommandState.AttackMove) return; // 이미 공격/돌격 명령 수행 중이면 통과
 
@@ -2499,72 +2803,7 @@ public class Squad : MonoBehaviour
             currentEncirclementFactor = Mathf.MoveTowards(currentEncirclementFactor, 0f, 2.0f * Time.deltaTime);
         }
 
-        int enemyMemberCount = (currentTargetSquad != null) ? currentTargetSquad.MemberCount : 0;
-        bool hasActiveCombat = (engagedCount > 0) || (hasActiveEnemyTarget && currentTargetSquad != null && enemyMemberCount > 0);
 
-        if (hasActiveCombat && currentTargetSquad != null && enemyMemberCount > 0)
-        {
-            int myCount = MemberCount;
-            int totalRows = Mathf.CeilToInt((float)myCount / Mathf.Max(1, currentColumns));
-            float curSpacingZ = (currentFormationType == SquadFormationType.Loose && !isLooseFormation) ? (DEFAULT_LOOSE_SPACING_Z * customSpacingMultiplier) : (spacingZ * customSpacingMultiplier);
-            float baseFrontZ = (totalRows - 1) * 0.5f * curSpacingZ;
-
-            // ⚔️ 1열이 접적면(contactSurfaceCenter)에 완벽 밀착하도록 부대 기준점 동기화
-            Vector3 pushTarget = contactSurfaceCenter - (targetSquadRotation * Vector3.forward) * (baseFrontZ + 0.1f);
-            transform.position = Vector3.MoveTowards(transform.position, pushTarget, 2.0f * Time.deltaTime);
-            moveDestination = transform.position;
-
-            transform.rotation = targetSquadRotation;
-
-            Vector3 basePos = transform.position;
-            Quaternion baseRot = transform.rotation;
-
-            bool isAttackerEnveloping = hasActiveEnemyTarget && (currentColumns * spacingX >= currentTargetSquad.currentColumns * currentTargetSquad.spacingX * 0.9f);
-
-            if (isAttackerEnveloping)
-            {
-                // [A. 공격/포위자]: 매끄러운 동심원 초승달 포위 슬롯 동기화
-                for (int i = 0; i < members.Count; i++)
-                {
-                    Unit u = members[i];
-                    if (u == null) continue;
-
-                    int col = Mathf.Clamp(u.Col, 0, currentColumns - 1);
-                    int row = Mathf.Max(0, u.Row);
-
-                    if (CalculateEnvelopmentSlot(row, (float)col, currentColumns, totalGridRows, currentFormationType, out Vector3 envelopSlot, out Vector3 colNormalDir))
-                    {
-                        Vector3 worldSlotPos = basePos + (baseRot * envelopSlot);
-                        Quaternion slotRot = baseRot * Quaternion.LookRotation(colNormalDir);
-                        u.UpdateTargetPosition(worldSlotPos, slotRot);
-                    }
-                    else
-                    {
-                        Vector3 fallbackSlot = GetSlotLocalOffset(row, col, currentColumns, totalGridRows, currentFormationType);
-                        Vector3 worldSlotPos = basePos + (baseRot * fallbackSlot);
-                        u.UpdateTargetPosition(worldSlotPos, baseRot);
-                    }
-                }
-                return;
-            }
-            else
-            {
-                // [B. 피포위/수비자]: 인위적인 원형 변형 없이 정통 사각 방진(Solid Shieldwall) 유지하며 자연스럽게 교전
-                for (int i = 0; i < members.Count; i++)
-                {
-                    Unit u = members[i];
-                    if (u == null) continue;
-
-                    int col = Mathf.Clamp(u.Col, 0, currentColumns - 1);
-                    int row = Mathf.Max(0, u.Row);
-
-                    Vector3 normalSlot = GetSlotLocalOffset(row, col, currentColumns, totalGridRows, currentFormationType);
-                    Vector3 worldSlotPos = basePos + (baseRot * normalSlot);
-                    u.UpdateTargetPosition(worldSlotPos, baseRot);
-                }
-                return;
-            }
-        }
 
         // 부대가 이동 중이 아닐 때는 고정 대형 프레임(moveDestination)에 앵커를 완벽 고정!
         if (!isMoving)
@@ -2941,8 +3180,8 @@ public class Squad : MonoBehaviour
 
     public Vector3 CalculateCurvedSlotOffset(int row, float col, int columns, int totalRows, SquadFormationType formType)
     {
-        float curSpacingX = (formType == SquadFormationType.Loose || isLooseFormation) ? (spacingX * 1.5f) : spacingX;
-        float curSpacingZ = (formType == SquadFormationType.Loose || isLooseFormation) ? (spacingZ * 1.5f) : spacingZ;
+        float curSpacingX = spacingX * customSpacingMultiplier;
+        float curSpacingZ = spacingZ * customSpacingMultiplier;
         
         if (totalRows <= 0)
         {
@@ -2951,9 +3190,11 @@ public class Squad : MonoBehaviour
         }
 
         // 🌟 [공격/포위 시 부대 분할 없이 하나의 일체형 대형으로 완전 통합]:
+        // 🏹 원거리 궁병 부대(IsRangedSquad)는 적을 포위하지 않고 정규 사격 진형을 엄격히 유지!
+        // ⚔️ 근접 부대만 적의 정면/측면을 감싸 안는 포위 대형(CalculateEnvelopmentSlot) 발동!
         // 단, 평행 횡대(Line) 진형에서는 양 날개가 벌어지며 옆 부대 전선을 침범하지 않도록,
         // 인위적 포위 왜곡을 배제하고 단단한 직사각형 방패벽 슬롯을 엄격히 유지합니다.
-        if (hasActiveEnemyTarget && currentTargetSquad != null && targetEnemyWidth > 0f && formType != SquadFormationType.Line)
+        if (!IsRangedSquad && hasActiveEnemyTarget && currentTargetSquad != null && targetEnemyWidth > 0f && formType != SquadFormationType.Line)
         {
             if (CalculateEnvelopmentSlot(row, col, columns, totalRows, formType, out Vector3 envelopSlot, out _))
             {
@@ -3092,11 +3333,6 @@ public class Squad : MonoBehaviour
     {
         if (members != null && members.Count > 0)
         {
-            if (!isMoving && currentCommandState != UnitCommandState.MeleeEngaged)
-            {
-                return transform.position;
-            }
-
             Vector3 sum = Vector3.zero;
             int count = 0;
             for (int i = 0; i < members.Count; i++)

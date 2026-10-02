@@ -22,12 +22,15 @@
     - `CalculateSlotWorldPosition()`: 대형 내 개별 슬롯 월드 좌표 계산
     - `GetSlotLocalOffset()`: 진형 타입별 통합 오프셋 산출
   - 📂 2.2. 특수 진형 연산 (Special Formations)
-    - `CalculateCurvedSlotOffset()`: Alt+좌클릭 2차 포물선 곡선 대형 계산
-    - `CalculateEnvelopmentSlot()`: 전열 폭 비례 U자형 포위망 슬롯 계산
+    - `CalculateCurvedSlotOffset()`: Alt+좌클릭 2차 포물선 곡선 대형 계산 (원거리 부대 IsRangedSquad는 근접 포위 슬롯 왜곡을 배제하고 단정된 방진 사격 슬롯 엄격 유지)
+    - `CalculateEnvelopmentSlot()`: 전열 폭 비례 U자형 포위망 슬롯 계산 (근접 보병 전용 돌격 포위망)
     - `CalculateOrganicDefensiveSlot()`: 피포위 수비 시 방어선 슬롯 계산
 - 📁 **3. 이동 및 지휘 명령 (Movement & Command Dispatch)**
   - `CommandMoveWithFormation()`: 지정 목적지로 부대 대형 이동 명령 및 실효 스탯 최신화
-  - `CommandAttackSquad()`: 지정 적 부대 타겟팅 및 쇄도 포위 돌격
+  - `CommandAttackSquad()`: 지정 적 부대 타겟팅 (보병은 포위 돌격, 궁병은 사거리 유지 일제사격 분기)
+  - `CommandRangedAttackSquad()`: 🏹 궁병 부대전술 - 150m 사거리 밖이면 전술 전진(Move), 사거리 안이면 제자리 정지 후 정면 일제사격 유지
+  - `CommandRangedHaltAndFire()`: 🏹 궁병 제자리 사격 태세 - 대형 슬롯을 온전히 유지한 채 적 방향 정렬 및 정지 사격
+  - `ToggleLooseFormation()`: 산개(Loose) 토글 및 진형 타입(currentFormationType) 양방향 동기화, 간격 중복 연산 배제
   - `CommandStop()`: 전 부대원 즉시 정지 및 진형 사수
   - `CommandCurvedFormation()`: 곡선 대형 전개 명령
   - `AddWaypoint()`, `ClearWaypoints()`: 다중 경유지(Waypoint) 대기열 관리

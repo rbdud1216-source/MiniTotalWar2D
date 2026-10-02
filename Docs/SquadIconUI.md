@@ -15,7 +15,7 @@
   - `Awake()`, `Start()`, `OnDestroy()`: 컴포넌트 캐싱 및 버튼 리스너 바인딩
   - `Initialize(Squad squad)`: 대상 부대 바인딩, 초기 조직력 게이지 설정, 진영 색상(아군/적군) 지정
 - 📁 **2. 실시간 위치 및 게이지 동기화 (`LateUpdate`)**
-  - `UpdateIconPosition()`: `targetSquad.GetVisualCenter()`를 스크린 좌표(`WorldToScreenPoint`)로 변환하여 머리 위(`offset = (0, 40, 0)`)에 부드럽게 고정
+  - `UpdateIconPosition()`: `targetSquad.GetVisualCenter()`(살아있는 병사들의 실시간 물리적 평균 무게중심)를 스크린 좌표(`WorldToScreenPoint`)로 변환하여 머리 위(`offset = (0, 40, 0)`)에 부드럽고 견고하게 고정 (사격, 이동, 교전 중 적진으로의 이탈이나 왕복 현상 완전 원천 차단)
   - `UpdateOrganizationBar()`: 잔여 병력 비율(`MemberCount / initialUnitCount`) 계산 및 `fillAmount` 적용
   - 동적 색상 전환:
     - **적군 부대**: 선명한 레드 (`#F24040`)

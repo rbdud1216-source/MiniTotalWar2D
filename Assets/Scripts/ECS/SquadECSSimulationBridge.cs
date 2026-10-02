@@ -307,6 +307,7 @@ namespace MiniTotalWar.ECS
                 MaxChargeDamage = (unit.maxChargeDamage > 0f) ? unit.maxChargeDamage : 35f,
                 ChargeImpactReady = 1,
                 AutoAttackEnabled = unit.autoAttackEnabled ? 1 : 0,
+                FireAtWill = unit.fireAtWill ? 1 : 0,
                 CanReflectCharge = unit.canReflectCharge ? 1 : 0,
                 KnockdownThreshold = (unit.knockdownSpeedThreshold > 0f) ? unit.knockdownSpeedThreshold : 2.0f,
                 KnockdownDuration = (unit.knockdownDuration > 0f) ? unit.knockdownDuration : 3.0f,

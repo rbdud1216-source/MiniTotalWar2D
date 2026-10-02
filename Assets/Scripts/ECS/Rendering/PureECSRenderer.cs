@@ -16,6 +16,7 @@ namespace MiniTotalWar.ECS
 
         [Header("렌더링 메시 및 머티리얼")]
         [SerializeField] private Mesh unitMesh;
+        [SerializeField] private Mesh missileMesh; // 🎯 신규 궁병 전용 구형(Sphere) 메쉬
         [SerializeField] private Material playerMaterial;
         [SerializeField] private Material playerSelectedMaterial;
         [SerializeField] private Material enemyMaterial;
@@ -27,9 +28,16 @@ namespace MiniTotalWar.ECS
         private EntityQuery unitQuery;
         private bool isInitialized = false;
 
+        // 보병(Cube) 버퍼
         private Matrix4x4[] playerMatrices = new Matrix4x4[4096];
         private Matrix4x4[] playerSelectedMatrices = new Matrix4x4[4096];
         private Matrix4x4[] enemyMatrices = new Matrix4x4[4096];
+
+        // 궁병(Sphere) 버퍼
+        private Matrix4x4[] playerArcherMatrices = new Matrix4x4[4096];
+        private Matrix4x4[] playerSelectedArcherMatrices = new Matrix4x4[4096];
+        private Matrix4x4[] enemyArcherMatrices = new Matrix4x4[4096];
+
         private readonly Matrix4x4[] sharedBatchBuffer = new Matrix4x4[1023];
         private MaterialPropertyBlock propBlock;
 
@@ -44,6 +52,13 @@ namespace MiniTotalWar.ECS
                 GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 unitMesh = cube.GetComponent<MeshFilter>().sharedMesh;
                 Destroy(cube);
+            }
+
+            if (missileMesh == null)
+            {
+                GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                missileMesh = sphere.GetComponent<MeshFilter>().sharedMesh;
+                Destroy(sphere);
             }
 
             Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Universal Render Pipeline/Simple Lit") ?? Shader.Find("Sprites/Default");
@@ -141,6 +156,10 @@ namespace MiniTotalWar.ECS
                 int playerSelectedCount = 0;
                 int enemyCount = 0;
 
+                int playerArcherCount = 0;
+                int playerSelectedArcherCount = 0;
+                int enemyArcherCount = 0;
+
                 for (int i = 0; i < totalEntities; i++)
                 {
                     if (tags[i].IsAlive == 0) continue;
@@ -158,34 +177,56 @@ namespace MiniTotalWar.ECS
                     }
 
                     Matrix4x4 mat = Matrix4x4.TRS(pos, rot, unitScale);
+                    bool isArcher = (tags[i].UnitType == 2);
 
                     if (tags[i].Faction == 1) // 아군
                     {
                         bool isSelected = selectedSquadIds.Contains(tags[i].SquadId) || (hasSelectedEntities && selectedEntitySet.Contains(entities[i]));
                         if (isSelected)
                         {
-                            if (playerSelectedCount >= playerSelectedMatrices.Length)
+                            if (isArcher)
                             {
-                                System.Array.Resize(ref playerSelectedMatrices, playerSelectedMatrices.Length * 2);
+                                if (playerSelectedArcherCount >= playerSelectedArcherMatrices.Length)
+                                    System.Array.Resize(ref playerSelectedArcherMatrices, playerSelectedArcherMatrices.Length * 2);
+                                playerSelectedArcherMatrices[playerSelectedArcherCount++] = mat;
                             }
-                            playerSelectedMatrices[playerSelectedCount++] = mat;
+                            else
+                            {
+                                if (playerSelectedCount >= playerSelectedMatrices.Length)
+                                    System.Array.Resize(ref playerSelectedMatrices, playerSelectedMatrices.Length * 2);
+                                playerSelectedMatrices[playerSelectedCount++] = mat;
+                            }
                         }
                         else
                         {
-                            if (playerCount >= playerMatrices.Length)
+                            if (isArcher)
                             {
-                                System.Array.Resize(ref playerMatrices, playerMatrices.Length * 2);
+                                if (playerArcherCount >= playerArcherMatrices.Length)
+                                    System.Array.Resize(ref playerArcherMatrices, playerArcherMatrices.Length * 2);
+                                playerArcherMatrices[playerArcherCount++] = mat;
                             }
-                            playerMatrices[playerCount++] = mat;
+                            else
+                            {
+                                if (playerCount >= playerMatrices.Length)
+                                    System.Array.Resize(ref playerMatrices, playerMatrices.Length * 2);
+                                playerMatrices[playerCount++] = mat;
+                            }
                         }
                     }
                     else // 적군
                     {
-                        if (enemyCount >= enemyMatrices.Length)
+                        if (isArcher)
                         {
-                            System.Array.Resize(ref enemyMatrices, enemyMatrices.Length * 2);
+                            if (enemyArcherCount >= enemyArcherMatrices.Length)
+                                System.Array.Resize(ref enemyArcherMatrices, enemyArcherMatrices.Length * 2);
+                            enemyArcherMatrices[enemyArcherCount++] = mat;
                         }
-                        enemyMatrices[enemyCount++] = mat;
+                        else
+                        {
+                            if (enemyCount >= enemyMatrices.Length)
+                                System.Array.Resize(ref enemyMatrices, enemyMatrices.Length * 2);
+                            enemyMatrices[enemyCount++] = mat;
+                        }
                     }
                 }
 
@@ -194,16 +235,21 @@ namespace MiniTotalWar.ECS
                     entities.Dispose();
                 }
 
-                // GPU Instancing으로 1023개 단위 일괄 렌더링 (Draw Call 1~3개로 압축!)
-                RenderBatches(playerMaterial, playerMatrices, playerCount);
-                RenderBatches(playerSelectedMaterial, playerSelectedMatrices, playerSelectedCount);
-                RenderBatches(enemyMaterial, enemyMatrices, enemyCount);
+                // 1. 보병 (Cube 직육면체) GPU Instancing 렌더링
+                RenderBatches(unitMesh, playerMaterial, playerMatrices, playerCount);
+                RenderBatches(unitMesh, playerSelectedMaterial, playerSelectedMatrices, playerSelectedCount);
+                RenderBatches(unitMesh, enemyMaterial, enemyMatrices, enemyCount);
+
+                // 2. 궁병 (Sphere 동그란 구형) GPU Instancing 렌더링
+                RenderBatches(missileMesh, playerMaterial, playerArcherMatrices, playerArcherCount);
+                RenderBatches(missileMesh, playerSelectedMaterial, playerSelectedArcherMatrices, playerSelectedArcherCount);
+                RenderBatches(missileMesh, enemyMaterial, enemyArcherMatrices, enemyArcherCount);
             }
         }
 
-        private void RenderBatches(Material mat, Matrix4x4[] matrices, int totalCount)
+        private void RenderBatches(Mesh targetMesh, Material mat, Matrix4x4[] matrices, int totalCount)
         {
-            if (totalCount == 0 || mat == null || unitMesh == null) return;
+            if (totalCount == 0 || mat == null || targetMesh == null) return;
 
             const int batchSize = 1023;
             int offset = 0;
@@ -214,7 +260,7 @@ namespace MiniTotalWar.ECS
                 System.Array.Copy(matrices, offset, sharedBatchBuffer, 0, count);
 
                 Graphics.DrawMeshInstanced(
-                    unitMesh,
+                    targetMesh,
                     0,
                     mat,
                     sharedBatchBuffer,

@@ -22,7 +22,74 @@ public class Unit : MonoBehaviour
     [System.NonSerialized] public float baseMass = 100f;
     [System.NonSerialized] public float baseAttackCooldown = 1.0f;
 
-    [Tooltip("일반 백병전 1회 타격 공격력")]
+    [Tooltip("유닛의 병종 및 전술적 역할")]
+    public UnitType unitType = UnitType.MeleeInfantry;
+
+    [Header("🏹 원거리(사격) 유닛 설정")]
+    [Tooltip("원거리 사격 유닛 여부 (체크(V) 시 활 사격 및 전용 탄약 시스템 활성화, 해제 시 순수 근접 유닛으로 동작)")]
+    public bool isRangedUnit = false;
+
+    [Tooltip("이동 중 사격 가능 여부 (체크 시 이동 중에도 사격 가능, 체크 해제 시 제자리에 멈춰 서서만 일제사격)")]
+    public bool canFireWhileMoving = true;
+
+    [Tooltip("🏹 자유 사격 (Fire at Will) 활성화 여부 (체크 시 사거리 내 적에게 자동 일제사격, 해제 시 지정 공격 명령 시에만 사격)")]
+    public bool fireAtWill = true;
+
+    [Tooltip("병사 1인당 소지 화살 총량 (원거리 유닛 전용, 0발 시 근접 보병 모드로 영구 전환)")]
+    public int maxAmmo = 25;
+
+    [Tooltip("실시간 잔여 화살 수")]
+    public int currentAmmo = 25;
+
+    [Tooltip("원거리 최대 유효 사거리 (미터 단위, 실제 전투 활 및 토탈워 기준: 150m)")]
+    public float rangedAttackRange = 150.0f;
+
+    [Tooltip("최적 사거리 (m 단위, 이 거리 이내에서는 100% 명중 및 100% 최대 대미지 적용)")]
+    public float optimalRange = 50.0f;
+
+    [Tooltip("원거리 최소 사거리 (m 단위, 적이 이 거리 이내로 접근 시 활 사격을 중단)")]
+    public float rangedMinRange = 5.0f;
+
+    [Tooltip("원거리 기본 타격 대미지 (최적 사거리 기준)")]
+    public float rangedBaseDamage = 15.0f;
+
+    [Tooltip("최대 사거리(150m) 끝에서 적용될 최소 대미지 비율 (멀어질수록 선형 감쇠, 기본: 0.55 = 55%)")]
+    [Range(0.1f, 1.0f)]
+    public float minDamageRatioAtMax = 0.55f;
+
+    [Tooltip("원거리 사격 간격 쿨다운 (초 단위, 2.2초당 1발 일제사격)")]
+    public float rangedAttackCooldown = 2.2f;
+
+    [Tooltip("근거리(최적 사거리 이내)에서의 착탄 오차 반경 (m 단위, 기본: 0.3m로 정밀 타격)")]
+    public float minSpreadRadius = 0.3f;
+
+    [Tooltip("최대 사거리(150m)에서의 착탄 오차 반경 (m 단위, 기본: 3.5m로 탄착군 분산 및 빗맞음 발생)")]
+    public float maxSpreadRadius = 3.5f;
+
+    [Tooltip("사격 궤적 모드 (HighArc: 곡사 포물선 - 활, Flat: 직선 평사 - 쇠뇌)")]
+    public TrajectoryMode trajectoryMode = TrajectoryMode.HighArc;
+
+    [Tooltip("화살 순수 비행 속도 (m/s, 기본: 30.0m/s)")]
+    public float projectileSpeed = 30.0f;
+
+    [Tooltip("중력 가속도 영향 배율 (곡사 시 포물선 최고점 높이 계수, 기본: 1.0)")]
+    public float gravityScale = 1.0f;
+
+    [Tooltip("방어력 100% 완전 무시 여부 (체크 시 트루 데미지 적용)")]
+    public bool ignoreArmor = false;
+
+    [Tooltip("방어력 무시 관통 피해 비율 (0.0~1.0, 기본: 0.25 = 대미지의 25%는 방어력 100% 무시 직격)")]
+    [Range(0.0f, 1.0f)]
+    public float armorPiercingRatio = 0.25f;
+
+    [Tooltip("적 방어력을 깎아내고 계산하는 관통 수치 (만분율 단위)")]
+    public int armorShredAmount = 0;
+
+    [Tooltip("적이 이 거리 이내로 접근 시 활을 거두고 근접 주무기(칼)로 백병전 강제 전환 (기본: 5.0m)")]
+    public float meleeSwitchDistance = 5.0f;
+
+    [Header("⚔️ 근접 주무기 (Primary Melee Weapon) 설정")]
+    [Tooltip("일반 백병전 1회 타격 공격력 (활을 접었을 때 휘두를 칼/창 공격력)")]
     public float damage = 10f;
 
     [Tooltip("공격 쿨다운 주기 (초 단위, 수치가 작을수록 빠르게 공격)")]
@@ -250,6 +317,24 @@ public class Unit : MonoBehaviour
         baseArmor = armor;
         baseMass = mass;
         baseAttackCooldown = attackCooldown;
+
+        // 🏹 원거리(사격) 유닛 전용 초기화
+        if (isRangedUnit)
+        {
+            unitType = UnitType.Archer;
+            currentAmmo = maxAmmo;
+            if (rangedAttackRange < 10.0f) rangedAttackRange = 150.0f;
+            if (optimalRange < 5.0f) optimalRange = 50.0f;
+            if (rangedMinRange < 1.0f) rangedMinRange = 5.0f;
+            if (rangedBaseDamage < 1.0f) rangedBaseDamage = 15.0f;
+            if (projectileSpeed < 10.0f) projectileSpeed = 30.0f;
+            if (meleeSwitchDistance < 1.0f) meleeSwitchDistance = 5.0f;
+        }
+        else
+        {
+            currentAmmo = 0;
+            maxAmmo = 0;
+        }
     }
 
     private void Start()
@@ -310,7 +395,16 @@ public class Unit : MonoBehaviour
                         if (foundEnemy != null)
                         {
                             target = foundEnemy;
-                            currentState = UnitCommandState.MeleeEngaged;
+                            float d = Vector3.Distance(transform.position, foundEnemy.transform.position);
+                            // 🏹 궁병은 적이 5m 이내로 들어오지 않는 한 백병전(MeleeEngaged)으로 전환되지 않고 사격 자세 유지
+                            if (isRangedUnit && currentAmmo > 0 && d > meleeSwitchDistance)
+                            {
+                                // 원거리 사격 자세 유지
+                            }
+                            else
+                            {
+                                currentState = UnitCommandState.MeleeEngaged;
+                            }
                         }
                     }
                 }
@@ -371,7 +465,16 @@ public class Unit : MonoBehaviour
                     if (foundEnemy != null)
                     {
                         target = foundEnemy;
-                        currentState = UnitCommandState.MeleeEngaged;
+                        float d = Vector3.Distance(transform.position, foundEnemy.transform.position);
+                        // 🏹 궁병은 적이 5m 이내로 들어오지 않는 한 백병전(MeleeEngaged)으로 전환되지 않고 사격 자세 유지
+                        if (isRangedUnit && currentAmmo > 0 && d > meleeSwitchDistance)
+                        {
+                            // 원거리 사격 자세 유지
+                        }
+                        else
+                        {
+                            currentState = UnitCommandState.MeleeEngaged;
+                        }
                     }
                 }
             }
@@ -814,6 +917,33 @@ public class Unit : MonoBehaviour
         else if (UnitJobSimulationManager.Instance != null)
         {
             UnitJobSimulationManager.Instance.UpdateUnitTargetPosition(this, fixedTargetPos, targetRotation, currentState);
+        }
+    }
+
+    /// <summary>
+    /// 유닛의 모든 이동 및 공격 명령을 중단하고 제자리에 멈춰 섭니다.
+    /// </summary>
+    public void Stop()
+    {
+        currentState = UnitCommandState.Idle;
+        hasSquadCommand = false;
+        target = null;
+        fixedTargetPos = transform.position;
+
+        if (agent != null && agent.isActiveAndEnabled && agent.isOnNavMesh)
+        {
+            agent.isStopped = true;
+            agent.ResetPath();
+            agent.velocity = Vector3.zero;
+        }
+
+        if (MiniTotalWar.ECS.SquadECSSimulationBridge.Instance != null)
+        {
+            MiniTotalWar.ECS.SquadECSSimulationBridge.Instance.UpdateEntityTarget(this, transform.position, transform.rotation, UnitCommandState.Idle);
+        }
+        else if (UnitJobSimulationManager.Instance != null)
+        {
+            UnitJobSimulationManager.Instance.UpdateUnitTargetPosition(this, transform.position, transform.rotation, UnitCommandState.Idle);
         }
     }
 }

@@ -952,11 +952,11 @@ public class PlayerController : MonoBehaviour
             {
                 if (clickedEnemySquad != null)
                 {
-                    CommandAttackTargetSquad(clickedEnemySquad);
+                    CommandAttackTargetSquad(clickedEnemySquad, isAltPressed);
                 }
                 else
                 {
-                    CommandAttackTargetPosition(enemyWorldPos);
+                    CommandAttackTargetPosition(enemyWorldPos, isAltPressed);
                 }
                 return;
             }
@@ -2424,6 +2424,10 @@ public class PlayerController : MonoBehaviour
         { 
             ToggleAutoAttack(); 
         }
+        if (Input.GetKeyDown(KeyCode.F))
+        {
+            ToggleFireAtWill();
+        }
         if (Input.GetKeyDown(KeyCode.B)) 
         { 
             ToggleLooseFormation(); 
@@ -2639,119 +2643,10 @@ public class PlayerController : MonoBehaviour
                 return;
             }
 
-            // 🎯 2. 빈 바닥을 클릭한 경우: 어택땅(AttackMove) 실행
+            // 🎯 2. 빈 바닥을 클릭한 경우: CommandAttackTargetPosition 실행 (궁병은 사거리 내 제자리 사격, 근접은 어택땅)
             if (GetMouseWorldPosition(out Vector3 targetPos))
             {
-                int squadCount = selectedSquads.Count;
-                int unitCount = 0;
-
-                if (squadCount == 1)
-                {
-                    Squad s = selectedSquads[0];
-                    if (s != null)
-                    {
-                        s.ClearWaypoints();
-                        s.CommandMoveWithFormation(targetPos, s.transform.rotation, s.currentColumns, false, UnitCommandState.AttackMove);
-                    }
-                }
-                else if (squadCount > 1)
-                {
-                    Vector3 centroid = GetSquadsCentroid(selectedSquads);
-                    foreach (Squad s in selectedSquads)
-                    {
-                        if (s != null)
-                        {
-                            Vector3 relOffset = s.transform.position - centroid;
-                            Vector3 squadDest = targetPos + relOffset;
-                            s.ClearWaypoints();
-                            s.CommandMoveWithFormation(squadDest, s.transform.rotation, s.currentColumns, false, UnitCommandState.AttackMove);
-                        }
-                    }
-                }
-
-                // 자유 유닛 어택땅: 1점으로 겹치지 않도록 분산 슬롯 할당
-                List<Unit> freeUnits = new List<Unit>();
-                foreach (Unit u in selectedUnits)
-                {
-                    if (u != null && u.mySquad == null) freeUnits.Add(u);
-                }
-
-                if (freeUnits.Count == 1)
-                {
-                    freeUnits[0].AttackMoveTo(targetPos);
-                    unitCount = 1;
-                }
-                else if (freeUnits.Count > 1)
-                {
-                    Vector3 currentCenter = Vector3.zero;
-                    foreach (Unit u in freeUnits) currentCenter += u.transform.position;
-                    currentCenter /= freeUnits.Count;
-
-                    float avgDist = 0f;
-                    foreach (Unit u in freeUnits) avgDist += Vector3.Distance(u.transform.position, currentCenter);
-                    avgDist /= freeUnits.Count;
-
-                    if (avgDist < 0.5f)
-                    {
-                        var (clusterSlots, _) = CalculateClusterSlotPositions(targetPos, Quaternion.identity, freeUnits.Count);
-                        for (int i = 0; i < freeUnits.Count && i < clusterSlots.Count; i++)
-                        {
-                            freeUnits[i].AttackMoveTo(clusterSlots[i]);
-                            unitCount++;
-                        }
-                    }
-                    else
-                    {
-                        foreach (Unit u in freeUnits)
-                        {
-                            Vector3 offset = u.transform.position - currentCenter;
-                            Vector3 dest = targetPos + offset;
-                            if (UnityEngine.AI.NavMesh.SamplePosition(dest, out UnityEngine.AI.NavMeshHit hit, 1.0f, UnityEngine.AI.NavMesh.AllAreas))
-                            {
-                                dest = hit.position;
-                            }
-                            u.AttackMoveTo(dest);
-                            unitCount++;
-                        }
-                    }
-                }
-
-                // ⚡ 순수 ECS 자유 유닛 어택땅
-                if (selectedECSEntities.Count > 0)
-                {
-                    var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
-                    if (world != null && world.IsCreated)
-                    {
-                        var em = world.EntityManager;
-                        var (clSlots, _) = CalculateClusterSlotPositions(targetPos, Quaternion.identity, selectedECSEntities.Count);
-
-                        for (int i = 0; i < selectedECSEntities.Count; i++)
-                        {
-                            var ent = selectedECSEntities[i];
-                            if (em.Exists(ent) && em.HasComponent<MiniTotalWar.ECS.UnitMovementData>(ent) && em.HasComponent<MiniTotalWar.ECS.UnitCombatData>(ent))
-                            {
-                                var mov = em.GetComponentData<MiniTotalWar.ECS.UnitMovementData>(ent);
-                                var combat = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(ent);
-
-                                Vector3 slot = (i < clSlots.Count) ? clSlots[i] : targetPos;
-                                mov.TargetPosition = slot;
-                                float spd = (mov.MoveSpeed >= 2.0f) ? 2.8f : 1.2f;
-                                mov.MoveSpeed = spd;
-                                mov.Acceleration = (spd >= 2.0f) ? 8.0f : 4.5f;
-
-                                combat.CurrentState = (int)UnitCommandState.AttackMove;
-                                combat.AutoAttackEnabled = 1;
-                                combat.ChargeImpactReady = 1;
-
-                                em.SetComponentData(ent, mov);
-                                em.SetComponentData(ent, combat);
-                                unitCount++;
-                            }
-                        }
-                    }
-                }
-
-                Debug.Log($"[PlayerController] ⚔️ 어택땅 명령 전송 완료! (목표 좌표: {targetPos:F1}, 대상: 부대 {squadCount}개 / 자유유닛 {unitCount}명)");
+                CommandAttackTargetPosition(targetPos, isAltPressed: false);
             }
             isAttackTargetingMode = false;
         }
@@ -2951,6 +2846,85 @@ public class PlayerController : MonoBehaviour
 
         string stateText = newState ? "⚔️ [선제 돌격 요격 (적 접근 시 자동 돌격)]" : "🛡️ [접촉 방어 모드 (돌격하지 않고 몸이 붙었을 때만 교전)]";
         Debug.Log($"[PlayerController] 🎯 [V] 근접 교전 태세 -> {stateText} (적용 유닛: {affectedCount}명)");
+        UpdateCommandUI();
+    }
+
+    /// <summary>
+    /// 🏹 [F키] 선택된 원거리 부대 및 유닛의 자유 사격(Fire at Will) 태세를 토글합니다.
+    /// On: 사거리 내에 적이 들어오면 자동 일제사격.
+    /// Off: 화살을 아끼며 대기하고, 지휘관이 직접 타겟을 지정했을 때만 사격.
+    /// </summary>
+    public void ToggleFireAtWill()
+    {
+        bool anyEnabled = false;
+        foreach (Squad s in selectedSquads)
+        {
+            if (s != null && s.fireAtWill)
+            {
+                anyEnabled = true;
+                break;
+            }
+        }
+        foreach (Unit u in selectedUnits)
+        {
+            if (u != null && u.fireAtWill)
+            {
+                anyEnabled = true;
+                break;
+            }
+        }
+
+        bool newState = !anyEnabled;
+        int affectedSquads = 0;
+        int affectedUnits = 0;
+
+        foreach (Squad s in selectedSquads)
+        {
+            if (s != null)
+            {
+                s.SetFireAtWill(newState);
+                affectedSquads++;
+            }
+        }
+
+        foreach (Unit u in selectedUnits)
+        {
+            if (u != null)
+            {
+                u.fireAtWill = newState;
+                affectedUnits++;
+            }
+        }
+
+        // ⚡ 순수 ECS 자유 유닛 자유 사격 동기화
+        if (selectedECSEntities.Count > 0)
+        {
+            var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
+            if (world != null && world.IsCreated)
+            {
+                var em = world.EntityManager;
+                for (int i = 0; i < selectedECSEntities.Count; i++)
+                {
+                    var ent = selectedECSEntities[i];
+                    if (em.Exists(ent) && em.HasComponent<MiniTotalWar.ECS.UnitCombatData>(ent))
+                    {
+                        var combat = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(ent);
+                        combat.FireAtWill = newState ? 1 : 0;
+                        em.SetComponentData(ent, combat);
+                        affectedUnits++;
+                    }
+                }
+            }
+        }
+
+        // 🛑 [사용자 요구 반영]: F를 눌러 자유사격을 끄는 순간 모든 공격을 100% 즉시 멈추고 제자리에 정지!
+        if (!newState)
+        {
+            StopSelected();
+        }
+
+        string fireText = newState ? "🏹 [자유 사격 ON (사거리 내 적 자동 일제사격)]" : "🎯 [자유 사격 OFF (즉시 사격 중지 / 화살 절약)]";
+        Debug.Log($"[PlayerController] 🎯 [F] 원거리 사격 태세 -> {fireText} (적용 부대: {affectedSquads}, 유닛: {affectedUnits})");
         UpdateCommandUI();
     }
 
@@ -3160,9 +3134,11 @@ public class PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 선택된 아군 부대/유닛들에게 특정 적 부대를 향해 대형을 유지하며 정면 돌격 교전 명령을 하달합니다.
+    /// 선택된 아군 부대/유닛들에게 특정 적 부대를 향해 대형을 유지하며 교전 명령을 하달합니다.
+    /// 일반 우클릭: 원거리 궁병 부대는 사거리 유지 일제사격, 근접 부대는 포위 돌격.
+    /// Alt + 우클릭: 원거리 궁병 부대도 활을 접고 보조무기(단검/칼)를 뽑아 강제 백병전 돌격.
     /// </summary>
-    public void CommandAttackTargetSquad(Squad enemySquad)
+    public void CommandAttackTargetSquad(Squad enemySquad, bool isAltPressed = false)
     {
         if (enemySquad == null || (enemySquad.members.Count == 0 && enemySquad.initialUnitCount == 0)) return;
 
@@ -3171,25 +3147,59 @@ public class PlayerController : MonoBehaviour
 
         int attackedSquads = 0;
 
+        int rangedSquadCount = 0;
+        int meleeSquadCount = 0;
+
         foreach (Squad mySquad in selectedSquads)
         {
             if (mySquad == null || (mySquad.members.Count == 0 && mySquad.initialUnitCount == 0)) continue;
 
-            // 즉시 1프레임에 적 시선 축 투영 완료 및 전원 일제 포위 돌격
-            mySquad.CommandAttackSquad(enemySquad);
+            if (isAltPressed)
+            {
+                // ⚔️ [Alt + 우클릭]: 강제 백병전 돌격 (궁병도 활을 접고 백병전 돌격)
+                mySquad.CommandMeleeChargeSquad(enemySquad);
+                meleeSquadCount++;
+            }
+            else
+            {
+                // 🏹 [일반 우클릭/Z키]: 원거리 부대는 사거리 유지 일제사격, 근접 부대는 포위 돌격
+                mySquad.CommandAttackSquad(enemySquad);
+                if (mySquad.IsRangedSquad)
+                {
+                    rangedSquadCount++;
+                }
+                else
+                {
+                    meleeSquadCount++;
+                }
+            }
             attackedSquads++;
         }
 
-        // 자유 유닛들도 적 부대 중심을 향해 AttackMove
+        // 자유 유닛들도 적 부대 중심을 향해 사격 또는 돌격
         foreach (Unit u in selectedUnits)
         {
             if (u != null && u.mySquad == null)
             {
-                u.AttackMoveTo(enemyVisualCenter);
+                if (!isAltPressed && u.isRangedUnit)
+                {
+                    float dist = Vector3.Distance(u.transform.position, enemyVisualCenter);
+                    if (dist <= u.rangedAttackRange * 0.90f)
+                    {
+                        u.Stop();
+                    }
+                    else
+                    {
+                        u.MoveTo(enemyVisualCenter - ((enemyVisualCenter - u.transform.position).normalized * (u.rangedAttackRange * 0.70f)));
+                    }
+                }
+                else
+                {
+                    u.AttackMoveTo(enemyVisualCenter);
+                }
             }
         }
 
-        // ⚡ 순수 ECS 자유 유닛들도 AttackMove
         // ⚡ 순수 ECS 자유 유닛들도 AttackMove
         if (selectedECSEntities.Count > 0)
         {
@@ -3221,7 +3231,18 @@ public class PlayerController : MonoBehaviour
         }
 
         isAttackTargetingMode = false;
-        Debug.Log($"[PlayerController] ⚔️ 적 부대({enemySquad.name})를 목표로 일제 정면 돌격 교전 명령 하달! (돌격 부대 수: {attackedSquads})");
+        if (rangedSquadCount > 0 && meleeSquadCount == 0)
+        {
+            Debug.Log($"[PlayerController] 🏹 적 부대({enemySquad.name})를 목표로 원거리 일제사격 명령 하달! (사격 부대: {rangedSquadCount}개)");
+        }
+        else if (rangedSquadCount > 0 && meleeSquadCount > 0)
+        {
+            Debug.Log($"[PlayerController] ⚔️🏹 적 부대({enemySquad.name})를 목표로 복합 공격 명령 하달! (원거리 사격: {rangedSquadCount}부대, 근접 돌격: {meleeSquadCount}부대)");
+        }
+        else
+        {
+            Debug.Log($"[PlayerController] ⚔️ 적 부대({enemySquad.name})를 목표로 일제 정면 돌격 교전 명령 하달! (돌격 부대 수: {attackedSquads})");
+        }
     }
 
     /// <summary>
@@ -3373,16 +3394,49 @@ public class PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 특정 위치(적 유닛 위치 등)를 향해 선택된 부대 및 자유 유닛들에게 일제 돌격 공격을 하달합니다.
+    /// 특정 위치(적 유닛 위치 등)를 향해 선택된 부대 및 자유 유닛들에게 교전/사격 공격을 하달합니다.
+    /// 일반 우클릭: 원거리 궁병 부대는 사거리 내이면 제자리 정지 사격 자세 유지, 사거리 밖이면 사거리 내로 전술 전진.
+    /// Alt + 우클릭: 강제 돌격 (AttackMove).
     /// </summary>
-    public void CommandAttackTargetPosition(Vector3 targetWorldPos)
+    public void CommandAttackTargetPosition(Vector3 targetWorldPos, bool isAltPressed = false)
     {
         foreach (Squad mySquad in selectedSquads)
         {
             if (mySquad != null && mySquad.MemberCount > 0)
             {
-                mySquad.ClearWaypoints();
-                mySquad.CommandMoveWithFormation(targetWorldPos, mySquad.transform.rotation, mySquad.currentColumns, false, UnitCommandState.AttackMove);
+                if (!isAltPressed && mySquad.IsRangedSquad)
+                {
+                    // 🏹 원거리 부대는 사거리 내이면 정지하여 사격 자세, 사거리 밖이면 사거리 내로 전술 전진
+                    Vector3 myPos = mySquad.GetVisualCenter();
+                    Vector3 dir = targetWorldPos - myPos;
+                    dir.y = 0f;
+                    float dist = dir.magnitude;
+                    float maxRange = 150f;
+                    if (mySquad.members.Count > 0 && mySquad.members[0] != null && mySquad.members[0].rangedAttackRange > 10f)
+                    {
+                        maxRange = mySquad.members[0].rangedAttackRange;
+                    }
+
+                    Quaternion faceRot = (dir.sqrMagnitude > 0.001f) ? Quaternion.LookRotation(dir.normalized) : mySquad.transform.rotation;
+
+                    if (dist <= maxRange * 0.90f)
+                    {
+                        // 사거리 안: 제자리 정지 후 목표 지점 방향 조준 사격
+                        mySquad.CommandRangedHaltAndFire(faceRot, null);
+                    }
+                    else
+                    {
+                        // 사거리 밖: 사거리 안(0.70f 지점)으로 정규 전술 전진
+                        Vector3 standPos = targetWorldPos - (dir.normalized * (maxRange * 0.70f));
+                        mySquad.ClearWaypoints();
+                        mySquad.CommandMoveWithFormation(standPos, faceRot, mySquad.currentColumns, false, UnitCommandState.Move);
+                    }
+                }
+                else
+                {
+                    mySquad.ClearWaypoints();
+                    mySquad.CommandMoveWithFormation(targetWorldPos, mySquad.transform.rotation, mySquad.currentColumns, false, UnitCommandState.AttackMove);
+                }
             }
         }
 
@@ -3390,7 +3444,22 @@ public class PlayerController : MonoBehaviour
         {
             if (u != null && u.mySquad == null)
             {
-                u.AttackMoveTo(targetWorldPos);
+                if (!isAltPressed && u.isRangedUnit)
+                {
+                    float dist = Vector3.Distance(u.transform.position, targetWorldPos);
+                    if (dist <= u.rangedAttackRange * 0.90f)
+                    {
+                        u.Stop();
+                    }
+                    else
+                    {
+                        u.MoveTo(targetWorldPos - ((targetWorldPos - u.transform.position).normalized * (u.rangedAttackRange * 0.70f)));
+                    }
+                }
+                else
+                {
+                    u.AttackMoveTo(targetWorldPos);
+                }
             }
         }
 

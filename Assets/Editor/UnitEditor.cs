@@ -8,6 +8,27 @@ using UnityEngine;
 [CanEditMultipleObjects]
 public class UnitEditor : Editor
 {
+    private SerializedProperty unitType;
+    private SerializedProperty isRangedUnit;
+    private SerializedProperty canFireWhileMoving;
+    private SerializedProperty maxAmmo;
+    private SerializedProperty currentAmmo;
+    private SerializedProperty rangedAttackRange;
+    private SerializedProperty optimalRange;
+    private SerializedProperty rangedMinRange;
+    private SerializedProperty rangedBaseDamage;
+    private SerializedProperty minDamageRatioAtMax;
+    private SerializedProperty rangedAttackCooldown;
+    private SerializedProperty minSpreadRadius;
+    private SerializedProperty maxSpreadRadius;
+    private SerializedProperty trajectoryMode;
+    private SerializedProperty projectileSpeed;
+    private SerializedProperty gravityScale;
+    private SerializedProperty ignoreArmor;
+    private SerializedProperty armorPiercingRatio;
+    private SerializedProperty armorShredAmount;
+    private SerializedProperty meleeSwitchDistance;
+
     private SerializedProperty isPlayer;
     private SerializedProperty maxHp;
     private SerializedProperty currentHp;
@@ -62,6 +83,7 @@ public class UnitEditor : Editor
     private SerializedProperty fixedTargetPos;
 
     // 카테고리 접기/펼치기 상태 플래그
+    private static bool showRangedWeapon = true;
     private static bool showSurvival = true;
     private static bool showPrimaryWeapon = true;
     private static bool showSidearm = true;
@@ -73,6 +95,27 @@ public class UnitEditor : Editor
 
     private void OnEnable()
     {
+        unitType = serializedObject.FindProperty("unitType");
+        isRangedUnit = serializedObject.FindProperty("isRangedUnit");
+        canFireWhileMoving = serializedObject.FindProperty("canFireWhileMoving");
+        maxAmmo = serializedObject.FindProperty("maxAmmo");
+        currentAmmo = serializedObject.FindProperty("currentAmmo");
+        rangedAttackRange = serializedObject.FindProperty("rangedAttackRange");
+        optimalRange = serializedObject.FindProperty("optimalRange");
+        rangedMinRange = serializedObject.FindProperty("rangedMinRange");
+        rangedBaseDamage = serializedObject.FindProperty("rangedBaseDamage");
+        minDamageRatioAtMax = serializedObject.FindProperty("minDamageRatioAtMax");
+        rangedAttackCooldown = serializedObject.FindProperty("rangedAttackCooldown");
+        minSpreadRadius = serializedObject.FindProperty("minSpreadRadius");
+        maxSpreadRadius = serializedObject.FindProperty("maxSpreadRadius");
+        trajectoryMode = serializedObject.FindProperty("trajectoryMode");
+        projectileSpeed = serializedObject.FindProperty("projectileSpeed");
+        gravityScale = serializedObject.FindProperty("gravityScale");
+        ignoreArmor = serializedObject.FindProperty("ignoreArmor");
+        armorPiercingRatio = serializedObject.FindProperty("armorPiercingRatio");
+        armorShredAmount = serializedObject.FindProperty("armorShredAmount");
+        meleeSwitchDistance = serializedObject.FindProperty("meleeSwitchDistance");
+
         isPlayer = serializedObject.FindProperty("isPlayer");
         maxHp = serializedObject.FindProperty("maxHp");
         currentHp = serializedObject.FindProperty("currentHp");
@@ -137,6 +180,87 @@ public class UnitEditor : Editor
         {
             DrawLiveCombatSummary(unit);
             EditorGUILayout.Space(6);
+        }
+
+        // 🏹 유닛 병종 및 원거리 활성화 제어 스위치
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        if (unitType != null)
+            EditorGUILayout.PropertyField(unitType, new GUIContent("병종 분류 (Unit Type)", "유닛의 병종 및 전술적 역할을 지정합니다."));
+
+        if (isRangedUnit != null)
+        {
+            EditorGUILayout.Space(2);
+            EditorGUILayout.PropertyField(isRangedUnit, new GUIContent("🏹 원거리(사격) 유닛 활성화", "체크 시 활 사격, 전용 탄약 및 투사체 물리 시스템이 활성화됩니다. 해제 시 순수 근접 보병으로 동작합니다."));
+        }
+        EditorGUILayout.EndVertical();
+        EditorGUILayout.Space(4);
+
+        // 🎯 [원거리 전용 설정창]: isRangedUnit이 체크되었을 때만 동적으로 노출!
+        if (isRangedUnit != null && isRangedUnit.boolValue)
+        {
+            showRangedWeapon = EditorGUILayout.Foldout(showRangedWeapon, "🎯 0. 원거리 무기 및 탄도학 (Ranged Weapon - 활/쇠뇌)", true);
+            if (showRangedWeapon)
+            {
+                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+                // A. 탄약 관리
+                EditorGUILayout.LabelField("📦 전용 탄약(Ammunition) 관리", EditorStyles.miniBoldLabel);
+                if (canFireWhileMoving != null)
+                    EditorGUILayout.PropertyField(canFireWhileMoving, new GUIContent("이동 중 사격 허용 (Move & Fire)", "체크 시 행군/이동 중에도 화살을 발사하며, 해제 시 제자리에 멈춰 서서만 일제사격을 수행합니다."));
+                if (maxAmmo != null)
+                    EditorGUILayout.PropertyField(maxAmmo, new GUIContent("최대 소지 화살 수", "병사 1인당 소지하는 화살 총량입니다. (기본: 25발)"));
+                if (currentAmmo != null)
+                    EditorGUILayout.PropertyField(currentAmmo, new GUIContent("실시간 잔여 화살 수", "현재 남아있는 화살 수량입니다. 0발이 되면 활을 수납하고 근접 보병으로 전환됩니다."));
+
+                EditorGUILayout.Space(4);
+                // B. 사거리 및 대미지 감쇠
+                EditorGUILayout.LabelField("🏹 사거리 및 거리별 대미지 감쇠", EditorStyles.miniBoldLabel);
+                if (rangedAttackRange != null)
+                    EditorGUILayout.PropertyField(rangedAttackRange, new GUIContent("최대 유효 사거리 (m)", "화살을 쏠 수 있는 최대 사거리입니다. (실제 전투 활/토탈워 기준: 150m)"));
+                if (optimalRange != null)
+                    EditorGUILayout.PropertyField(optimalRange, new GUIContent("최적 사거리 (m)", "이 거리 안에서는 100% 명중 및 100% 최대 대미지가 적용됩니다. (기본: 50m)"));
+                if (rangedMinRange != null)
+                    EditorGUILayout.PropertyField(rangedMinRange, new GUIContent("최소 사거리 (m)", "이 거리 미만으로 적이 다가오면 활 사격을 중단합니다. (기본: 5m)"));
+                if (rangedBaseDamage != null)
+                    EditorGUILayout.PropertyField(rangedBaseDamage, new GUIContent("원거리 기본 대미지", "화살 직격 시의 기본 공격력입니다. (기본: 15.0)"));
+                if (minDamageRatioAtMax != null)
+                    EditorGUILayout.Slider(minDamageRatioAtMax, 0.1f, 1.0f, new GUIContent("최대 사거리 최소 대미지 비율", "최대 사거리(150m) 끝에서 적용될 최소 대미지 비율입니다. (기본: 0.55 = 55%)"));
+                if (rangedAttackCooldown != null)
+                    EditorGUILayout.PropertyField(rangedAttackCooldown, new GUIContent("사격 간격 쿨다운 (초)", "다음 일제사격까지의 대기 시간입니다. (기본: 2.2초당 1발)"));
+
+                EditorGUILayout.Space(4);
+                // C. 명중률 및 탄착군 분산
+                EditorGUILayout.LabelField("🎯 명중률 및 탄착군 분산 (Scatter)", EditorStyles.miniBoldLabel);
+                if (minSpreadRadius != null)
+                    EditorGUILayout.PropertyField(minSpreadRadius, new GUIContent("근거리 오차 반경 (m)", "최적 사거리(50m) 이내에서의 탄착군 오차 반경입니다. (기본: 0.3m로 정밀 타격)"));
+                if (maxSpreadRadius != null)
+                    EditorGUILayout.PropertyField(maxSpreadRadius, new GUIContent("최대 사거리 오차 반경 (m)", "최대 사거리(150m)에서의 탄착군 오차 반경입니다. (기본: 3.5m로 화살이 흩뿌려짐)"));
+
+                EditorGUILayout.Space(4);
+                // D. 탄도학 및 비행 물리
+                EditorGUILayout.LabelField("🚀 탄도학 및 비행 물리", EditorStyles.miniBoldLabel);
+                if (trajectoryMode != null)
+                    EditorGUILayout.PropertyField(trajectoryMode, new GUIContent("사격 궤적 모드", "HighArc: 하늘 높이 넘겨 쏘는 곡사(활), Flat: 낮고 빠르게 쏘는 직사(쇠뇌)"));
+                if (projectileSpeed != null)
+                    EditorGUILayout.PropertyField(projectileSpeed, new GUIContent("화살 비행 속도 (m/s)", "화살의 공중 순항 속도입니다. (기본: 30.0m/s)"));
+                if (gravityScale != null)
+                    EditorGUILayout.PropertyField(gravityScale, new GUIContent("중력 포물선 높이 계수", "곡사 시 포물선 최고점 높이를 조절하는 배율입니다. (기본: 1.0)"));
+
+                EditorGUILayout.Space(4);
+                // E. 방어력 관통 및 근접 전환
+                EditorGUILayout.LabelField("🛡️ 방어력 관통 및 백병전 전환", EditorStyles.miniBoldLabel);
+                if (ignoreArmor != null)
+                    EditorGUILayout.PropertyField(ignoreArmor, new GUIContent("방어력 100% 완전 무시", "체크 시 적의 방어력을 완전히 무시하고 트루 데미지를 줍니다."));
+                if (armorPiercingRatio != null)
+                    EditorGUILayout.Slider(armorPiercingRatio, 0.0f, 1.0f, new GUIContent("방어력 무시 관통 비율", "대미지의 몇 %를 방어력 무시 고정 피해로 넣을지 결정합니다. (기본: 25%)"));
+                if (armorShredAmount != null)
+                    EditorGUILayout.PropertyField(armorShredAmount, new GUIContent("방어력 삭감 관통 수치", "적 방어력을 깎아내고 계산하는 수치입니다. (만분율 단위)"));
+                if (meleeSwitchDistance != null)
+                    EditorGUILayout.PropertyField(meleeSwitchDistance, new GUIContent("근접 백병전 강제 전환 거리 (m)", "적 보병이 이 거리 안으로 파고들면 즉시 활을 거두고 칼을 뽑아 백병전을 수행합니다. (기본: 5.0m)"));
+
+                EditorGUILayout.EndVertical();
+                EditorGUILayout.Space(4);
+            }
         }
 
         // 🩺 1. 생존력 및 방어력 (Health & Armor)

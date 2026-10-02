@@ -26,6 +26,26 @@ public enum SquadFormationType
     Line            // 횡대 진형 (호환성 유지)
 }
 
+/// <summary>
+/// 유닛의 전술적 역할 및 병종 분류를 정의하는 열거형입니다.
+/// </summary>
+public enum UnitType
+{
+    MeleeInfantry,  // 일반 검/도끼 보병 (근접 돌격 및 방진 유지)
+    SpearInfantry,  // 장창병/창병 (대기병 돌격 반사 특화)
+    Archer,         // 궁병/사격병 (원거리 사격 + 보조무기 백병전)
+    Cavalry         // 기병 (고속 기동 및 충격 돌격)
+}
+
+/// <summary>
+/// 원거리 투사체의 탄도학 비행 궤적 형태를 정의하는 열거형입니다.
+/// </summary>
+public enum TrajectoryMode
+{
+    HighArc,        // 곡사 포물선 (활/장궁 - 아군 머리 위를 넘겨 쏘는 곡사)
+    Flat            // 직선 평사 (쇠뇌/총기 - 수평에 가깝게 빠르고 낮게 비행)
+}
+
 [Serializable]
 public class CommandButtonData
 {

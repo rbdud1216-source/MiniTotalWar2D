@@ -38,7 +38,6 @@ namespace MiniTotalWar.ECS
             tagLookup = state.GetComponentLookup<UnitEntityTag>(false);
         }
 
-        [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
             float deltaTime = SystemAPI.Time.DeltaTime;
@@ -51,6 +50,7 @@ namespace MiniTotalWar.ECS
             tagLookup.Update(ref state);
 
             NativeQueue<DamageEvent> damageQueue = new NativeQueue<DamageEvent>(Allocator.TempJob);
+            NativeQueue<ArrowLaunchCommand> arrowQueue = new NativeQueue<ArrowLaunchCommand>(Allocator.TempJob);
             NativeParallelHashSet<int> engagedSquads = new NativeParallelHashSet<int>(32, Allocator.TempJob);
 
             // 0단계: 현재 앞열이 적과 충돌하여 백병전(3) 중인 부대 ID들을 초고속 병렬 수집
@@ -69,6 +69,7 @@ namespace MiniTotalWar.ECS
                 AllAliveEntityMap = spatialGrid.AllAliveEntityMap,
                 EngagedSquads = engagedSquads,
                 DamageQueue = damageQueue.AsParallelWriter(),
+                ArrowQueue = arrowQueue.AsParallelWriter(),
                 DeltaTime = deltaTime,
                 CurrentTime = currentTime,
                 InvCellSize = SpatialHashGridSystem.INV_CELL_SIZE
@@ -85,8 +86,40 @@ namespace MiniTotalWar.ECS
             };
 
             JobHandle damageHandle = applyDamageJob.Schedule(moveHandle);
-            JobHandle finalHandle = damageQueue.Dispose(damageHandle);
-            state.Dependency = engagedSquads.Dispose(finalHandle);
+
+            // 🏹 3단계: 멀티스레드 Job 완료 후 화살 발사 일괄 처리 및 렌더링 동기화
+            damageHandle.Complete();
+
+            while (arrowQueue.TryDequeue(out ArrowLaunchCommand cmd))
+            {
+                if (ArrowSimulationManager.Instance != null)
+                {
+                    ArrowSimulationManager.Instance.LaunchArrow(
+                        cmd.isPlayer,
+                        cmd.shooterPos,
+                        cmd.targetPos,
+                        cmd.projectileSpeed,
+                        cmd.damage,
+                        cmd.armorPiercingRatio,
+                        cmd.armorShredAmount,
+                        cmd.ignoreArmor == 1,
+                        (TrajectoryMode)cmd.trajectoryMode,
+                        cmd.gravityScale,
+                        cmd.spreadRadius,
+                        cmd.hasAllyObstruction == 1
+                    );
+                }
+            }
+
+            if (ArrowSimulationManager.Instance != null)
+            {
+                ArrowSimulationManager.Instance.ManualUpdate(deltaTime);
+            }
+
+            damageQueue.Dispose();
+            arrowQueue.Dispose();
+            engagedSquads.Dispose();
+            state.Dependency = default;
         }
     }
 
@@ -122,6 +155,7 @@ namespace MiniTotalWar.ECS
         [ReadOnly] public NativeParallelHashMap<Entity, EntitySpatialData> AllAliveEntityMap;
         [ReadOnly] public NativeParallelHashSet<int> EngagedSquads;
         public NativeQueue<DamageEvent>.ParallelWriter DamageQueue;
+        public NativeQueue<ArrowLaunchCommand>.ParallelWriter ArrowQueue;
         public float DeltaTime;
         public float CurrentTime;
         public float InvCellSize;
@@ -147,6 +181,7 @@ namespace MiniTotalWar.ECS
 
             bool isFreeUnit = (tag.IsFreeUnit == 1 || tag.SquadId == -1);
             int closestEnemyIsFreeUnit = 0;
+            bool isRangedShooting = false;
 
             // 💫 넘어짐(무력화) 상태 타이머 업데이트
             bool isKnockedDown = (combat.KnockdownTimer > 0f);
@@ -375,7 +410,14 @@ namespace MiniTotalWar.ECS
                         bool isSquadAttacking = isAttacking || (foundEnemy && (combat.TargetSquadId != -1 || distToEnemy <= 25.0f));
                         bool isSquadEngaged = (tag.SquadId != -1 && EngagedSquads.Contains(tag.SquadId));
 
-                        if (isSquadAttacking)
+                        // 🏹 원거리 궁병(IsRangedUnit == 1)은 적이 백병전 거리 밖이고 탄약이 있으면 대형 슬롯 위치를 지키며 사격!
+                        if (combat.IsRangedUnit == 1 && distToEnemy > combat.MeleeSwitchDistance && combat.CurrentAmmo > 0)
+                        {
+                            targetDest = movement.TargetPosition;
+                            isCharging = false;
+                            isCombatRunning = false;
+                        }
+                        else if (isSquadAttacking)
                         {
                             // 💥 [1단계: 접촉 전 돌격 (부대원 전원 비교전 상태)]
                             // 적과 실제로 충돌하기 전까지는 대형 슬롯(movement.TargetPosition)을 유지하며 방진을 짠 채 일제히 전진 돌격!
@@ -466,22 +508,69 @@ namespace MiniTotalWar.ECS
                     }
                 }
 
+                // 🏹 [ECS 원거리 궁병 활 사격 판정]
+                isRangedShooting = false;
+                if (combat.IsRangedUnit == 1)
+                {
+                    // 🚨 백병전 교전 중(CurrentState == 3)이거나 5m 이내에 적이 들어왔으면 사격 100% 절대 금지!
+                    bool isEngagedInMelee = (combat.CurrentState == 3);
+                    bool isInsideMelee = (distToEnemy <= combat.MeleeSwitchDistance) || (meleeTargetDist <= combat.MeleeSwitchDistance);
+                    bool hasAmmo = (combat.CurrentAmmo > 0);
+                    bool canShootMovement = (combat.CanFireWhileMoving == 1) || (movement.CurrentSpeed <= 0.25f);
+                    // 🏹 [자유 사격(Fire at Will) 검사]: FireAtWill이 꺼져있으면 목표 부대 지정 시에만 사격
+                    bool canShootFireAtWill = (combat.FireAtWill == 1) || (combat.TargetSquadId != -1);
+
+                    if (!isEngagedInMelee && !isInsideMelee && hasAmmo && canShootFireAtWill && canShootMovement && distToEnemy <= combat.RangedAttackRange && distToEnemy >= combat.RangedMinRange)
+                    {
+                        isRangedShooting = true;
+
+                        if (CurrentTime >= combat.LastRangedAttackTime + combat.RangedAttackCooldown)
+                        {
+                            combat.LastRangedAttackTime = CurrentTime;
+                            combat.CurrentAmmo--;
+
+                            float distRatio = math.clamp((distToEnemy - combat.OptimalRange) / math.max(1.0f, combat.RangedAttackRange - combat.OptimalRange), 0f, 1f);
+                            float finalDmg = combat.RangedBaseDamage * (1.0f - (1.0f - combat.MinDamageRatioAtMax) * distRatio);
+                            float spread = math.lerp(combat.MinSpreadRadius, combat.MaxSpreadRadius, distRatio);
+
+                            int hasAlly = (meleeTargetDist <= combat.MeleeSwitchDistance || tag.Row >= 3) ? 1 : 0;
+
+                            ArrowQueue.Enqueue(new ArrowLaunchCommand
+                            {
+                                isPlayer = tag.Faction,
+                                shooterPos = currentPos,
+                                targetPos = enemyPos,
+                                projectileSpeed = combat.ProjectileSpeed,
+                                damage = finalDmg,
+                                armorPiercingRatio = combat.ArmorPiercingRatio,
+                                armorShredAmount = combat.ArmorShredAmount,
+                                ignoreArmor = combat.IgnoreArmor,
+                                trajectoryMode = combat.TrajectoryMode,
+                                gravityScale = combat.GravityScale,
+                                spreadRadius = spread,
+                                hasAllyObstruction = hasAlly
+                            });
+                        }
+                    }
+                }
+
                 // [A] 직접 칼/창이 닿는 유효 타격 사거리 판정
                 bool isSidearmActive = (combat.UseSidearm == 1 && meleeTargetDist <= combat.SidearmSwitchDistance);
                 float effectiveMeleeRange = isSidearmActive ? combat.SidearmAttackRange : effectiveAttackRange;
 
                 bool isInMelee = (meleeTargetDist <= effectiveMeleeRange);
-                if (isInMelee)
+                if (isInMelee && !isRangedShooting)
                 {
                     combat.CurrentState = 3; // MeleeEngaged
                 }
-                else if (combat.CurrentState == 3)
+                else if (combat.CurrentState == 3 && meleeTargetDist > combat.MeleeSwitchDistance)
                 {
+                    // 🛡️ 적이 백병전 거리(5m) 밖으로 완전히 달아났을 때만 백병전 해제
                     combat.CurrentState = (combat.AutoAttackEnabled == 0) ? 0 : 2;
                 }
 
-                // ⚔️ [백병전 타격 판정]: 무력화 상태가 아니고, 근접 사거리 내에 있거나 교전 중일 때 타격!
-                if (!isKnockedDown && (isInMelee || combat.CurrentState == 3))
+                // ⚔️ [백병전 타격 판정]: 원거리 사격 중이 아니고, 무력화 상태가 아니며 근접 교전 중일 때 타격!
+                if (!isRangedShooting && !isKnockedDown && (isInMelee || combat.CurrentState == 3))
                 {
                     float3 pushDir = meleePushDir;
                     if (math.lengthsq(pushDir) > 0.001f) pushDir = math.normalize(pushDir);
@@ -599,6 +688,12 @@ namespace MiniTotalWar.ECS
             // 옆 부대원과 우연히 몸이 스치더라도(meleeTargetDist), 자신의 목표를 향해 멈추지 않고 계속 전진합니다!
             bool isMeleeStopped = (distToEnemy <= effectiveStoppingDist) || (meleeTargetDist <= effectiveStoppingDist * 1.25f && (combat.TargetSquadId == -1 || distToEnemy <= effectiveStoppingDist * 1.8f));
             if (isMeleeStopped && combat.CurrentState == 3)
+            {
+                maxDesiredSpeed = 0f;
+            }
+
+            // 🏹 [ECS 궁병 제자리 사격 태세]: 이동 사격 불허 시 활을 쏘는 동안(isRangedShooting) 발 멈춤
+            if (isRangedShooting && combat.CanFireWhileMoving == 0)
             {
                 maxDesiredSpeed = 0f;
             }

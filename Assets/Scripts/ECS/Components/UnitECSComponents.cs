@@ -15,6 +15,7 @@ namespace MiniTotalWar.ECS
         public int SlotIndex;     // 부대 내 고유 슬롯 인덱스 (0 ~ N-1)
         public int Row;           // 현재 행(Row)
         public int Col;           // 현재 열(Col)
+        public int UnitType;      // 0 = Melee, 1 = Spear, 2 = Archer, 3 = Cavalry
     }
 
     /// <summary>
@@ -71,6 +72,7 @@ namespace MiniTotalWar.ECS
         public int ChargeImpactReady;     // 1 = 첫 충돌 넉백 펄스 장전, 0 = 소진
         public float EngagementStartTime; // 교전 시작 시간 (0f = 비교전)
         public int AutoAttackEnabled;     // 1 = 자동 선제 돌격 On, 0 = 근접 접촉 방어 Off (V)
+        public int FireAtWill;             // 1 = 자유 사격 On (사거리 내 적 자동 사격), 0 = Off (지정 사격만) (F)
         public int CanReflectCharge;       // 1 = 돌격 반사 가능(장창병), 0 = 불가능(검병)
         public float KnockdownThreshold;   // 넘어짐 판정 넉백 속도 임계값 (m/s)
         public float KnockdownDuration;    // 무력화 유지 시간 (초, 기본 3.0초)
@@ -83,6 +85,28 @@ namespace MiniTotalWar.ECS
         public int TargetSquadId;         // 부대 지휘관이 지정한 목표 적 부대 InstanceID (-1 = 없음/자유)
         public float3 CachedEnemyPos;     // 0.1초 주기로 갱신되는 타겟 적의 위치 캐시 (최적화)
         public float TargetSearchTimer;   // 적 위치/타겟 탐색 주기 타이머 (0.1초 주기 분산)
+
+        // 🏹 원거리 궁병 및 탄도학 스탯 (Pure ECS 지원)
+        public int IsRangedUnit;           // 1 = 원거리 궁병, 0 = 근접 보병
+        public int CanFireWhileMoving;     // 1 = 이동 중 사격 허용, 0 = 정지 시에만 사격
+        public int MaxAmmo;                // 최대 탄약 (25)
+        public int CurrentAmmo;            // 잔여 탄약
+        public float RangedAttackRange;    // 최대 사거리 (150m)
+        public float OptimalRange;         // 최적 사거리 (50m)
+        public float RangedMinRange;       // 최소 사거리 (5m)
+        public float RangedBaseDamage;     // 기본 사격 대미지 (15)
+        public float MinDamageRatioAtMax;  // 최대 사거리 감쇠율 (0.55)
+        public float RangedAttackCooldown; // 사격 쿨다운 (2.2s)
+        public float LastRangedAttackTime; // 최근 사격 시각
+        public float ProjectileSpeed;      // 화살 비행 속도 (30m/s)
+        public float MinSpreadRadius;      // 근거리 오차 반경 (0.3m)
+        public float MaxSpreadRadius;      // 최대 사거리 오차 반경 (3.5m)
+        public int TrajectoryMode;         // 0 = HighArc, 1 = Flat
+        public float GravityScale;         // 중력 배율 (1.0)
+        public float ArmorPiercingRatio;   // 방어 관통 비율 (0.25)
+        public int ArmorShredAmount;       // 방어 삭감치 (10)
+        public int IgnoreArmor;            // 1 = 방어 100% 무시, 0 = 방어 적용
+        public float MeleeSwitchDistance;  // 백병전 전환 거리 (5.0m)
     }
 
     /// <summary>
