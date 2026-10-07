@@ -12,7 +12,8 @@
 ## 🌳 2. 아키텍처 트리 맵 (Architecture Tree Map)
 
 - 📁 **1. 생명주기 및 초기화 (Lifecycle & Initialization)**
-  - `Start()`: 부대 컴포넌트 초기화, UI/미니맵 등록 및 초기 진형 실효 스탯 일괄 동기화
+  - `Start()`: 부대 컴포넌트 초기화, UI/미니맵 등록, 첫 유닛 프리팹 진형 설정 자동 흡수 및 초기 진형 실효 스탯 일괄 동기화
+  - `ApplyFormationSettingsFromUnitPrefab()`: 🚩 소속 유닛 프리팹의 권장 대형 간격, 체커보드, 순차사격 수치를 부대에 1:1 자동 주입 및 버퍼 동기화
   - `OnDestroy()`: 부대 해체 및 리소스 정리 (부대 카드, 아이콘, 미니맵 마커 자동 철거)
   - `InitializeSquadOnStart()`: 시작 시 부대원 자동 등록 및 초기 중심점 계산
   - `HandleSquadWipedOut()`: 부대원 전멸 시 0명 확정, 매니저 등록 해제 및 부대 오브젝트 파괴 일괄 처리
@@ -70,6 +71,7 @@
 | `GetFormationModifier` | `FormationStatModifier (type)` | 현재 방진 타입(Normal, Wedge, Square 등)별 인스펙터 계수 반환 | `ApplyFormationAndStanceModifiers` | [Squad.cs#L757-L768](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L757-L768) |
 | `GetFormationTightness` | `float ()` | 인스펙터 임계값 기준 0.0~1.0 연속 밀집도 산출 | `ApplyFormationAndStanceModifiers` | [Squad.cs#L770-L790](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L770-L790) |
 | `ApplyFormationAndStanceModifiers` | `void ()` | 방진 기본 + 산개도 비례 + 태세 결합 실효 스탯 산출 및 3계층 동기화 | `Start`, `RebuildGrid`, `CommandMove`, `SetAutoAttack` | [Squad.cs#L792-L860](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L792-L860) |
+| `ApplyFormationSettingsFromUnitPrefab` | `void (Unit unitPrefab)` | 배정된 유닛 프리팹의 권장 간격, 체커보드, 순차사격 수치를 부대에 자동 동기화 | `BattleManager.SpawnSquad`, `Squad.Start` | [Squad.cs#L944-L972](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L944-L972) |
 | `MemberCount` | `int (get)` | 실시간 생존 부대원 수 반환 (Pure ECS / GameObject 완전 호환) | `UI`, `PlayerController`, `AI` | [Squad.cs#L42-L57](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L42-L57) |
 | `HandleSquadWipedOut` | `void ()` | 부대 전멸 시 0명 확정, 매니저 해제 및 오브젝트 파괴 일괄 처리 | `UpdateSquadCenter`, `OnUnitDied` | [Squad.cs#L2928-L2938](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2928-L2938) |
 | `CalculateSlotLocalOffset` | `Vector3 (r, c, count, rows, cols)` | 열과 행에 따른 슬롯 상대 좌표 계산 | `RebuildGridStructure` | [Squad.cs#L216-L238](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L216-L238) |
@@ -83,8 +85,12 @@
 | `UpdateEnemyProjectionData` | `void (enemy, rot, center)` | 적 부대의 360도 투영 폭 및 접적면 계산 | `CommandAttackSquad`, `Tracking` | [Squad.cs#L1552-L1700](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1552-L1700) |
 | `UpdateTargetSquadTracking` | `void ()` | 공격 중인 적 부대 위치 추적 및 슬롯 갱신 | `Update` | [Squad.cs#L1815-L1910](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1815-L1910) |
 | `SetAutoAttack` | `void (bool enabled)` | 적 접근 시 자동 선제 요격 허용 및 접촉 방어(V키) 스탯 동기화 | `PlayerController`, `V키` | [Squad.cs#L1300-L1350](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1300-L1350) |
-| `GetFrontLineCenter` | `Vector3 ()` | 부대 맨 앞열(전열)의 물리적 중심 좌표 반환 | `UpdateEnemyTracking` | [Squad.cs#L3000-L3040](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3000-L3040) |
-| `GetVisualCenter` | `Vector3 ()` | 생존 부대원 전체의 실제 평균 중심 좌표 | `PlayerController`, `AI` | [Squad.cs#L3041-L3070](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3041-L3070) |
+| `GetFrontLineCenter` | `Vector3 ()` | 부대 맨 앞열(전열)의 물리적 중심 좌표 반환 | `UpdateEnemyTracking` | [Squad.cs#L3000-L3040](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3000-L3040) |
+| `GetVisualCenter` | `Vector3 ()` | 생존 부대원 전체의 실제 평균 중심 좌표 (ECS 집계 폴백 지원) | `PlayerController`, `AI`, `AdjustSpacing` | [Squad.cs#L3520-L3550](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3520-L3550) |
+| `AdjustSpacing` | `void (float delta)` | [ / ] 키 단발/가속 대열 간격 조절 시 이동 명령 없이 실제 병사 중심(GetVisualCenter) 기준 제자리 슬롯 간격 갱신 | `PlayerController.cs` | [Squad.cs#L3199-L3265](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3199-L3265) |
+| `UpdateECSEntitiesTargetInPlace` | `void (Vector3 anchorCenter)` | Pure ECS 모드에서 이동 상태 전환 없이 현재 대기/교전 상태를 보존하며 제자리 슬롯 좌표만 동기화 | `Squad.AdjustSpacing` | [Squad.cs#L1385-L1460](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1385-L1460) |
+| `SetStaggeredFormation` | `void (bool enabled)` | 엇갈린 대형 설정 및 제자리 슬롯/시뮬레이션 버퍼 즉시 동기화 | `Squad.ToggleStaggeredFormation`, `UI` | [Squad.cs#L3435-L3488](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3435-L3488) |
+| `ToggleStaggeredFormation` | `void ()` | 엇갈린 대형 권한(canUseStaggeredFormation) 보유 부대의 대형 토글 | `PlayerController.cs`, `T키` | [Squad.cs#L3490-L3500](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3490-L3500) |
 
 ---
 

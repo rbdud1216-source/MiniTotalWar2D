@@ -98,10 +98,16 @@ public class Squad : MonoBehaviour
     public float spacingX = 1.1f;
     [Tooltip("부대원 앞뒤(종방향) 열 간격 (기본 1.2m)")]
     public float spacingZ = 1.2f;
+    [Tooltip("유닛 프리팹 기준 기본 가로 간격")]
+    public float baseSpacingX = 1.1f;
+    [Tooltip("유닛 프리팹 기준 기본 세로 간격")]
+    public float baseSpacingZ = 1.2f;
     [Tooltip("커스텀 간격 배율")]
     public float customSpacingMultiplier = 1.0f;
-    [Tooltip("체커보드 지그재그 배치 여부 (체크 시 뒷열 병사가 앞열 병사 사이 빈틈에 엇갈려 서서 시야와 무기 거리를 확보)")]
-    public bool useStaggeredFormation = true; // 지그재그(체커보드) 엇갈림 배치
+    [Tooltip("엇갈린 대형 전환 권한 여부 (소속 유닛 프리팹의 권장 설정에 따라 결정)")]
+    public bool canUseStaggeredFormation = false;
+    [Tooltip("엇갈린 대형(Staggered Formation) 활성화 여부 (활성화 시 2열 병사가 1열 병사 사이 빈틈에 엇갈려 서서 2열 직사 사격 개방)")]
+    public bool useStaggeredFormation = false; // 엇갈린 대형 활성화 여부 (기본값: 단정한 직렬 대형)
 
     [Tooltip("열(Rank)과 열 사이의 순차적 출발 반응 지연 시간(초) - 전진/후진 시 파동형 출발 제어 (기본 0.08초)")]
     public float rowReactionDelay = 0.08f;
@@ -112,7 +118,7 @@ public class Squad : MonoBehaviour
     [Tooltip("부대 전면 가로 열(Columns) 수 (Alt 드래그 또는 명령 시 조절)")]
     public int currentColumns = 5;
 
-    private int totalGridRows = 0;
+    public int totalGridRows = 0;
 
     [System.Serializable]
     public struct FormationStatModifier
@@ -205,6 +211,13 @@ public class Squad : MonoBehaviour
     [Tooltip("🏹 자유 사격 (Fire at Will - F키) 활성화 여부 (체크 시 사거리 내 적에게 자동 일제사격, 해제 시 지정 공격 명령 시에만 사격)")]
     public bool fireAtWill = true;
 
+    [Header("🔄 원거리 방진 순차 사격 (Rolling Volley) 전술 설정")]
+    [Tooltip("열별 순차 사격(Rolling Volley) 활성화 여부 (체크 시 1열부터 순차적으로 파도타기 사격)")]
+    public bool enableSequentialFire = false;
+
+    [Tooltip("순차 사격 시 행(Row) 사이의 발사 지연 시간 (초, 기본: 0.35초)")]
+    public float sequentialRowDelay = 0.35f;
+
     private Vector3 ecsVisualCenter = Vector3.zero;
     private bool hasEcsVisualCenter = false;
 
@@ -222,6 +235,7 @@ public class Squad : MonoBehaviour
         if (members.Count > 0 && members[0] != null)
         {
             isPlayer = members[0].isPlayer;
+            ApplyFormationSettingsFromUnitPrefab(members[0]);
         }
 
         // 플레이어 부대인 경우에만 화면 좌하단 부대 카드를 생성합니다.
@@ -400,9 +414,9 @@ public class Squad : MonoBehaviour
             return slots;
         }
 
-        // 📐 [진형 간격 산출]: 산개(Loose) 여부에 따라 spacingX/Z가 이미 결정되어 있으므로 중복 2배 연산 배제
-        float currentSpacingX = spacingX * customSpacingMultiplier * formationWidthMultiplier;
-        float currentSpacingZ = spacingZ * customSpacingMultiplier * formationLengthMultiplier;
+        // 📐 [진형 간격 산출]: spacingX/Z에 이미 customSpacingMultiplier가 반영되어 있으므로 중복 연산 배제
+        float currentSpacingX = spacingX * formationWidthMultiplier;
+        float currentSpacingZ = spacingZ * formationLengthMultiplier;
 
         if (formType == SquadFormationType.Diamond)
         {
@@ -909,17 +923,65 @@ public class Squad : MonoBehaviour
             }
         }
 
+        float effSpacingX = spacingX * formationWidthMultiplier;
+        float effSpacingZ = spacingZ * formationLengthMultiplier;
+        int rows = (totalGridRows > 0) ? totalGridRows : Mathf.CeilToInt((float)MemberCount / Mathf.Max(1, currentColumns));
+
         // 7. UnitJobSimulationManager (C# Job System 버퍼) 일괄 갱신
         if (UnitJobSimulationManager.Instance != null)
         {
-            UnitJobSimulationManager.Instance.UpdateSquadCombatModifiers(this, effectiveArmor, effectiveMass, effectiveCooldown);
+            UnitJobSimulationManager.Instance.UpdateSquadCombatModifiers(
+                this, effectiveArmor, effectiveMass, effectiveCooldown,
+                effSpacingX, effSpacingZ, rows, useStaggeredFormation,
+                enableSequentialFire, sequentialRowDelay);
         }
 
         // 8. SquadECSSimulationBridge (Pure ECS World Entity) 일괄 갱신
         if (SquadECSSimulationBridge.Instance != null)
         {
-            SquadECSSimulationBridge.Instance.UpdateSquadCombatModifiers(this, effectiveArmor, effectiveMass, effectiveCooldown);
+            SquadECSSimulationBridge.Instance.UpdateSquadCombatModifiers(
+                this, effectiveArmor, effectiveMass, effectiveCooldown,
+                effSpacingX, effSpacingZ, rows, useStaggeredFormation,
+                enableSequentialFire, sequentialRowDelay);
         }
+    }
+
+    /// <summary>
+    /// 소속 유닛 프리팹(Unit)의 권장 진형 및 사격 전술 설정을 부대에 1:1로 자동 동기화합니다.
+    /// </summary>
+    public void ApplyFormationSettingsFromUnitPrefab(Unit unitPrefab)
+    {
+        if (unitPrefab == null || !unitPrefab.overrideSquadFormationDefaults) return;
+
+        if (unitPrefab.recommendedSquadSpacingX > 0.1f)
+        {
+            spacingX = unitPrefab.recommendedSquadSpacingX;
+            baseSpacingX = unitPrefab.recommendedSquadSpacingX;
+        }
+
+        if (unitPrefab.recommendedSquadSpacingZ > 0.1f)
+        {
+            spacingZ = unitPrefab.recommendedSquadSpacingZ;
+            baseSpacingZ = unitPrefab.recommendedSquadSpacingZ;
+        }
+
+        spacing = (spacingX + spacingZ) * 0.5f;
+
+        canUseStaggeredFormation = unitPrefab.recommendedStaggeredFormation;
+        useStaggeredFormation = false; // 🌟 스폰 시에는 항상 단정하고 깔끔한 직렬 대형을 기본으로 유지!
+        enableSequentialFire = unitPrefab.recommendedSequentialFire;
+
+        if (unitPrefab.recommendedSequentialRowDelay > 0.01f)
+            sequentialRowDelay = unitPrefab.recommendedSequentialRowDelay;
+
+        // 원거리 유닛 여부 및 병과 자동 동기화
+        if (unitPrefab.isRangedUnit && unitType != UnitType.Archer)
+        {
+            unitType = UnitType.Archer;
+        }
+
+        // 시뮬레이션 버퍼 즉시 갱신
+        ApplyFormationAndStanceModifiers();
     }
 
     public void SetFormationType(SquadFormationType formType)
@@ -1318,6 +1380,81 @@ public class Squad : MonoBehaviour
                     em.SetComponentData(ent, mov);
                     em.SetComponentData(ent, combat);
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 🛡️ [제자리 슬롯 간격 갱신 - Pure ECS 모드]
+    /// 부대 이동 명령(Move)이나 상태 강제 전환 없이, 현재 병사들의 중심(anchorCenter)을 기준으로
+    /// 슬롯 목표 좌표(TargetPosition)만 제자리에서 벌어지거나 좁혀지도록 갱신합니다.
+    /// </summary>
+    private void UpdateECSEntitiesTargetInPlace(Vector3 anchorCenter)
+    {
+        var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
+        if (world == null || !world.IsCreated) return;
+
+        var em = world.EntityManager;
+        var query = em.CreateEntityQuery(
+            typeof(MiniTotalWar.ECS.UnitEntityTag),
+            typeof(MiniTotalWar.ECS.UnitMovementData),
+            typeof(MiniTotalWar.ECS.UnitCombatData)
+        );
+
+        using (var entities = query.ToEntityArray(Unity.Collections.Allocator.Temp))
+        {
+            int squadId = GetInstanceID();
+            List<Unity.Entities.Entity> myEntities = new List<Unity.Entities.Entity>();
+
+            for (int i = 0; i < entities.Length; i++)
+            {
+                Unity.Entities.Entity ent = entities[i];
+                var tag = em.GetComponentData<MiniTotalWar.ECS.UnitEntityTag>(ent);
+                if (tag.SquadId == squadId && tag.IsAlive == 1)
+                {
+                    myEntities.Add(ent);
+                }
+            }
+
+            int myEntityCount = myEntities.Count;
+            if (myEntityCount == 0) return;
+
+            int cols = Mathf.Clamp(currentColumns, 1, myEntityCount);
+            currentColumns = cols;
+
+            var slots = GenerateFormationSlots(myEntityCount, cols, out totalGridRows, currentFormationType);
+
+            // 🛡️ 기존 Row(앞열 우선) 및 Col(좌측 우선) 순서대로 정렬하여 1:1 제자리 슬롯 매핑
+            myEntities.Sort((a, b) =>
+            {
+                var tagA = em.GetComponentData<MiniTotalWar.ECS.UnitEntityTag>(a);
+                var tagB = em.GetComponentData<MiniTotalWar.ECS.UnitEntityTag>(b);
+                if (tagA.Row != tagB.Row) return tagA.Row.CompareTo(tagB.Row);
+                return tagA.Col.CompareTo(tagB.Col);
+            });
+
+            Quaternion rot = transform.rotation;
+
+            for (int i = 0; i < myEntities.Count; i++)
+            {
+                if (i >= slots.Count) break;
+                Unity.Entities.Entity ent = myEntities[i];
+                var tag = em.GetComponentData<MiniTotalWar.ECS.UnitEntityTag>(ent);
+                var mov = em.GetComponentData<MiniTotalWar.ECS.UnitMovementData>(ent);
+
+                var slot = slots[i];
+
+                tag.SlotIndex = i;
+                tag.Row = slot.row;
+                tag.Col = slot.col;
+
+                mov.TargetPosition = anchorCenter + (rot * slot.localOffset);
+                mov.TargetRotation = rot * slot.localRotation;
+                mov.MoveSpeed = targetSpeed > 0 ? targetSpeed : 1.0f;
+
+                em.SetComponentData(ent, tag);
+                em.SetComponentData(ent, mov);
+                // 💡 combat.CurrentState는 건드리지 않고 기존 상태(대기/사격/교전 등)를 보존!
             }
         }
     }
@@ -3065,15 +3202,70 @@ public class Squad : MonoBehaviour
     public void AdjustSpacing(float delta)
     {
         customSpacingMultiplier = Mathf.Clamp(customSpacingMultiplier + delta, 0.45f, 3.0f);
-        spacingX = (isLooseFormation ? DEFAULT_LOOSE_SPACING_X : DEFAULT_SPACING_X) * customSpacingMultiplier;
-        spacingZ = (isLooseFormation ? DEFAULT_LOOSE_SPACING_Z : DEFAULT_SPACING_Z) * customSpacingMultiplier;
+        float baseX = (baseSpacingX > 0.1f) ? baseSpacingX : DEFAULT_SPACING_X;
+        float baseZ = (baseSpacingZ > 0.1f) ? baseSpacingZ : DEFAULT_SPACING_Z;
+        if (isLooseFormation)
+        {
+            baseX = Mathf.Max(baseX * 1.8f, DEFAULT_LOOSE_SPACING_X);
+            baseZ = Mathf.Max(baseZ * 1.8f, DEFAULT_LOOSE_SPACING_Z);
+        }
+        spacingX = baseX * customSpacingMultiplier;
+        spacingZ = baseZ * customSpacingMultiplier;
         spacing = (spacingX + spacingZ) * 0.5f;
 
-        // 즉시 현재 대형에 반영
-        if (!isMoving && (members.Count > 0 || initialUnitCount > 0))
+        if (isMoving)
         {
-            CommandMoveWithFormation(transform.position, transform.rotation, currentColumns, forceSort: false);
+            // 이동 중일 때는 현재 지정된 이동 목적지 기준으로 대형 슬롯만 갱신
+            CommandMoveWithFormation(moveDestination, targetSquadRotation, currentColumns, forceSort: false, currentCommandState);
         }
+        else
+        {
+            // 🛡️ [제자리 간격 조절 - In-Place Spacing Adjustment]:
+            // 부대 이동 명령(CommandMoveWithFormation)을 내리지 않고,
+            // 현재 유닛들이 실제로 서 있는 물리적 중심(GetVisualCenter)을 앵커로 유지한 채
+            // 제자리에서 슬롯 간격만 즉시 벌어지거나 좁혀지도록 갱신!
+            Vector3 anchorCenter = GetVisualCenter();
+            transform.position = anchorCenter;
+            moveDestination = anchorCenter;
+            targetSquadRotation = transform.rotation;
+
+            // 1. GameObject 모드 유닛 제자리 슬롯 좌표 갱신
+            if (members != null && members.Count > 0)
+            {
+                List<SlotInfo> slots = GenerateFormationSlots(members.Count, currentColumns, out totalGridRows, currentFormationType);
+                for (int i = 0; i < members.Count; i++)
+                {
+                    var member = members[i];
+                    if (member == null) continue;
+
+                    var slot = (i < slots.Count) ? slots[i] : default;
+                    Vector3 localOffset = (i < slots.Count) ? slot.localOffset : Vector3.zero;
+                    Vector3 newSlotPos = anchorCenter + (transform.rotation * localOffset);
+                    newSlotPos.y = anchorCenter.y;
+
+                    member.fixedTargetPos = newSlotPos;
+                    member.formationOffset = localOffset;
+                    member.targetRotation = transform.rotation * (i < slots.Count ? slot.localRotation : Quaternion.identity);
+
+                    // 기존 상태(currentState: 대기, 사격, 교전 등)를 그대로 유지하면서 슬롯 위치만 전달
+                    if (UnitJobSimulationManager.HasInstance)
+                    {
+                        UnitJobSimulationManager.Instance.UpdateUnitTargetPosition(member, newSlotPos, member.targetRotation, member.currentState);
+                    }
+                    if (MiniTotalWar.ECS.SquadECSSimulationBridge.Instance != null)
+                    {
+                        MiniTotalWar.ECS.SquadECSSimulationBridge.Instance.UpdateEntityTarget(member, newSlotPos, member.targetRotation, member.currentState);
+                    }
+                }
+            }
+            // 2. Pure ECS 모드 엔티티 제자리 슬롯 좌표 갱신
+            else if (initialUnitCount > 0)
+            {
+                UpdateECSEntitiesTargetInPlace(anchorCenter);
+            }
+        }
+
+        ApplyFormationAndStanceModifiers();
     }
 
     public bool CalculateEnvelopmentSlot(int row, float col, int columns, int totalRows, SquadFormationType formType, out Vector3 localPos, out Vector3 colNormalDir)
@@ -3086,8 +3278,8 @@ public class Squad : MonoBehaviour
             return false;
         }
 
-        float curSpacingX = (formType == SquadFormationType.Loose && !isLooseFormation) ? (DEFAULT_LOOSE_SPACING_X * customSpacingMultiplier) : (spacingX * customSpacingMultiplier);
-        float curSpacingZ = (formType == SquadFormationType.Loose && !isLooseFormation) ? (DEFAULT_LOOSE_SPACING_Z * customSpacingMultiplier) : (spacingZ * customSpacingMultiplier);
+        float curSpacingX = (formType == SquadFormationType.Loose && !isLooseFormation) ? (DEFAULT_LOOSE_SPACING_X * customSpacingMultiplier) : spacingX;
+        float curSpacingZ = (formType == SquadFormationType.Loose && !isLooseFormation) ? (DEFAULT_LOOSE_SPACING_Z * customSpacingMultiplier) : spacingZ;
 
         if (totalRows <= 0)
         {
@@ -3180,8 +3372,8 @@ public class Squad : MonoBehaviour
 
     public Vector3 CalculateCurvedSlotOffset(int row, float col, int columns, int totalRows, SquadFormationType formType)
     {
-        float curSpacingX = spacingX * customSpacingMultiplier;
-        float curSpacingZ = spacingZ * customSpacingMultiplier;
+        float curSpacingX = spacingX;
+        float curSpacingZ = spacingZ;
         
         if (totalRows <= 0)
         {
@@ -3220,6 +3412,16 @@ public class Squad : MonoBehaviour
 
         // 🏛️ [평상시 기본 사각 방진 및 Alt+좌클릭 수동 곡선 배치 좌표]
         float baseColOffset = (col - (columns - 1) * 0.5f) * curSpacingX;
+
+        // 🏁 [체커보드(지그재그) 엇갈림 배치 - Checkerboard / Staggered Formation]:
+        // useStaggeredFormation 활성화 시 짝수 행(-0.25f)과 홀수 행(+0.25f)이 가로로 반 칸(0.50f) 엇갈려 배치됩니다.
+        // 2열 병사는 1열 병사 둘 사이의 틈새 정중앙에 정확히 위치하게 되며, 부대 중심축(X=0)의 좌우 대칭이 완벽히 유지됩니다.
+        if (useStaggeredFormation && columns > 1)
+        {
+            float staggerSign = (row % 2 == 0) ? -0.25f : 0.25f;
+            baseColOffset += staggerSign * curSpacingX;
+        }
+
         float baseFrontZ = (totalRows - 1) * 0.5f * curSpacingZ;
         float rowDepth = row * curSpacingZ;
 
@@ -3233,6 +3435,67 @@ public class Squad : MonoBehaviour
         }
 
         return new Vector3(baseColOffset, 0f, baseFrontZ - rowDepth + curveZ);
+    }
+
+    /// <summary>
+    /// 🏁 체커보드(지그재그) 대형 설정을 토글/변경하고 제자리에서 슬롯을 즉시 갱신합니다.
+    /// </summary>
+    public void SetStaggeredFormation(bool enabled)
+    {
+        if (useStaggeredFormation == enabled) return;
+        useStaggeredFormation = enabled;
+
+        if (!isMoving && (members.Count > 0 || initialUnitCount > 0))
+        {
+            Vector3 anchorCenter = GetVisualCenter();
+            transform.position = anchorCenter;
+            moveDestination = anchorCenter;
+            targetSquadRotation = transform.rotation;
+
+            if (members != null && members.Count > 0)
+            {
+                var slots = GenerateFormationSlots(members.Count, currentColumns, out totalGridRows, currentFormationType);
+                for (int i = 0; i < members.Count; i++)
+                {
+                    var m = members[i];
+                    if (m == null) continue;
+
+                    var slot = (i < slots.Count) ? slots[i] : default;
+                    Vector3 localOffset = (i < slots.Count) ? slot.localOffset : Vector3.zero;
+                    Vector3 newPos = anchorCenter + (transform.rotation * localOffset);
+                    newPos.y = anchorCenter.y;
+
+                    m.fixedTargetPos = newPos;
+                    m.formationOffset = localOffset;
+                    m.targetRotation = transform.rotation * (i < slots.Count ? slot.localRotation : Quaternion.identity);
+
+                    if (UnitJobSimulationManager.HasInstance)
+                    {
+                        UnitJobSimulationManager.Instance.UpdateUnitTargetPosition(m, newPos, m.targetRotation, m.currentState);
+                    }
+                    if (MiniTotalWar.ECS.SquadECSSimulationBridge.Instance != null)
+                    {
+                        MiniTotalWar.ECS.SquadECSSimulationBridge.Instance.UpdateEntityTarget(m, newPos, m.targetRotation, m.currentState);
+                    }
+                }
+            }
+            else if (initialUnitCount > 0)
+            {
+                UpdateECSEntitiesTargetInPlace(anchorCenter);
+            }
+        }
+
+        ApplyFormationAndStanceModifiers();
+    }
+
+    /// <summary>
+    /// 🏁 엇갈린 대형(2열 직사 사격 태세)을 토글합니다.
+    /// (유닛 프리팹에서 엇갈린 대형 권한이 부여된 부대만 실행 가능)
+    /// </summary>
+    public void ToggleStaggeredFormation()
+    {
+        if (!canUseStaggeredFormation) return;
+        SetStaggeredFormation(!useStaggeredFormation);
     }
 
     /// <summary>
@@ -3350,6 +3613,11 @@ public class Squad : MonoBehaviour
         if (hasEcsVisualCenter)
         {
             return ecsVisualCenter;
+        }
+
+        if (MiniTotalWar.ECS.SpatialHashGridSystem.TryGetSquadAggregateData(GetInstanceID(), out Unity.Mathematics.float3 c, out int cnt, out _) && cnt > 0)
+        {
+            return (Vector3)c;
         }
 
         return transform.position;

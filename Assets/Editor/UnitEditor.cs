@@ -29,6 +29,21 @@ public class UnitEditor : Editor
     private SerializedProperty armorShredAmount;
     private SerializedProperty meleeSwitchDistance;
 
+    // 📐 원거리 3축 공간 및 사선 클리어런스 (밀집도 & 언덕 사면)
+    private SerializedProperty minRearSpacing;
+    private SerializedProperty minLateralSpacing;
+    private SerializedProperty headClearanceMargin;
+    private SerializedProperty allowStaggeredRank2DirectFire;
+
+    // 🚩 권장 소속 부대 진형 및 사격 전술 설정 (Squad Formation Defaults)
+    private SerializedProperty overrideSquadFormationDefaults;
+    private SerializedProperty recommendedSquadSpacingX;
+    private SerializedProperty recommendedSquadSpacingZ;
+    private SerializedProperty recommendedStaggeredFormation;
+    private SerializedProperty recommendedSequentialFire;
+    private SerializedProperty recommendedSequentialRowDelay;
+    private static bool showSquadFormationDefaults = true;
+
     private SerializedProperty isPlayer;
     private SerializedProperty maxHp;
     private SerializedProperty currentHp;
@@ -115,6 +130,16 @@ public class UnitEditor : Editor
         armorPiercingRatio = serializedObject.FindProperty("armorPiercingRatio");
         armorShredAmount = serializedObject.FindProperty("armorShredAmount");
         meleeSwitchDistance = serializedObject.FindProperty("meleeSwitchDistance");
+        minRearSpacing = serializedObject.FindProperty("minRearSpacing");
+        minLateralSpacing = serializedObject.FindProperty("minLateralSpacing");
+        headClearanceMargin = serializedObject.FindProperty("headClearanceMargin");
+        allowStaggeredRank2DirectFire = serializedObject.FindProperty("allowStaggeredRank2DirectFire");
+        overrideSquadFormationDefaults = serializedObject.FindProperty("overrideSquadFormationDefaults");
+        recommendedSquadSpacingX = serializedObject.FindProperty("recommendedSquadSpacingX");
+        recommendedSquadSpacingZ = serializedObject.FindProperty("recommendedSquadSpacingZ");
+        recommendedStaggeredFormation = serializedObject.FindProperty("recommendedStaggeredFormation");
+        recommendedSequentialFire = serializedObject.FindProperty("recommendedSequentialFire");
+        recommendedSequentialRowDelay = serializedObject.FindProperty("recommendedSequentialRowDelay");
 
         isPlayer = serializedObject.FindProperty("isPlayer");
         maxHp = serializedObject.FindProperty("maxHp");
@@ -258,9 +283,51 @@ public class UnitEditor : Editor
                 if (meleeSwitchDistance != null)
                     EditorGUILayout.PropertyField(meleeSwitchDistance, new GUIContent("근접 백병전 강제 전환 거리 (m)", "적 보병이 이 거리 안으로 파고들면 즉시 활을 거두고 칼을 뽑아 백병전을 수행합니다. (기본: 5.0m)"));
 
+                EditorGUILayout.Space(4);
+                // F. 📐 원거리 3축 공간 및 사선 클리어런스 (밀집도 & 언덕 사면)
+                EditorGUILayout.LabelField("📐 3축 공간 및 사선 클리어런스 (밀집도 & 언덕 사면)", EditorStyles.miniBoldLabel);
+                if (minRearSpacing != null)
+                    EditorGUILayout.PropertyField(minRearSpacing, new GUIContent("후방 최소 필요 거리 (m)", "백스윙/와인드업을 위한 뒷사람과의 최소 간격입니다. 활(0.8m), 투창(1.0m)은 공간이 필요하며, 쇠뇌/총(0.0m)은 견착 무기이므로 밀착 사격이 허용됩니다."));
+                if (minLateralSpacing != null)
+                    EditorGUILayout.PropertyField(minLateralSpacing, new GUIContent("측면 최소 필요 거리 (m)", "활 시위 전개 및 견착 조준을 위한 좌우 최소 대형 간격입니다. (기본: 0.75m)"));
+                if (headClearanceMargin != null)
+                    EditorGUILayout.PropertyField(headClearanceMargin, new GUIContent("전열 머리 위 안전 여유고 (m)", "앞열 아군 머리 위를 넘길 수 있는 최소 사선 여유 높이입니다. (기본: 0.45m) 언덕 고지대에서는 높은 지면차로 인해 후열 총병/직사 무기도 일제사격이 가능해집니다."));
+                if (allowStaggeredRank2DirectFire != null)
+                    EditorGUILayout.PropertyField(allowStaggeredRank2DirectFire, new GUIContent("체커보드 2열 틈새 직사 허용", "체크 시 엇갈린(체커보드) 대형에서 2열 사수가 1열 병사 사이의 틈새로 직사 사격을 수행합니다."));
+
                 EditorGUILayout.EndVertical();
                 EditorGUILayout.Space(4);
             }
+        }
+
+        // 🚩 권장 소속 부대 진형 및 사격 전술 설정 (Squad Formation Defaults)
+        showSquadFormationDefaults = EditorGUILayout.Foldout(showSquadFormationDefaults, "🚩 권장 소속 부대 진형 및 사격 전술 (Squad Formation Defaults)", true);
+        if (showSquadFormationDefaults)
+        {
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            if (overrideSquadFormationDefaults != null)
+                EditorGUILayout.PropertyField(overrideSquadFormationDefaults, new GUIContent("부대 진형 자동 동기화 활성화", "체크 시 이 유닛이 배속된 부대(Squad)의 대형 간격, 체커보드, 순차사격 수치를 아래 설정값으로 자동 동기화합니다."));
+
+            if (overrideSquadFormationDefaults != null && overrideSquadFormationDefaults.boolValue)
+            {
+                EditorGUILayout.Space(2);
+                EditorGUILayout.LabelField("📐 권장 대형 간격 (m)", EditorStyles.miniBoldLabel);
+                if (recommendedSquadSpacingX != null)
+                    EditorGUILayout.PropertyField(recommendedSquadSpacingX, new GUIContent("권장 가로(좌우) 간격 (m)", "부대원들 간의 기본 가로 간격입니다. (보병 1.0m, 궁병 1.1m 권장)"));
+                if (recommendedSquadSpacingZ != null)
+                    EditorGUILayout.PropertyField(recommendedSquadSpacingZ, new GUIContent("권장 세로(앞뒤) 간격 (m)", "부대 열(Row) 간의 기본 세로 간격입니다. (보병 1.0m, 장궁병 1.3m, 쇠뇌 0.8m 권장)"));
+
+                EditorGUILayout.Space(2);
+                EditorGUILayout.LabelField("🏹 권장 전술 및 사격 설정", EditorStyles.miniBoldLabel);
+                if (recommendedStaggeredFormation != null)
+                    EditorGUILayout.PropertyField(recommendedStaggeredFormation, new GUIContent("엇갈린 대형 권장", "체크 시 부대에 엇갈린 대형(2열 직사 사격 태세) 사용 권한이 부여되며, 인게임에서 [T] 키나 버튼으로 전환할 수 있습니다. (원거리 유닛: 체크 권장)"));
+                if (recommendedSequentialFire != null)
+                    EditorGUILayout.PropertyField(recommendedSequentialFire, new GUIContent("순차 사격(Rolling Volley) 권장", "체크 시 부대원들이 제자리에서 전열부터 행별로 시간차를 두고 교대 사격합니다. (원거리 유닛: 체크 권장)"));
+                if (recommendedSequentialRowDelay != null)
+                    EditorGUILayout.PropertyField(recommendedSequentialRowDelay, new GUIContent("순차 사격 행간 지연 시간 (초)", "각 행(열) 사이의 발사 시간차입니다. (기본: 0.4초)"));
+            }
+            EditorGUILayout.EndVertical();
+            EditorGUILayout.Space(4);
         }
 
         // 🩺 1. 생존력 및 방어력 (Health & Armor)

@@ -129,6 +129,7 @@ public class PlayerController : MonoBehaviour
     private float initialFormationLength = 1.0f; // 쐐기/마름모 전후 길이 / 방진 내부 크기 초기값
     private int initialFormationLayers = 2;      // 사각방진/원형진 겹수 초기값
     private float initialFormationLayersSpacing = 1.0f; // 방진 층간(열끼리) 거리 초기값
+    private float bracketHoldTimer = 0f;          // 📐 [ ] 대열 간격 조절 키 홀드 지속 시간 타이머
 
     private Camera mainCamera;
 
@@ -2432,23 +2433,56 @@ public class PlayerController : MonoBehaviour
         { 
             ToggleLooseFormation(); 
         }
-        if (Input.GetKeyDown(KeyCode.LeftBracket) || Input.GetKey(KeyCode.LeftBracket))
+        // 📐 [ ] 대열 간격 조절 (단발 탭: 0.1씩 정밀 조절 / 길게 누름: 점점 빠르게 가속)
+        bool leftDown = Input.GetKeyDown(KeyCode.LeftBracket);
+        bool leftHold = Input.GetKey(KeyCode.LeftBracket);
+        bool rightDown = Input.GetKeyDown(KeyCode.RightBracket);
+        bool rightHold = Input.GetKey(KeyCode.RightBracket);
+
+        if (leftDown)
         {
+            bracketHoldTimer = 0f;
             foreach (Squad s in selectedSquads)
             {
-                if (s != null) s.AdjustSpacing(-0.04f);
+                if (s != null) s.AdjustSpacing(-0.1f);
             }
         }
-        if (Input.GetKeyDown(KeyCode.RightBracket) || Input.GetKey(KeyCode.RightBracket))
+        else if (rightDown)
         {
+            bracketHoldTimer = 0f;
             foreach (Squad s in selectedSquads)
             {
-                if (s != null) s.AdjustSpacing(0.04f);
+                if (s != null) s.AdjustSpacing(0.1f);
             }
+        }
+        else if (leftHold || rightHold)
+        {
+            bracketHoldTimer += Time.deltaTime;
+            // 0.3초 이상 꾹 누르고 있을 때부터 연속 가속 조절 시작
+            if (bracketHoldTimer > 0.3f)
+            {
+                float holdDuration = bracketHoldTimer - 0.3f;
+                // 누른 시간에 따라 초당 0.35 -> 2.2까지 점진적 가속
+                float speed = Mathf.Lerp(0.35f, 2.2f, Mathf.Clamp01(holdDuration / 1.5f));
+                float delta = speed * Time.deltaTime * (leftHold ? -1f : 1f);
+
+                foreach (Squad s in selectedSquads)
+                {
+                    if (s != null) s.AdjustSpacing(delta);
+                }
+            }
+        }
+        else
+        {
+            bracketHoldTimer = 0f;
         }
         if (Input.GetKeyDown(KeyCode.R)) 
         { 
             ToggleRunMode(); 
+        }
+        if (Input.GetKeyDown(KeyCode.T))
+        {
+            ToggleStaggeredFormationSelected();
         }
         if (Input.GetKeyDown(KeyCode.G))
         {
@@ -2947,6 +2981,32 @@ public class PlayerController : MonoBehaviour
         Debug.Log($"[PlayerController] 💨 [B] 산개 모드 토글 -> {stateDesc} (적용 부대: {changedSquads}개)");
     }
 
+    /// <summary>
+    /// 🏁 [T] 선택된 부대 중 엇갈린 대형 권한이 있는 부대들의 대형을 토글합니다.
+    /// </summary>
+    public void ToggleStaggeredFormationSelected()
+    {
+        int changedSquads = 0;
+        bool anyStaggered = false;
+
+        foreach (Squad s in selectedSquads)
+        {
+            if (s != null && s.canUseStaggeredFormation)
+            {
+                s.ToggleStaggeredFormation();
+                if (s.useStaggeredFormation) anyStaggered = true;
+                changedSquads++;
+            }
+        }
+
+        if (changedSquads > 0)
+        {
+            string stateDesc = anyStaggered ? "🟢 [엇갈린 대형 전환 (2열 직사 사격 개방)]" : "🔴 [직렬 대형 복귀 (일자 방진)]";
+            Debug.Log($"[PlayerController] 🏁 [T] 엇갈린 대형 토글 -> {stateDesc} (적용 부대: {changedSquads}개)");
+            UpdateCommandUI();
+        }
+    }
+
     private void ToggleRunMode()
     {
         bool anyRunning = false;
@@ -3123,6 +3183,20 @@ public class PlayerController : MonoBehaviour
         if (selectedSquads.Count > 0)
         {
             cmds.Add(new CommandButtonData { commandId = "Loose", buttonName = isAnyLoose ? "밀집 방진" : "전군 산개", hotkeyText = "B", onClickAction = () => { ToggleLooseFormation(); } });
+
+            // 🏁 엇갈린 대형 권한이 있는 부대가 선택된 경우에만 전용 토글 버튼 표시
+            bool hasStaggerableSquad = selectedSquads.Exists(s => s != null && s.canUseStaggeredFormation);
+            if (hasStaggerableSquad)
+            {
+                bool isAnyStaggered = selectedSquads.Exists(s => s != null && s.canUseStaggeredFormation && s.useStaggeredFormation);
+                cmds.Add(new CommandButtonData
+                {
+                    commandId = "StaggeredFormation",
+                    buttonName = isAnyStaggered ? "직렬 대형" : "엇갈린 대형",
+                    hotkeyText = "T",
+                    onClickAction = () => { ToggleStaggeredFormationSelected(); }
+                });
+            }
             cmds.Add(new CommandButtonData { commandId = "Normal", buttonName = "일자진", hotkeyText = "/", onClickAction = () => { SetFormation(SquadFormationType.Normal); } });
             cmds.Add(new CommandButtonData { commandId = "Diamond", buttonName = "마름모", hotkeyText = "N", onClickAction = () => { SetFormation(SquadFormationType.Diamond); if (selectedSquads.Count > 1) ArrangeGrandDiamondFormation(); } });
             cmds.Add(new CommandButtonData { commandId = "Wedge", buttonName = "쐐기진", hotkeyText = "M", onClickAction = () => { SetFormation(SquadFormationType.Wedge); if (selectedSquads.Count > 1) ArrangeGrandWedgeFormation(); } });

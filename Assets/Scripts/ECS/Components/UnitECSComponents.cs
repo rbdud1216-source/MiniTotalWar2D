@@ -107,6 +107,18 @@ namespace MiniTotalWar.ECS
         public int ArmorShredAmount;       // 방어 삭감치 (10)
         public int IgnoreArmor;            // 1 = 방어 100% 무시, 0 = 방어 적용
         public float MeleeSwitchDistance;  // 백병전 전환 거리 (5.0m)
+
+        // 📐 원거리 3축 공간 및 사선 클리어런스 (Pure ECS)
+        public float MinRearSpacing;               // 후방 최소 필요 거리 (m)
+        public float MinLateralSpacing;            // 측면 최소 필요 거리 (m)
+        public float HeadClearanceMargin;          // 머리 위 안전 여유 고도 (m)
+        public int AllowStaggeredRank2DirectFire;  // 1 = 체커보드 2열 틈새 직사 허용, 0 = 불허
+        public int EnableSequentialFire;           // 1 = 순차 사격 On, 0 = Off
+        public float SequentialRowDelay;           // 순차 사격 행간 지연 시간 (초)
+        public float SquadSpacingX;                // 소속 부대 가로 실효 간격 (m)
+        public float SquadSpacingZ;                // 소속 부대 세로 실효 간격 (m)
+        public int TotalRows;                      // 소속 부대 총 행(Row) 수
+        public int IsStaggeredFormation;           // 1 = 체커보드 대형, 0 = 완전 직렬
     }
 
     /// <summary>

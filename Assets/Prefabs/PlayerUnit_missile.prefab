@@ -56,6 +56,7 @@ MonoBehaviour:
   unitType: 2
   isRangedUnit: 1
   canFireWhileMoving: 0
+  fireAtWill: 1
   maxAmmo: 25
   currentAmmo: 25
   rangedAttackRange: 150
@@ -73,6 +74,16 @@ MonoBehaviour:
   armorPiercingRatio: 0.25
   armorShredAmount: 10
   meleeSwitchDistance: 5
+  minRearSpacing: 0.8
+  minLateralSpacing: 0.75
+  headClearanceMargin: 0.25
+  allowStaggeredRank2DirectFire: 1
+  overrideSquadFormationDefaults: 1
+  recommendedSquadSpacingX: 1
+  recommendedSquadSpacingZ: 1
+  recommendedStaggeredFormation: 1
+  recommendedSequentialFire: 0
+  recommendedSequentialRowDelay: 0.4
   damage: 10
   attackCooldown: 2
   attackRange: 5

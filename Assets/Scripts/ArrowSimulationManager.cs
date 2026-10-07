@@ -187,7 +187,8 @@ public class ArrowSimulationManager : MonoBehaviour
         TrajectoryMode trajectoryMode,
         float gravityScale,
         float spreadRadius = 0.5f,
-        bool hasAllyObstruction = false)
+        bool hasAllyObstruction = false,
+        int shooterRow = 0)
     {
         // 🎯 탄착군 오차 반경 무작위 분산 적용
         if (spreadRadius > 0.05f)
@@ -232,12 +233,12 @@ public class ArrowSimulationManager : MonoBehaviour
         }
         else if (hasAllyObstruction)
         {
-            // 🛡️ [고각 곡사]: 전방에 아군 백병전 전선이 있거나 깊은 후열 발사 시 머리 위를 넘기는 45~58도 고각
+            // 🛡️ [고각 곡사]: 전방에 아군 백병전 전선이 있을 때 머리 위를 넘기는 45~58도 고각
             finalAngleDeg = Mathf.Lerp(45.0f, 58.0f, distRatio);
         }
         else
         {
-            // 🏹 [토탈워 현실적 탄도학]:
+            // 🏹 [토탈워 현실적 탄도학 - 부대 전체 일관된 기준 탄도]:
             // 0m ~ 50m: 5도 ~ 12도 완전한 수평 직사 (근거리 적에게 직선으로 시원하게 꽂힘!)
             // 50m ~ 100m: 12도 ~ 22도 낮은 표준 포물선
             // 100m ~ 150m: 22도 ~ 32도 장거리 사격 탄도
@@ -256,6 +257,12 @@ public class ArrowSimulationManager : MonoBehaviour
                 float longRatio = Mathf.Clamp01((horizDist - 100.0f) / 50.0f);
                 finalAngleDeg = Mathf.Lerp(22.0f, 32.0f, longRatio);
             }
+
+            // 🏹 [일제사격 화살 다발(Volley Bundle) 연출]:
+            // 뒷열(shooterRow) 병사는 앞사람 머리 위를 자연스럽게 넘길 수 있도록 행당 약 1.2도씩만 미세하게 상향 조정
+            // (극단적 고각 대신 부대 전체가 하나의 우아한 화살 다발을 형성하여 일관된 궤적 유지)
+            float rowOffset = Mathf.Clamp(shooterRow * 1.2f, 0f, 6.0f);
+            finalAngleDeg += rowOffset;
         }
 
         float thetaRad = finalAngleDeg * Mathf.Deg2Rad;

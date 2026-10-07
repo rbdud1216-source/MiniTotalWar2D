@@ -106,7 +106,8 @@ namespace MiniTotalWar.ECS
                         (TrajectoryMode)cmd.trajectoryMode,
                         cmd.gravityScale,
                         cmd.spreadRadius,
-                        cmd.hasAllyObstruction == 1
+                        cmd.hasAllyObstruction == 1,
+                        cmd.shooterRow
                     );
                 }
             }
@@ -516,24 +517,87 @@ namespace MiniTotalWar.ECS
                     bool isEngagedInMelee = (combat.CurrentState == 3);
                     bool isInsideMelee = (distToEnemy <= combat.MeleeSwitchDistance) || (meleeTargetDist <= combat.MeleeSwitchDistance);
                     bool hasAmmo = (combat.CurrentAmmo > 0);
-                    bool canShootMovement = (combat.CanFireWhileMoving == 1) || (movement.CurrentSpeed <= 0.25f);
+                    // 🚀 [이동 중 사격 판정 (자유사격 이동 데드락 원천 방지)]:
+                    // 1) 이동 중 사격 가능 유닛(CanFireWhileMoving == 1)은 이동 중에도 사격 허용
+                    // 2) 이동 중 사격 불가(CanFireWhileMoving == 0) 유닛:
+                    //    - 플레이어의 이동(CurrentState == 1) 명령 수행 중이고 아직 목적지에 도착하지 못했다면 사격 금지(이동 우선!)
+                    //    - 목적지에 도착하여 멈춰 섰을 때(CurrentSpeed <= 0.25f)만 사격 허용!
+                    float3 toDestVec = targetDest - currentPos;
+                    toDestVec.y = 0f;
+                    float distToDestTemp = math.length(toDestVec);
+                    bool isMovingUnderOrder = (combat.CurrentState == 1) && (distToDestTemp > movement.StoppingDistance);
+                    bool canShootMovement = (combat.CanFireWhileMoving == 1) || (!isMovingUnderOrder && movement.CurrentSpeed <= 0.25f);
                     // 🏹 [자유 사격(Fire at Will) 검사]: FireAtWill이 꺼져있으면 목표 부대 지정 시에만 사격
                     bool canShootFireAtWill = (combat.FireAtWill == 1) || (combat.TargetSquadId != -1);
 
-                    if (!isEngagedInMelee && !isInsideMelee && hasAmmo && canShootFireAtWill && canShootMovement && distToEnemy <= combat.RangedAttackRange && distToEnemy >= combat.RangedMinRange)
+                    // 📐 [3축 공간 및 사선 클리어런스 검사 (Clearance Check)]
+                    // 1) 후방 공간 검사: 최후열이거나 최소 간격이 0(견착 무기: 쇠뇌/총)이거나 대형 세로 간격이 충분할 때 통과
+                    bool isBackRow = (tag.Row >= combat.TotalRows - 1);
+                    bool rearClear = isBackRow || (combat.MinRearSpacing <= 0.01f) || (combat.SquadSpacingZ >= combat.MinRearSpacing);
+
+                    // 2) 측면 공간 검사: 대형 가로 간격 확보 여부
+                    bool lateralClear = (combat.MinLateralSpacing <= 0.01f) || (combat.SquadSpacingX >= combat.MinLateralSpacing);
+
+                    // 3) 전방 사선 및 언덕 경사면 클리어런스 (Front LoS & Hill Clearance)
+                    bool frontClear = false;
+                    if (tag.Row == 0)
+                    {
+                        // 1열은 앞에 아군이 없으므로 항상 통과
+                        frontClear = true;
+                    }
+                    else if (tag.Row == 1 && combat.IsStaggeredFormation == 1 && combat.AllowStaggeredRank2DirectFire == 1)
+                    {
+                        // 체커보드(엇갈림) 2열은 전방 1열 사이 틈새로 직사 허용
+                        frontClear = true;
+                    }
+                    else
+                    {
+                        // 3열 이상 또는 직렬 2열: 기하학적 높이차(언덕 경사면) + 탄도 발사각 앙각 판정
+                        float distToFront = tag.Row * math.max(0.5f, combat.SquadSpacingZ);
+                        float enemyDistSafe = math.max(1.0f, distToEnemy);
+
+                        // 사수가 적보다 높은 언덕에 위치할 때의 지면 고도 우위
+                        float slopeDy = (currentPos.y - enemyPos.y) * (distToFront / enemyDistSafe);
+
+                        // 탄도 앙각에 따른 전열 머리 위 고도 상승치
+                        float baseAngle;
+                        if (combat.TrajectoryMode == 1) // Parabolic (곡사)
+                        {
+                            float angleRatio = math.clamp(distToEnemy / math.max(1.0f, combat.RangedAttackRange), 0f, 1f);
+                            baseAngle = math.lerp(0.26f, 0.61f, angleRatio); // 15° ~ 35°
+                        }
+                        else // Direct (직사)
+                        {
+                            baseAngle = 0.035f; // 약 2° 조준각
+                        }
+                        float elevationDy = distToFront * math.tan(baseAngle);
+                        float totalClearance = slopeDy + elevationDy;
+
+                        frontClear = (totalClearance >= combat.HeadClearanceMargin);
+                    }
+
+                    bool isClearanceSatisfied = rearClear && lateralClear && frontClear;
+
+                    if (!isEngagedInMelee && !isInsideMelee && hasAmmo && canShootFireAtWill && canShootMovement && isClearanceSatisfied && distToEnemy <= combat.RangedAttackRange && distToEnemy >= combat.RangedMinRange)
                     {
                         isRangedShooting = true;
 
-                        if (CurrentTime >= combat.LastRangedAttackTime + combat.RangedAttackCooldown)
+                        // ⏱️ [순차 사격(Rolling Volley) 행간 지연 시간 계산]
+                        float rowTimingOffset = (combat.EnableSequentialFire == 1) ? (tag.Row * combat.SequentialRowDelay) : 0f;
+
+                        if (CurrentTime >= combat.LastRangedAttackTime + combat.RangedAttackCooldown + rowTimingOffset)
                         {
-                            combat.LastRangedAttackTime = CurrentTime;
+                            combat.LastRangedAttackTime = CurrentTime - rowTimingOffset;
                             combat.CurrentAmmo--;
 
                             float distRatio = math.clamp((distToEnemy - combat.OptimalRange) / math.max(1.0f, combat.RangedAttackRange - combat.OptimalRange), 0f, 1f);
                             float finalDmg = combat.RangedBaseDamage * (1.0f - (1.0f - combat.MinDamageRatioAtMax) * distRatio);
                             float spread = math.lerp(combat.MinSpreadRadius, combat.MaxSpreadRadius, distRatio);
 
-                            int hasAlly = (meleeTargetDist <= combat.MeleeSwitchDistance || tag.Row >= 3) ? 1 : 0;
+                            // 🛡️ [앞에 아군 부대 존재 여부 감지]:
+                            // 전방 적이 아군과 백병전 중일 때만 고각 곡사! (후열이라고 억지로 45도 이상 고각 쏘지 않고, 기준 탄도 + 행별 미세 분산 적용)
+                            bool isEnemyInMelee = (localTargetSquadId != -1 && EngagedSquads.Contains(localTargetSquadId));
+                            int hasAlly = isEnemyInMelee ? 1 : 0;
 
                             ArrowQueue.Enqueue(new ArrowLaunchCommand
                             {
@@ -548,7 +612,8 @@ namespace MiniTotalWar.ECS
                                 trajectoryMode = combat.TrajectoryMode,
                                 gravityScale = combat.GravityScale,
                                 spreadRadius = spread,
-                                hasAllyObstruction = hasAlly
+                                hasAllyObstruction = hasAlly,
+                                shooterRow = tag.Row
                             });
                         }
                     }

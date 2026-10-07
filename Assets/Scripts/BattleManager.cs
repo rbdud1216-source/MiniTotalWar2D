@@ -387,6 +387,14 @@ public class BattleManager : MonoBehaviour
             return squad;
         }
 
+        // 🚩 [유닛 프리팹 기반 부대 진형 및 전술 자동 동기화]
+        // 배정된 유닛 프리팹의 권장 대형 간격, 체커보드, 순차 사격 설정을 슬롯 생성 전에 부대에 1:1 주입!
+        Unit prefabUnitComp = prefabToSpawn.GetComponent<Unit>();
+        if (prefabUnitComp != null)
+        {
+            squad.ApplyFormationSettingsFromUnitPrefab(prefabUnitComp);
+        }
+
         int unitCount = config.unitCount;
         List<SlotInfo> spawnSlots = squad.GenerateFormationSlots(unitCount, cols, out int totalRows, squad.currentFormationType);
 
@@ -541,7 +549,19 @@ public class BattleManager : MonoBehaviour
                         ArmorPiercingRatio = defaultApRatio,
                         ArmorShredAmount = defaultShred,
                         IgnoreArmor = defaultIgnoreArmor,
-                        MeleeSwitchDistance = defaultMeleeSwitch
+                        MeleeSwitchDistance = defaultMeleeSwitch,
+
+                        // 📐 원거리 3축 공간 및 사선 클리어런스
+                        MinRearSpacing = (prefabUnit != null) ? prefabUnit.minRearSpacing : 0.8f,
+                        MinLateralSpacing = (prefabUnit != null) ? prefabUnit.minLateralSpacing : 0.75f,
+                        HeadClearanceMargin = (prefabUnit != null && prefabUnit.headClearanceMargin > 0.01f) ? prefabUnit.headClearanceMargin : 0.25f,
+                        AllowStaggeredRank2DirectFire = (prefabUnit != null && !prefabUnit.allowStaggeredRank2DirectFire) ? 0 : 1,
+                        EnableSequentialFire = squad.enableSequentialFire ? 1 : 0,
+                        SequentialRowDelay = squad.sequentialRowDelay,
+                        SquadSpacingX = squad.spacingX * squad.formationWidthMultiplier,
+                        SquadSpacingZ = squad.spacingZ * squad.formationLengthMultiplier,
+                        TotalRows = (squad.totalGridRows > 0) ? squad.totalGridRows : Mathf.CeilToInt((float)unitCount / Mathf.Max(1, squad.currentColumns)),
+                        IsStaggeredFormation = squad.useStaggeredFormation ? 1 : 0
                     });
 
                     em.SetComponentData(entity, new UnitSeparationData

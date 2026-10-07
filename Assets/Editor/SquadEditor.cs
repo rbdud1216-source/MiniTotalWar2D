@@ -27,6 +27,8 @@ public class SquadEditor : Editor
     private SerializedProperty spacingZ;
     private SerializedProperty useStaggeredFormation;
     private SerializedProperty rowReactionDelay;
+    private SerializedProperty enableSequentialFire;
+    private SerializedProperty sequentialRowDelay;
     private SerializedProperty looseSpacingThreshold;
     private SerializedProperty tightSpacingThreshold;
 
@@ -85,6 +87,8 @@ public class SquadEditor : Editor
         spacingZ = serializedObject.FindProperty("spacingZ");
         useStaggeredFormation = serializedObject.FindProperty("useStaggeredFormation");
         rowReactionDelay = serializedObject.FindProperty("rowReactionDelay");
+        enableSequentialFire = serializedObject.FindProperty("enableSequentialFire");
+        sequentialRowDelay = serializedObject.FindProperty("sequentialRowDelay");
         looseSpacingThreshold = serializedObject.FindProperty("looseSpacingThreshold");
         tightSpacingThreshold = serializedObject.FindProperty("tightSpacingThreshold");
 
@@ -180,6 +184,15 @@ public class SquadEditor : Editor
             EditorGUILayout.PropertyField(useStaggeredFormation, new GUIContent("체커보드 지그재그 배치", "체크 시 뒷열 병사가 앞열 병사 사이 빈틈에 엇갈려 서서 시야와 무기 거리를 확보합니다."));
         if (rowReactionDelay != null)
             EditorGUILayout.PropertyField(rowReactionDelay, new GUIContent("열 단위 순차 출발 지연 (초)", "전진/후진 시 앞열과 뒷열 간의 파동형 순차 출발 반응 시간입니다. (기본 0.08초)"));
+
+        EditorGUILayout.Space(4);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        EditorGUILayout.LabelField("🏹 원거리 순차 사격 (Rolling Volley / Rank Fire)", EditorStyles.miniBoldLabel);
+        if (enableSequentialFire != null)
+            EditorGUILayout.PropertyField(enableSequentialFire, new GUIContent("순차 사격 활성화 (교대 발사)", "체크 시 부대원들이 제자리에서 전열부터 행(Row)별로 시간차를 두고 순차 발사하여 지속적인 화망을 유지합니다."));
+        if (sequentialRowDelay != null)
+            EditorGUILayout.PropertyField(sequentialRowDelay, new GUIContent("행간 사격 지연 시간 (초)", "각 행(열) 사이의 발사 시간차입니다. (기본: 0.4초)"));
+        EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(4);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);

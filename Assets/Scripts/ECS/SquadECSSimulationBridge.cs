@@ -319,7 +319,41 @@ namespace MiniTotalWar.ECS
                 SidearmMaxKnockbackCap = (unit.sidearmMaxKnockbackCap > 0f) ? unit.sidearmMaxKnockbackCap : 0.8f,
                 TargetSquadId = (unit.mySquad != null && unit.mySquad.currentTargetSquad != null) ? unit.mySquad.currentTargetSquad.GetInstanceID() : -1,
                 CachedEnemyPos = float3.zero,
-                TargetSearchTimer = (float)(entity.Index % 10) * 0.01f
+                TargetSearchTimer = (float)(entity.Index % 10) * 0.01f,
+
+                // 🏹 원거리 궁병 및 탄도학 스탯
+                IsRangedUnit = unit.isRangedUnit ? 1 : 0,
+                CanFireWhileMoving = unit.canFireWhileMoving ? 1 : 0,
+                MaxAmmo = unit.maxAmmo,
+                CurrentAmmo = unit.currentAmmo,
+                RangedAttackRange = (unit.rangedAttackRange > 1.0f) ? unit.rangedAttackRange : 150.0f,
+                OptimalRange = (unit.optimalRange > 1.0f) ? unit.optimalRange : 50.0f,
+                RangedMinRange = unit.rangedMinRange,
+                RangedBaseDamage = (unit.rangedBaseDamage > 0f) ? unit.rangedBaseDamage : 15.0f,
+                MinDamageRatioAtMax = (unit.minDamageRatioAtMax > 0.05f) ? unit.minDamageRatioAtMax : 0.55f,
+                RangedAttackCooldown = (unit.rangedAttackCooldown > 0.05f) ? unit.rangedAttackCooldown : 2.2f,
+                LastRangedAttackTime = Time.time - UnityEngine.Random.Range(0f, unit.rangedAttackCooldown),
+                ProjectileSpeed = (unit.projectileSpeed > 1.0f) ? unit.projectileSpeed : 30.0f,
+                MinSpreadRadius = unit.minSpreadRadius,
+                MaxSpreadRadius = (unit.maxSpreadRadius > 0.1f) ? unit.maxSpreadRadius : 3.5f,
+                TrajectoryMode = (int)unit.trajectoryMode,
+                GravityScale = (unit.gravityScale > 0.05f) ? unit.gravityScale : 1.0f,
+                ArmorPiercingRatio = unit.armorPiercingRatio,
+                ArmorShredAmount = unit.armorShredAmount,
+                IgnoreArmor = unit.ignoreArmor ? 1 : 0,
+                MeleeSwitchDistance = (unit.meleeSwitchDistance > 0.1f) ? unit.meleeSwitchDistance : 5.0f,
+
+                // 📐 원거리 3축 공간 및 사선 클리어런스
+                MinRearSpacing = unit.minRearSpacing,
+                MinLateralSpacing = unit.minLateralSpacing,
+                HeadClearanceMargin = (unit.headClearanceMargin > 0.01f) ? unit.headClearanceMargin : 0.25f,
+                AllowStaggeredRank2DirectFire = unit.allowStaggeredRank2DirectFire ? 1 : 0,
+                EnableSequentialFire = (unit.mySquad != null && unit.mySquad.enableSequentialFire) ? 1 : 0,
+                SequentialRowDelay = (unit.mySquad != null) ? unit.mySquad.sequentialRowDelay : 0.35f,
+                SquadSpacingX = (unit.mySquad != null) ? (unit.mySquad.spacingX * unit.mySquad.formationWidthMultiplier) : 1.1f,
+                SquadSpacingZ = (unit.mySquad != null) ? (unit.mySquad.spacingZ * unit.mySquad.formationLengthMultiplier) : 1.2f,
+                TotalRows = (unit.mySquad != null) ? unit.mySquad.totalGridRows : 1,
+                IsStaggeredFormation = (unit.mySquad != null && unit.mySquad.useStaggeredFormation) ? 1 : 0
             });
 
             entityManager.SetComponentData(entity, new UnitSeparationData
@@ -459,7 +493,17 @@ namespace MiniTotalWar.ECS
         /// <summary>
         /// 진형 밀집도 및 전투 태세에 따른 실효 스탯(방어력, 무게, 공격 쿨다운)을 소속 ECS 부대원 전원에게 일괄 주입합니다.
         /// </summary>
-        public void UpdateSquadCombatModifiers(Squad squad, int effectiveArmor, float effectiveMass, float effectiveCooldown)
+        public void UpdateSquadCombatModifiers(
+            Squad squad,
+            int effectiveArmor,
+            float effectiveMass,
+            float effectiveCooldown,
+            float effSpacingX = 1.1f,
+            float effSpacingZ = 1.2f,
+            int totalRows = 1,
+            bool isStaggered = true,
+            bool enableSequential = false,
+            float sequentialDelay = 0.35f)
         {
             if (squad == null) return;
             if (!isInitialized) InitializeECS();
@@ -480,6 +524,12 @@ namespace MiniTotalWar.ECS
                             combat.Armor = effectiveArmor;
                             combat.Mass = effectiveMass;
                             combat.AttackCooldown = effectiveCooldown;
+                            combat.SquadSpacingX = effSpacingX;
+                            combat.SquadSpacingZ = effSpacingZ;
+                            combat.TotalRows = totalRows;
+                            combat.IsStaggeredFormation = isStaggered ? 1 : 0;
+                            combat.EnableSequentialFire = enableSequential ? 1 : 0;
+                            combat.SequentialRowDelay = sequentialDelay;
                             entityManager.SetComponentData(entity, combat);
                         }
                     }
@@ -503,6 +553,12 @@ namespace MiniTotalWar.ECS
                         combat.Armor = effectiveArmor;
                         combat.Mass = effectiveMass;
                         combat.AttackCooldown = effectiveCooldown;
+                        combat.SquadSpacingX = effSpacingX;
+                        combat.SquadSpacingZ = effSpacingZ;
+                        combat.TotalRows = totalRows;
+                        combat.IsStaggeredFormation = isStaggered ? 1 : 0;
+                        combat.EnableSequentialFire = enableSequential ? 1 : 0;
+                        combat.SequentialRowDelay = sequentialDelay;
                         entityManager.SetComponentData(entities[i], combat);
                     }
                 }

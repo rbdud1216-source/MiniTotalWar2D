@@ -87,6 +87,18 @@ public struct UnitJobData
     public int row;                    // 대형 내 행 위치 (0, 1, 2...)
     public int col;                    // 대형 내 열 위치 (0, 1, 2...)
     public int fireAtWill;             // 1 = 자유 사격 켜짐, 0 = 꺼짐 (지정 명령 시에만 사격)
+
+    // 📐 원거리 3축 공간 및 사선 클리어런스 (Job System)
+    public float minRearSpacing;               // 후방 최소 필요 거리 (m)
+    public float minLateralSpacing;            // 측면 최소 필요 거리 (m)
+    public float headClearanceMargin;          // 머리 위 안전 여유 고도 (m)
+    public int allowStaggeredRank2DirectFire;  // 1 = 체커보드 2열 틈새 직사 허용, 0 = 불허
+    public int enableSequentialFire;           // 1 = 순차 사격 On, 0 = Off
+    public float sequentialRowDelay;           // 순차 사격 행간 지연 시간 (초)
+    public float squadSpacingX;                // 소속 부대 가로 실효 간격 (m)
+    public float squadSpacingZ;                // 소속 부대 세로 실효 간격 (m)
+    public int totalRows;                      // 소속 부대 총 행(Row) 수
+    public int isStaggeredFormation;           // 1 = 체커보드 대형, 0 = 완전 직렬
 }
 
 /// <summary>
@@ -106,6 +118,7 @@ public struct ArrowLaunchCommand
     public float gravityScale;
     public float spreadRadius;
     public int hasAllyObstruction;     // 1 = 앞에 아군 차폐가 있어 48~75도 고각 곡사, 0 = 0~45도 직사/표준곡사
+    public int shooterRow;             // 🏹 사수의 방진 내 행(Row) 인덱스 (미세 분산용)
 }
 
 /// <summary>
@@ -333,6 +346,18 @@ public class UnitJobSimulationManager : MonoBehaviour
                 oldData.col = u.Col;
                 oldData.fireAtWill = ((u.mySquad != null) ? u.mySquad.fireAtWill : u.fireAtWill) ? 1 : 0;
 
+                // 📐 원거리 3축 공간 및 사선 클리어런스 데이터 동기화
+                oldData.minRearSpacing = u.minRearSpacing;
+                oldData.minLateralSpacing = u.minLateralSpacing;
+                oldData.headClearanceMargin = (u.headClearanceMargin > 0.05f) ? u.headClearanceMargin : 0.45f;
+                oldData.allowStaggeredRank2DirectFire = u.allowStaggeredRank2DirectFire ? 1 : 0;
+                oldData.enableSequentialFire = (u.mySquad != null && u.mySquad.enableSequentialFire) ? 1 : 0;
+                oldData.sequentialRowDelay = (u.mySquad != null) ? u.mySquad.sequentialRowDelay : 0.4f;
+                oldData.squadSpacingX = (u.mySquad != null) ? (u.mySquad.spacingX * u.mySquad.formationWidthMultiplier) : 1.0f;
+                oldData.squadSpacingZ = (u.mySquad != null) ? (u.mySquad.spacingZ * u.mySquad.formationLengthMultiplier) : 1.0f;
+                oldData.totalRows = (u.mySquad != null) ? ((u.mySquad.totalGridRows > 0) ? u.mySquad.totalGridRows : Mathf.CeilToInt((float)u.mySquad.MemberCount / Mathf.Max(1, u.mySquad.currentColumns))) : 1;
+                oldData.isStaggeredFormation = (u.mySquad != null && u.mySquad.useStaggeredFormation) ? 1 : 0;
+
                 if (u.FixedTargetPos != Vector3.zero)
                 {
                     oldData.targetPosition = u.FixedTargetPos;
@@ -427,7 +452,19 @@ public class UnitJobSimulationManager : MonoBehaviour
                     canFireWhileMoving = u.canFireWhileMoving ? 1 : 0,
                     row = u.Row,
                     col = u.Col,
-                    fireAtWill = ((u.mySquad != null) ? u.mySquad.fireAtWill : u.fireAtWill) ? 1 : 0
+                    fireAtWill = ((u.mySquad != null) ? u.mySquad.fireAtWill : u.fireAtWill) ? 1 : 0,
+
+                    // 📐 원거리 3축 공간 및 사선 클리어런스 초기화
+                    minRearSpacing = u.minRearSpacing,
+                    minLateralSpacing = u.minLateralSpacing,
+                    headClearanceMargin = (u.headClearanceMargin > 0.05f) ? u.headClearanceMargin : 0.45f,
+                    allowStaggeredRank2DirectFire = u.allowStaggeredRank2DirectFire ? 1 : 0,
+                    enableSequentialFire = (u.mySquad != null && u.mySquad.enableSequentialFire) ? 1 : 0,
+                    sequentialRowDelay = (u.mySquad != null) ? u.mySquad.sequentialRowDelay : 0.4f,
+                    squadSpacingX = (u.mySquad != null) ? (u.mySquad.spacingX * u.mySquad.formationWidthMultiplier) : 1.0f,
+                    squadSpacingZ = (u.mySquad != null) ? (u.mySquad.spacingZ * u.mySquad.formationLengthMultiplier) : 1.0f,
+                    totalRows = (u.mySquad != null) ? ((u.mySquad.totalGridRows > 0) ? u.mySquad.totalGridRows : Mathf.CeilToInt((float)u.mySquad.MemberCount / Mathf.Max(1, u.mySquad.currentColumns))) : 1,
+                    isStaggeredFormation = (u.mySquad != null && u.mySquad.useStaggeredFormation) ? 1 : 0
                 };
 
                 unitDataArray[i] = data;
@@ -506,9 +543,12 @@ public class UnitJobSimulationManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 진형/태세/밀집도에 따라 계산된 부대 소속 유닛들의 방어력, 무게(질량), 공격 쿨다운을 일괄 갱신합니다.
+    /// 진형/태세/밀집도에 따라 계산된 부대 소속 유닛들의 방어력, 무게(질량), 공격 쿨다운 및 원거리 클리어런스 파라미터를 일괄 갱신합니다.
     /// </summary>
-    public void UpdateSquadCombatModifiers(Squad squad, int effectiveArmor, float effectiveMass, float effectiveCooldown)
+    public void UpdateSquadCombatModifiers(
+        Squad squad, int effectiveArmor, float effectiveMass, float effectiveCooldown,
+        float effSpacingX, float effSpacingZ, int totalRows, bool isStaggered,
+        bool enableSequentialFire, float sequentialRowDelay)
     {
         if (squad == null || !isNativeArraysAllocated || !unitDataArray.IsCreated) return;
 
@@ -524,6 +564,12 @@ public class UnitJobSimulationManager : MonoBehaviour
                 data.armor = effectiveArmor;
                 data.mass = effectiveMass;
                 data.attackCooldown = effectiveCooldown;
+                data.squadSpacingX = effSpacingX;
+                data.squadSpacingZ = effSpacingZ;
+                data.totalRows = totalRows;
+                data.isStaggeredFormation = isStaggered ? 1 : 0;
+                data.enableSequentialFire = enableSequentialFire ? 1 : 0;
+                data.sequentialRowDelay = sequentialRowDelay;
                 unitDataArray[i] = data;
 
                 // 유닛 자체 필드도 함께 동기화
@@ -664,7 +710,8 @@ public class UnitJobSimulationManager : MonoBehaviour
                         (TrajectoryMode)cmd.trajectoryMode,
                         cmd.gravityScale,
                         cmd.spreadRadius,
-                        cmd.hasAllyObstruction == 1
+                        cmd.hasAllyObstruction == 1,
+                        cmd.shooterRow
                     );
                 }
             }
@@ -1274,18 +1321,76 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                     // fireAtWill이 꺼져(0) 있으면, 지휘관이 명시적으로 적 부대를 지정(targetSquadId != -1)하지 않은 한 자동 사격을 하지 않고 화살 절약!
                     bool canShootFireAtWill = (data.fireAtWill == 1) || (data.targetSquadId != -1);
 
-                    // 백병전 교전 중이 아니고, 백병전 거리(5m) 밖이고, 탄약이 있고, 사거리 내(5m ~ 150m)에 적이 있을 때만 사격 허용
-                    // 🚀 [이동 중 사격 체크박스 적용]: canFireWhileMoving이 0이면 이동 중(속도 > 0.25m/s) 사격 금지
-                    bool canShootMovement = (data.canFireWhileMoving == 1) || (data.currentSpeed <= 0.25f);
+                    // 🚀 [이동 중 사격 판정 (자유사격 이동 데드락 원천 방지)]:
+                    // 1) 이동 중 사격 가능 유닛(canFireWhileMoving == 1)은 이동 중에도 사격 허용
+                    // 2) 이동 중 사격 불가(canFireWhileMoving == 0) 유닛:
+                    //    - 플레이어의 이동(currentState == 1) 명령 수행 중이고 아직 목적지에 도착하지 못했다면 사격 금지(이동 우선!)
+                    //    - 목적지에 도착하여 멈춰 섰을 때(currentSpeed <= 0.25f)만 사격 허용!
+                    Vector3 toDestVec = targetDest - currentPos;
+                    toDestVec.y = 0f;
+                    float distToDest = toDestVec.magnitude;
+                    bool isMovingUnderOrder = (data.currentState == 1) && (distToDest > data.stoppingDistance);
+                    bool canShootMovement = (data.canFireWhileMoving == 1) || (!isMovingUnderOrder && data.currentSpeed <= 0.25f);
 
-                    if (!isEngagedInMelee && !isInsideMelee && hasAmmo && canShootFireAtWill && canShootMovement && distToEnemy <= data.rangedAttackRange && distToEnemy >= data.rangedMinRange)
+                    // 📐 [3축 공간 및 사선 클리어런스 검사 (Clearance Check)]
+                    // 1) 후방 공간 검사: 최후열이거나 최소 간격이 0(견착 무기: 쇠뇌/총)이거나 대형 세로 간격이 충분할 때 통과
+                    bool isBackRow = (data.row >= data.totalRows - 1);
+                    bool rearClear = isBackRow || (data.minRearSpacing <= 0.01f) || (data.squadSpacingZ >= data.minRearSpacing);
+
+                    // 2) 측면 공간 검사: 대형 가로 간격 확보 여부
+                    bool lateralClear = (data.minLateralSpacing <= 0.01f) || (data.squadSpacingX >= data.minLateralSpacing);
+
+                    // 3) 전방 사선 및 언덕 경사면 클리어런스 (Front LoS & Hill Clearance)
+                    bool frontClear = false;
+                    if (data.row == 0)
+                    {
+                        // 1열은 앞에 아군이 없으므로 항상 통과
+                        frontClear = true;
+                    }
+                    else if (data.row == 1 && data.isStaggeredFormation == 1 && data.allowStaggeredRank2DirectFire == 1)
+                    {
+                        // 체커보드(엇갈림) 2열은 전방 1열 사이 틈새로 직사 허용
+                        frontClear = true;
+                    }
+                    else
+                    {
+                        // 3열 이상 또는 직렬 2열: 기하학적 높이차(언덕 경사면) + 탄도 발사각 앙각 판정
+                        float distToFront = data.row * Mathf.Max(0.5f, data.squadSpacingZ);
+                        float enemyDistSafe = Mathf.Max(1.0f, distToEnemy);
+
+                        // 사수가 적보다 높은 언덕에 위치할 때의 지면 고도 우위
+                        float slopeDy = (currentPos.y - enemyPos.y) * (distToFront / enemyDistSafe);
+
+                        // 탄도 앙각에 따른 전열 머리 위 고도 상승치
+                        float baseAngle;
+                        if (data.trajectoryMode == 1) // Parabolic (곡사)
+                        {
+                            float angleRatio = Mathf.Clamp01(distToEnemy / Mathf.Max(1.0f, data.rangedAttackRange));
+                            baseAngle = Mathf.Lerp(0.26f, 0.61f, angleRatio); // 15° ~ 35°
+                        }
+                        else // Direct (직사)
+                        {
+                            baseAngle = 0.035f; // 약 2° 조준각
+                        }
+                        float elevationDy = distToFront * Mathf.Tan(baseAngle);
+                        float totalClearance = slopeDy + elevationDy;
+
+                        frontClear = (totalClearance >= data.headClearanceMargin);
+                    }
+
+                    bool isClearanceSatisfied = rearClear && lateralClear && frontClear;
+
+                    if (!isEngagedInMelee && !isInsideMelee && hasAmmo && canShootFireAtWill && canShootMovement && isClearanceSatisfied && distToEnemy <= data.rangedAttackRange && distToEnemy >= data.rangedMinRange)
                     {
                         isRangedShooting = true;
 
+                        // ⏱️ [순차 사격(Rolling Volley) 행간 지연 시간 계산]
+                        float rowTimingOffset = (data.enableSequentialFire == 1) ? (data.row * data.sequentialRowDelay) : 0f;
+
                         // 적을 향해 조준 및 쿨다운 경과 시 화살 발사
-                        if (currentTime >= data.lastAttackTime + data.rangedAttackCooldown)
+                        if (currentTime >= data.lastAttackTime + data.rangedAttackCooldown + rowTimingOffset)
                         {
-                            data.lastAttackTime = currentTime;
+                            data.lastAttackTime = currentTime - rowTimingOffset;
                             data.currentAmmo--;
 
                             float distRatio = Mathf.Clamp01((distToEnemy - data.optimalRange) / Mathf.Max(1.0f, data.rangedAttackRange - data.optimalRange));
@@ -1293,10 +1398,9 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                             float spread = Mathf.Lerp(data.minSpreadRadius, data.maxSpreadRadius, distRatio);
 
                             // 🛡️ [앞에 아군 부대 존재 여부 감지]:
-                            // 적 유닛이 아군과 백병전 중(enemyData.currentState == 3)이거나,
-                            // 궁병 방진의 4열 이후 깊은 후열(Row >= 3)에서 앞열 머리 위를 넘겨야 할 때만 고각 곡사!
-                            // 전방에 교전 중인 아군이 없으면 시원하고 빠른 평사/직사(Flat Fire) 유지!
-                            int hasAlly = (enemyData.currentState == 3 || data.row >= 3) ? 1 : 0;
+                            // 적 유닛이 아군과 백병전 중(enemyData.currentState == 3)일 때만 아군 머리 위를 넘기는 고각 곡사!
+                            // (방진 내 후열이라고 해서 억지로 45도 이상 고각으로 쏘지 않고, 기준 탄도 + 행별 미세 분산 적용)
+                            int hasAlly = (enemyData.currentState == 3) ? 1 : 0;
 
                             arrowLaunchQueue.Enqueue(new ArrowLaunchCommand
                             {
@@ -1311,7 +1415,8 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                                 trajectoryMode = data.trajectoryMode,
                                 gravityScale = data.gravityScale,
                                 spreadRadius = spread,
-                                hasAllyObstruction = hasAlly
+                                hasAllyObstruction = hasAlly,
+                                shooterRow = data.row
                             });
                         }
                     }

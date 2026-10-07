@@ -88,6 +88,38 @@ public class Unit : MonoBehaviour
     [Tooltip("적이 이 거리 이내로 접근 시 활을 거두고 근접 주무기(칼)로 백병전 강제 전환 (기본: 5.0m)")]
     public float meleeSwitchDistance = 5.0f;
 
+    [Header("📐 원거리 사선 및 무기 동작 공간 (Clearance)")]
+    [Tooltip("뒤로 팔/무기를 젖히는 데 필요한 최소 후방 거리 (활: 0.8m, 투창: 1.0m, 쇠뇌/총: 0.0m - 밀착 사격 가능)")]
+    public float minRearSpacing = 0.8f;
+
+    [Tooltip("양옆으로 무기를 다루는 데 필요한 최소 측면 거리 (활: 0.8m, 쇠뇌/총: 0.55m)")]
+    public float minLateralSpacing = 0.75f;
+
+    [Tooltip("앞사람 머리 위를 지나가야 하는 최소 안전 여유 고도 (m 단위, 기본: 0.25m)")]
+    public float headClearanceMargin = 0.25f;
+
+    [Tooltip("체커보드 엇갈림 대형에서 2열의 수평 틈새 직사 허용 여부 (기본: true)")]
+    public bool allowStaggeredRank2DirectFire = true;
+
+    [Header("🚩 권장 소속 부대 진형 및 사격 전술 설정 (Squad Formation Defaults)")]
+    [Tooltip("이 유닛 프리팹의 설정으로 소속 부대(Squad)의 진형 간격 및 사격 전술을 자동 동기화할지 여부")]
+    public bool overrideSquadFormationDefaults = true;
+
+    [Tooltip("이 병과가 소속될 부대의 권장 가로(좌우) 간격 (m, 기본 보병: 1.0m, 궁병: 1.1m)")]
+    public float recommendedSquadSpacingX = 1.0f;
+
+    [Tooltip("이 병과가 소속될 부대의 권장 세로(앞뒤) 간격 (m, 기본 보병: 1.0m, 장궁병: 1.3m, 쇠뇌: 0.8m)")]
+    public float recommendedSquadSpacingZ = 1.0f;
+
+    [Tooltip("이 병과가 소속될 부대의 엇갈린 대형 권장 여부 (체크 시 부대에서 [T] 키나 버튼으로 2열 틈새 직사 사격 대형 전환 가능)")]
+    public bool recommendedStaggeredFormation = false;
+
+    [Tooltip("이 병과가 소속될 부대의 순차 사격(Rolling Volley) 권장 여부 (원거리 유닛: true 권장)")]
+    public bool recommendedSequentialFire = false;
+
+    [Tooltip("이 병과가 소속될 부대의 순차 사격 행간 지연 시간 (초, 기본 0.4초)")]
+    public float recommendedSequentialRowDelay = 0.4f;
+
     [Header("⚔️ 근접 주무기 (Primary Melee Weapon) 설정")]
     [Tooltip("일반 백병전 1회 타격 공격력 (활을 접었을 때 휘두를 칼/창 공격력)")]
     public float damage = 10f;
