@@ -34,6 +34,8 @@ namespace MiniTotalWar.ECS
         public float StoppingDistance;
         public int IsCharging;        // 1 = 돌격 중(1.8m/s), 0 = 일반 이동
         public int IsCombatRunning;   // 1 = 교전 중 이격 시 달리기(1.2m/s)
+        public int AlignToSlope;      // 1 = 옵션 B (경사면 기울기 반영), 0 = 옵션 A (수직 유지)
+        public float GroundYOffset;   // 지면 밀착 높이 오프셋
     }
 
     /// <summary>
@@ -99,6 +101,8 @@ namespace MiniTotalWar.ECS
         public float RangedAttackCooldown; // 사격 쿨다운 (2.2s)
         public float LastRangedAttackTime; // 최근 사격 시각
         public float ProjectileSpeed;      // 화살 비행 속도 (30m/s)
+        public float ProjectileDrag;       // 화살 공기 저항 감속 계수 (0.25)
+        public Unity.Mathematics.float3 LaunchOffset; // 무기 발사 위치 로컬 오프셋 (X, Y, Z)
         public float MinSpreadRadius;      // 근거리 오차 반경 (0.3m)
         public float MaxSpreadRadius;      // 최대 사거리 오차 반경 (3.5m)
         public int TrajectoryMode;         // 0 = HighArc, 1 = Flat
@@ -107,6 +111,7 @@ namespace MiniTotalWar.ECS
         public int ArmorShredAmount;       // 방어 삭감치 (10)
         public int IgnoreArmor;            // 1 = 방어 100% 무시, 0 = 방어 적용
         public float MeleeSwitchDistance;  // 백병전 전환 거리 (5.0m)
+        public float RangedKnockbackPower; // 원거리 피격 넉백 세기 (m/s)
 
         // 📐 원거리 3축 공간 및 사선 클리어런스 (Pure ECS)
         public float MinRearSpacing;               // 후방 최소 필요 거리 (m)

@@ -94,6 +94,18 @@ flowchart TD
 | `knockdownSpeedThreshold` | `float` | `2.0f` | 넘어짐(무력화) 판정 넉백 속도 임계값 (m/s, 기본: 2.0m/s) |
 | `knockdownDuration` | `float` | `3.0f` | 넘어짐 무력화 지속 시간 (초, 기본: 3.0초) |
 | `isImmuneToKnockdown` | `bool` | `false` | 넘어짐/무력화 면역 불굴 특수능력 (체크 시 어떤 넉백 충격에도 넘어지지 않음) |
+| `isRangedUnit` | `bool` | `false` | 원거리 사격 유닛 여부 (체크 시 활/투사체 사격 및 전용 탄약 시스템 가동) |
+| `maxAmmo` | `int` | `25` | 병사 1인당 소지 화살 총량 (0발 소진 시 근접 보병 모드로 영구 전환) |
+| `currentAmmo` | `int` | `25` | 실시간 잔여 화살 수 |
+| `launchPoint` | `Transform` | `null` | 발사점 빈 자식 오브젝트 (씬 뷰 기즈모 조작 가능, `launchOffset`과 양방향 자동 동기화) |
+| `launchOffset` | `Vector3` | `(0.25, 0.15, 0.45)` | 유닛 0.5 스케일 구체 기준 로컬 발사 오프셋 (X=우측손, Y=어깨높이, Z=전방팔뻗음) |
+| `rangedAttackRange` | `float` | `150.0f` | 원거리 최대 유효 사거리 (m 단위, 기본 150m) |
+| `optimalRange` | `float` | `50.0f` | 원거리 최적 사거리 (m 단위, 100% 명중 및 대미지) |
+| `rangedBaseDamage` | `float` | `15.0f` | 원거리 기본 사격 대미지 |
+| `rangedAttackCooldown` | `float` | `2.2f` | 사격 간격 쿨다운 (초 단위) |
+| `rangedKnockbackPower` | `float` | `0.35f` | 원거리 화살/투사체 적중 시 피격 유닛에게 가하는 물리 넉백 충격 세기 (m/s 단위, 기본: 0.35m/s, 0이면 넉백 없음) |
+| `trajectoryMode` | `TrajectoryMode` | `HighArc` | 사격 궤적 모드 (HighArc: 곡사 포물선, Flat: 직선 평사) |
+| `projectileSpeed` | `float` | `30.0f` | 화살 순수 비행 속도 (m/s, 기본 30m/s) |
 
 ---
 
@@ -140,6 +152,14 @@ flowchart TD
    - **불굴 면역 특수능력 (`isImmuneToKnockdown == true`)**: 체크된 유닛(정예 중보병, 중기병, 괴수 등)은 아무리 강력한 충격을 받아도 쓰러지지 않고 즉시 반격합니다.
 5. **넉백 물리 감쇠 (초당 8.0 m/s²)**:
    - 밀려난 속도는 초당 8.0m/s² 비율로 감쇠하며 0.1~0.2초 내에 즉시 소멸하여 안정적인 백병전 거리를 형성합니다.
+
+### 3) ⛰️ 지형 굴곡 및 경사각 설정 (Terrain & Slope Alignment)
+- **옵션 A (수직 유지, `alignToSlope == false`)**:
+  - `TerrainHeightManager`를 통해 실시간 지면 높이(`Y = SampleHeight + groundYOffset`)만 추적하고, 몸체는 중력 반대 방향(하늘)을 향해 똑바로 섭니다. (보병/궁병 군단 표준 및 150~220+ FPS 초고속 성능 보장)
+- **옵션 B (경사각 반영, `alignToSlope == true`)**:
+  - 지형 표면 법선(Normal)을 계산하여 경사면 기울기에 맞춰 유닛의 몸체가 앞뒤·좌우로 자연스럽게 기울어집니다. (전차, 공성 병기 권장)
+- **지면 밀착 높이 (`groundYOffset`)**:
+  - 기본값 0.39m (높이 0.78m 큐브의 절반). 지형 표면으로부터 유닛 중심의 수직 오프셋입니다.
 
 ---
 

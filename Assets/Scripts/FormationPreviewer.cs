@@ -42,7 +42,7 @@ public class FormationPreviewer : MonoBehaviour
             if (i < slotPositions.Count)
             {
                 Vector3 targetPos = slotPositions[i];
-                targetPos.y += yOffset;
+                targetPos.y = TerrainHeightManager.SampleHeightFast(targetPos.x, targetPos.z) + yOffset;
 
                 activeDots[i].transform.position = targetPos;
                 activeDots[i].transform.rotation = (slotRotations != null && i < slotRotations.Count) ? slotRotations[i] : Quaternion.identity;
@@ -79,7 +79,7 @@ public class FormationPreviewer : MonoBehaviour
             if (i < slotTransforms.Count)
             {
                 Vector3 targetPos = slotTransforms[i].position;
-                targetPos.y += yOffset;
+                targetPos.y = TerrainHeightManager.SampleHeightFast(targetPos.x, targetPos.z) + yOffset;
 
                 activeDots[i].transform.position = targetPos;
                 activeDots[i].transform.rotation = slotTransforms[i].rotation;
@@ -113,7 +113,7 @@ public class FormationPreviewer : MonoBehaviour
             if (i < slotPositions.Count)
             {
                 Vector3 targetPos = slotPositions[i];
-                targetPos.y += yOffset;
+                targetPos.y = TerrainHeightManager.SampleHeightFast(targetPos.x, targetPos.z) + yOffset;
 
                 activeDots[i].transform.position = targetPos;
                 activeDots[i].transform.rotation = rotation;
@@ -160,7 +160,7 @@ public class FormationPreviewer : MonoBehaviour
             if (i < allPositions.Count)
             {
                 Vector3 targetPos = allPositions[i];
-                targetPos.y += yOffset;
+                targetPos.y = TerrainHeightManager.SampleHeightFast(targetPos.x, targetPos.z) + yOffset;
 
                 activeDots[i].transform.position = targetPos;
                 activeDots[i].transform.rotation = allRotations[i];
@@ -210,7 +210,7 @@ public class FormationPreviewer : MonoBehaviour
             if (i < allPositions.Count)
             {
                 Vector3 targetPos = allPositions[i];
-                targetPos.y += yOffset;
+                targetPos.y = TerrainHeightManager.SampleHeightFast(targetPos.x, targetPos.z) + yOffset;
 
                 activeDots[i].transform.position = targetPos;
                 activeDots[i].transform.rotation = allRotations[i];

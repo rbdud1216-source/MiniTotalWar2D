@@ -35,6 +35,7 @@
   - `CommandStop()`: 전 부대원 즉시 정지 및 진형 사수
   - `CommandCurvedFormation()`: 곡선 대형 전개 명령
   - `AddWaypoint()`, `ClearWaypoints()`: 다중 경유지(Waypoint) 대기열 관리
+  - `UpdatePathLine()`, `AddTerrainConformingSegment()`: 📈 이동 목적지 경로선을 1m 단위로 분할하여 지형 굴곡을 따라 완벽히 밀착 렌더링 (언덕 가림 방지)
 - 📁 **4. 순차 기동 및 공간 정렬 루틴 (Staggered Dispatch & Spatial Sort)**
   - `AssignFormationPositionsRoutine()`: O(N^2) 공간 정렬 및 슬롯 배정 코루틴
   - `StartUnitsMovementStaggered()`: 전진/후진 방향성 열 단위 순차 출발 코루틴
@@ -79,11 +80,16 @@
 | `SetRunMode` | `void (bool run)` | 구보/제식보행 속도 전환 및 엔티티 동기화 | `PlayerController`, `R키` | [Squad.cs#L591-L608](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L591-L608) |
 | `SetFormationType` | `void (SquadFormationType type)` | 진형 형태(일자, 사각방진, 쐐기 등) 변경 및 스탯 갱신 | `CommandUI`, 단축키 | [Squad.cs#L862-L883](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L862-L883) |
 | `RebuildGridStructure` | `void (int targetCols, bool sort)` | 부대 열 수 변경에 따른 내부 대형 격자 재구축 및 스탯 갱신 | `PlayerController`, `Awake` | [Squad.cs#L885-L967](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L885-L967) |
-| `CommandMoveWithFormation` | `void (dest, rot, cols, sort, state)` | 부대 전체 대형 이동 명령 및 실효 스탯 최신화 | `PlayerController`, `Update` | [Squad.cs#L969-L1050](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L969-L1050) |
-| `CommandAttackSquad` | `void (Squad enemySquad)` | 지정 적 부대 타겟팅 및 포위 대형 쇄도 | `PlayerController`, `AI` | [Squad.cs#L1454-L1500](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1454-L1500) |
+| `CommandMoveWithFormation` | `void (dest, rot, cols, sort, state, preserveTarget)` | 부대 전체 대형 이동 명령 및 실효 스탯 최신화 (`preserveTarget`으로 타겟 보존 지원) | `PlayerController`, `Update`, `AI` | [Squad.cs#L1248-L1320](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1248-L1320) |
+| `CommandAttackSquad` | `void (Squad enemySquad)` | 지정 적 부대 타겟팅 (중복 돌격 차단 가드로 이미 돌격 중일 때 연산/로그 배제, 보병은 포위 돌격, 궁병은 사거리 유지 일제사격 분기) | `PlayerController`, `AI` | [Squad.cs#L2034-L2090](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2034-L2090) |
+| `CommandRangedAttackSquad` | `void (Squad enemySquad)` | 🏹 궁병 부대전술 - 150m 사거리 밖이면 타겟 보존 전술 전진(`AttackMove`), 사거리 안이면 제자리 일제사격 | `CommandAttackSquad`, `Tracking` | [Squad.cs#L2092-L2150](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2092-L2150) |
+| `CommandRangedHaltAndFire` | `void (Quaternion faceRot, Squad enemySquad)` | 🏹 궁병 제자리 사격 태세 - 슬롯 대형을 온전히 유지한 채 적 방향 정렬, `Idle` 전환 및 정지 사격 | `CommandRangedAttackSquad`, `Tracking` | [Squad.cs#L2152-L2210](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2152-L2210) |
+| `UpdateEnemySquadAI` | `void ()` | 적군 AI 지속 공격 루틴 - 이미 돌격 중(`AttackMove`)이면 단 1회 명령으로 끝까지 쇄도하며, 정지/이탈 시에만 지속 추격 재발동 | `Update` | [Squad.cs#L2925-L2985](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2925-L2985) |
+| `GetCurrentTotalAmmo` | `int ()` | 현재 부대의 실시간 잔여 화살 총량 반환 (Pure ECS 초기화 전 안전 가드 포함) | `UI`, `Squad.HasAmmo` | [Squad.cs#L70-L95](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L70-L95) |
 | `SyncTargetSquadIdToSimulations` | `void (int targetSquadId)` | Job System & Pure ECS(직접 주입 폴백) targetId 동기화 | `CommandAttackSquad`, `Tracking` | [Squad.cs#L1507-L1550](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1507-L1550) |
 | `UpdateEnemyProjectionData` | `void (enemy, rot, center)` | 적 부대의 360도 투영 폭 및 접적면 계산 | `CommandAttackSquad`, `Tracking` | [Squad.cs#L1552-L1700](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1552-L1700) |
-| `UpdateTargetSquadTracking` | `void ()` | 공격 중인 적 부대 위치 추적 및 슬롯 갱신 | `Update` | [Squad.cs#L1815-L1910](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1815-L1910) |
+| `UpdateTargetSquadTracking` | `void ()` | 공격 중인 적 부대 위치 추적 및 슬롯 갱신 (화살 전량 소진 시 단 1회 원-샷 돌격 명령으로 전환 최적화) | `Update` | [Squad.cs#L2645-L2720](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2645-L2720) |
+| `UpdatePostCombatAutoReform` | `void ()` | 교전 종료 후 전열 재정비 (Pure ECS `MemberCount` 듀얼 모드 완벽 호환) | `Update` | [Squad.cs#L2750-L2795](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2750-L2795) |
 | `SetAutoAttack` | `void (bool enabled)` | 적 접근 시 자동 선제 요격 허용 및 접촉 방어(V키) 스탯 동기화 | `PlayerController`, `V키` | [Squad.cs#L1300-L1350](file:///a:/Unity/MiniTotalWar2D/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1300-L1350) |
 | `GetFrontLineCenter` | `Vector3 ()` | 부대 맨 앞열(전열)의 물리적 중심 좌표 반환 | `UpdateEnemyTracking` | [Squad.cs#L3000-L3040](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3000-L3040) |
 | `GetVisualCenter` | `Vector3 ()` | 생존 부대원 전체의 실제 평균 중심 좌표 (ECS 집계 폴백 지원) | `PlayerController`, `AI`, `AdjustSpacing` | [Squad.cs#L3520-L3550](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3520-L3550) |
@@ -144,8 +150,11 @@ flowchart TD
 | `baseMass` | `float` | 100f | 유닛 프리팹 원본 기준 무게 (밀림 저항력) |
 | `baseAttackCooldown` | `float` | 1.0f | 유닛 프리팹 원본 기준 기본 공격 주기(초) |
 | `currentFormationType` | `SquadFormationType` | Normal | 현재 선택된 부대 진형 (`Normal`, `Loose`, `Wedge`, `Diamond`, `Square`, `Circle`) |
-| `isLooseFormation` | `bool` | false | 산개 대형 활성화 여부 (활성화 시 방진 보너스 0%, 자유 유닛 1.0배) |
 | `autoAttackEnabled` | `bool` | true | 자동 요격 허용 여부 (`false` 시 접촉 방어 태세 - Bracing 발동) |
+| `IsRangedSquad` | `bool` | - | 원거리(궁병) 병과 여부 |
+| `HasAmmo` | `bool` | - | 잔여 탄약 존재 여부 (0발 소진 시 false가 되어 근접 보병으로 자동 전환) |
+| `AmmoRatio` | `float` | - | 부대 실시간 잔여 탄약 비율 (0.0f ~ 1.0f) |
+| `hasChargedAfterEmptyAmmo` | `bool` | false | 사격 종료 후 단 1회 돌격 하달 완료 여부 플래그 (중복 돌격 명령 및 제자리 멈춤 차단) |
 
 ---
 

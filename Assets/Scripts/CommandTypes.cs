@@ -33,7 +33,8 @@ public enum UnitType
 {
     MeleeInfantry,  // 일반 검/도끼 보병 (근접 돌격 및 방진 유지)
     SpearInfantry,  // 장창병/창병 (대기병 돌격 반사 특화)
-    Archer,         // 궁병/사격병 (원거리 사격 + 보조무기 백병전)
+    Archer,         // 궁병/사격병 (원거리 곡사 사격 + 보조무기 백병전)
+    Gunner,         // 총병/화승총병 (원거리 초고속 직사 사격 + 사선확보 기동 특화)
     Cavalry         // 기병 (고속 기동 및 충격 돌격)
 }
 

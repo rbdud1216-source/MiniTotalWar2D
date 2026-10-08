@@ -63,6 +63,8 @@ flowchart TD
 | :--- | :--- | :--- | :--- |
 | `offset` | `Vector3` | `(0, 40, 0)` | 부대 중심점 기준 머리 위 스크린 픽셀 오프셋 |
 | `organizationImage` | `Image` | - | 조직력(잔여 병력 수)을 나타내는 Vertical Filled 이미지 |
+| `ammoBarRoot` | `GameObject` | - | 탄약 게이지 바 루트 (토탈워 삼국 방식: 평시 숨김, 첫 사격 시 활성화) |
+| `ammoBarImage` | `Image` | - | 잔여 화살 비율(0.0~1.0)을 표시하는 Horizontal Filled 앰버 골드 이미지 |
 
 ---
 

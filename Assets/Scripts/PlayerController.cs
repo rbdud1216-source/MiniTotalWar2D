@@ -162,6 +162,29 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 드래그 선의 시작점과 끝점 사이를 1m 단위로 분할하여 지형 높이를 샘플링함으로써,
+    /// 언덕이나 굴곡 지형에서도 드래그 선이 땅속에 파묻히지 않고 지표면 굴곡을 따라 완벽히 밀착 표시되도록 합니다.
+    /// </summary>
+    private void SetDragLineTerrainConforming(Vector3 start, Vector3 end, float stepDistance = 1.0f)
+    {
+        if (activeDragLine == null) return;
+        float dist = Vector2.Distance(new Vector2(start.x, start.z), new Vector2(end.x, end.z));
+        int segments = Mathf.Clamp(Mathf.CeilToInt(dist / Mathf.Max(0.5f, stepDistance)), 1, 80);
+
+        List<Vector3> points = new List<Vector3>(segments + 1);
+        for (int i = 0; i <= segments; i++)
+        {
+            float t = (float)i / segments;
+            Vector3 pt = Vector3.Lerp(start, end, t);
+            pt.y = TerrainHeightManager.SampleHeightFast(pt.x, pt.z) + 0.15f;
+            points.Add(pt);
+        }
+
+        activeDragLine.positionCount = points.Count;
+        activeDragLine.SetPositions(points.ToArray());
+    }
+
     private void Update()
     {
         HandleSquadCreationAndDisband();
@@ -622,8 +645,7 @@ public class PlayerController : MonoBehaviour
 
                     primarySquad.formationLayers = oldLay;
 
-                    activeDragLine.positionCount = 2;
-                    activeDragLine.SetPositions(new Vector3[] { center + Vector3.up * 0.1f, currentWorldPos + Vector3.up * 0.1f });
+                    SetDragLineTerrainConforming(center, currentWorldPos);
                 }
                 else if (isWedgeOrDiamond)
                 {
@@ -644,8 +666,7 @@ public class PlayerController : MonoBehaviour
 
                     Vector3 frontPoint = primarySquad.transform.position + (primarySquad.transform.forward * 4.0f * targetLength);
                     Vector3 backPoint = primarySquad.transform.position - (primarySquad.transform.forward * 4.0f * targetLength);
-                    activeDragLine.positionCount = 2;
-                    activeDragLine.SetPositions(new Vector3[] { backPoint + Vector3.up * 0.1f, frontPoint + Vector3.up * 0.1f });
+                    SetDragLineTerrainConforming(backPoint, frontPoint);
                 }
                 else
                 {
@@ -663,8 +684,7 @@ public class PlayerController : MonoBehaviour
                             previewer.ShowCurvedPreview(primarySquad, primarySquad.transform.position, primarySquad.transform.rotation, primarySquad.currentColumns, currentPreviewCurvature);
                         }
 
-                        activeDragLine.positionCount = 2;
-                        activeDragLine.SetPositions(new Vector3[] { primarySquad.transform.position + Vector3.up * 0.1f, currentWorldPos + Vector3.up * 0.1f });
+                        SetDragLineTerrainConforming(primarySquad.transform.position, currentWorldPos);
                     }
                     else if (selectedSquads.Count > 1)
                     {
@@ -700,8 +720,7 @@ public class PlayerController : MonoBehaviour
                             }
                         }
 
-                        activeDragLine.positionCount = 2;
-                        activeDragLine.SetPositions(new Vector3[] { centroid + Vector3.up * 0.1f, currentWorldPos + Vector3.up * 0.1f });
+                        SetDragLineTerrainConforming(centroid, currentWorldPos);
                     }
                 }
             }
@@ -844,8 +863,7 @@ public class PlayerController : MonoBehaviour
                     }
                 }
 
-                activeDragLine.positionCount = 2;
-                activeDragLine.SetPositions(new Vector3[] { formationStartWorldPos + Vector3.up * 0.1f, currentWorldPos + Vector3.up * 0.1f });
+                SetDragLineTerrainConforming(formationStartWorldPos, currentWorldPos);
             }
             return;
         }
@@ -1017,8 +1035,7 @@ public class PlayerController : MonoBehaviour
 
                             if (previewer != null) previewer.ShowPreview(primarySquad, primarySquad.transform.position, targetRot, primarySquad.currentColumns);
 
-                            activeDragLine.positionCount = 2;
-                            activeDragLine.SetPositions(new Vector3[] { primarySquad.transform.position + Vector3.up * 0.1f, currentWorldPos + Vector3.up * 0.1f });
+                            SetDragLineTerrainConforming(primarySquad.transform.position, currentWorldPos);
                         }
                         else
                         {
@@ -1026,8 +1043,7 @@ public class PlayerController : MonoBehaviour
                             if (previewer != null) previewer.ShowMultiSquadPreview(rotateConfigs);
 
                             Vector3 centroid = GetSquadsCentroid(selectedSquads);
-                            activeDragLine.positionCount = 2;
-                            activeDragLine.SetPositions(new Vector3[] { centroid + Vector3.up * 0.1f, currentWorldPos + Vector3.up * 0.1f });
+                            SetDragLineTerrainConforming(centroid, currentWorldPos);
                         }
                     }
                     // [Alt + 우클릭] 부대 중심(Center)을 유지한 상태로 좌우 대칭 크기/날카로움/겹수 조절 프리뷰
@@ -1059,8 +1075,7 @@ public class PlayerController : MonoBehaviour
                             Vector3 leftEdge = centerPos - (targetRot * Vector3.right * previewWidth * 0.5f);
                             Vector3 rightEdge = centerPos + (targetRot * Vector3.right * previewWidth * 0.5f);
 
-                            activeDragLine.positionCount = 2;
-                            activeDragLine.SetPositions(new Vector3[] { leftEdge + Vector3.up * 0.1f, rightEdge + Vector3.up * 0.1f });
+                            SetDragLineTerrainConforming(leftEdge, rightEdge);
                         }
                         else if (isWedgeOrDiamond)
                         {
@@ -1080,8 +1095,7 @@ public class PlayerController : MonoBehaviour
                             Vector3 leftEdge = centerPos - (targetRot * Vector3.right * previewWidth * 0.5f);
                             Vector3 rightEdge = centerPos + (targetRot * Vector3.right * previewWidth * 0.5f);
 
-                            activeDragLine.positionCount = 2;
-                            activeDragLine.SetPositions(new Vector3[] { leftEdge + Vector3.up * 0.1f, rightEdge + Vector3.up * 0.1f });
+                            SetDragLineTerrainConforming(leftEdge, rightEdge);
                         }
                         else
                         {
@@ -1101,8 +1115,7 @@ public class PlayerController : MonoBehaviour
                             Vector3 leftEdge = centerPos - (targetRot * Vector3.right * halfWidth);
                             Vector3 rightEdge = centerPos + (targetRot * Vector3.right * halfWidth);
 
-                            activeDragLine.positionCount = 2;
-                            activeDragLine.SetPositions(new Vector3[] { leftEdge + Vector3.up * 0.1f, rightEdge + Vector3.up * 0.1f });
+                            SetDragLineTerrainConforming(leftEdge, rightEdge);
                         }
                     }
                     else if (isDraggingFormation)
@@ -1117,7 +1130,9 @@ public class PlayerController : MonoBehaviour
                             activeDragLine.positionCount = freeDrawPath.Count;
                             for (int i = 0; i < freeDrawPath.Count; i++)
                             {
-                                activeDragLine.SetPosition(i, freeDrawPath[i] + Vector3.up * 0.1f);
+                                Vector3 pt = freeDrawPath[i];
+                                pt.y = TerrainHeightManager.SampleHeightFast(pt.x, pt.z) + 0.15f;
+                                activeDragLine.SetPosition(i, pt);
                             }
                         }
                         else
@@ -1149,8 +1164,7 @@ public class PlayerController : MonoBehaviour
                                 }
                             }
 
-                            activeDragLine.positionCount = 2;
-                            activeDragLine.SetPositions(new Vector3[] { formationStartWorldPos + Vector3.up * 0.1f, currentWorldPos + Vector3.up * 0.1f });
+                            SetDragLineTerrainConforming(formationStartWorldPos, currentWorldPos);
                         }
                     }
                 }
@@ -1160,8 +1174,7 @@ public class PlayerController : MonoBehaviour
 
                     if (isShiftPressed)
                     {
-                        activeDragLine.positionCount = 2;
-                        activeDragLine.SetPositions(new Vector3[] { formationStartWorldPos + Vector3.up * 0.1f, currentWorldPos + Vector3.up * 0.1f });
+                        SetDragLineTerrainConforming(formationStartWorldPos, currentWorldPos);
 
                         if (previewer != null)
                         {
@@ -1179,7 +1192,9 @@ public class PlayerController : MonoBehaviour
                         activeDragLine.positionCount = freeDrawPath.Count;
                         for (int i = 0; i < freeDrawPath.Count; i++)
                         {
-                            activeDragLine.SetPosition(i, freeDrawPath[i] + Vector3.up * 0.1f);
+                            Vector3 pt = freeDrawPath[i];
+                            pt.y = TerrainHeightManager.SampleHeightFast(pt.x, pt.z) + 0.15f;
+                            activeDragLine.SetPosition(i, pt);
                         }
 
                         if (previewer != null)

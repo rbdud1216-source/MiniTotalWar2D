@@ -16,6 +16,12 @@ public class CameraController : MonoBehaviour
     [SerializeField] private float minHeight3D = 5f;
     [SerializeField] private float maxHeight3D = 150f;
 
+    [Header("시점 회전(피치) 각도 제한 - 3D 전장 시점")]
+    [Tooltip("최소 상향 각도 (음수면 위쪽 하늘이나 언덕 고지대를 시원하게 올려다볼 수 있음. 기본: -45도)")]
+    [SerializeField] private float minPitch = -45f;
+    [Tooltip("최대 하향 각도 (양수면 지면을 내려다봄. 기본: 88도)")]
+    [SerializeField] private float maxPitch = 88f;
+
     [Header("시야 높이(Zoom) 제한 - 2D 전술지도(Tactical Map) 시점")]
     [SerializeField] private float tacticalMinHeight = 20f;
     [SerializeField] private float tacticalMaxHeight = 350f;
@@ -274,10 +280,10 @@ public class CameraController : MonoBehaviour
                 // Y축 회전 (좌우)
                 transform.Rotate(Vector3.up, rotX, Space.World);
 
-                // X축 회전 (상하 피치 제한)
+                // X축 회전 (상하 피치 제한: 음수 각도로 위쪽 언덕과 하늘을 시원하게 올려다봄)
                 float newXAngle = transform.eulerAngles.x - rotY;
                 if (newXAngle > 180f) newXAngle -= 360f;
-                newXAngle = Mathf.Clamp(newXAngle, 10f, 85f);
+                newXAngle = Mathf.Clamp(newXAngle, minPitch, maxPitch);
 
                 Vector3 currentEuler = transform.eulerAngles;
                 transform.eulerAngles = new Vector3(newXAngle, currentEuler.y, 0f);
@@ -306,6 +312,13 @@ public class CameraController : MonoBehaviour
         float currentMinH = isTopDownMode ? tacticalMinHeight : minHeight3D;
         float currentMaxH = isTopDownMode ? tacticalMaxHeight : maxHeight3D;
         pos.y = Mathf.Clamp(pos.y, currentMinH, currentMaxH);
+
+        // 🏔️ 지형 고도(언덕)가 존재할 경우 카메라가 지면 속으로 파고들지 않도록 안전 최소 고도 보장
+        if (!isTopDownMode && TerrainHeightManager.HasInstance)
+        {
+            float terrainH = TerrainHeightManager.SampleHeightFast(pos.x, pos.z);
+            pos.y = Mathf.Max(pos.y, terrainH + 1.5f);
+        }
 
         if (useBounds)
         {

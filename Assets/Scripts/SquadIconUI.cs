@@ -21,6 +21,11 @@ public class SquadIconUI : MonoBehaviour, IPointerClickHandler
     [Header("부대 조직력(체력) 표시 이미지")]
     [SerializeField] private Image organizationImage;
 
+    [Header("🏹 원거리 탄약(화살) 잔량 게이지")]
+    [SerializeField] private Image ammoBarImage;
+    [SerializeField] private GameObject ammoBarRoot;
+    private bool hasFiredAmmo = false; // 🏹 토탈워 삼국: 첫 사격을 시작할 때부터 게이지 표시
+
     private void Awake()
     {
         button = GetComponent<Button>();
@@ -47,6 +52,16 @@ public class SquadIconUI : MonoBehaviour, IPointerClickHandler
             organizationImage.type = Image.Type.Filled;
             organizationImage.fillMethod = Image.FillMethod.Vertical;
             organizationImage.fillOrigin = (int)Image.OriginVertical.Bottom; // 아래쪽 기준 (위에서 아래로 줄어듦)
+        }
+
+        if (ammoBarRoot == null)
+        {
+            Transform existing = transform.Find("AmmoBarRoot");
+            if (existing != null)
+            {
+                ammoBarRoot = existing.gameObject;
+                ammoBarImage = existing.Find("AmmoFill")?.GetComponent<Image>();
+            }
         }
 
         if (button != null)
@@ -117,6 +132,10 @@ public class SquadIconUI : MonoBehaviour, IPointerClickHandler
                 ? new Color(0.95f, 0.25f, 0.25f, 0.95f)  // 적군: 선명한 레드
                 : new Color(0.22f, 0.65f, 1.0f, 0.95f);  // 아군: 선명한 블루
         }
+
+        EnsureAmmoBarUI();
+        hasFiredAmmo = (targetSquad != null && targetSquad.IsRangedSquad && targetSquad.AmmoRatio < 0.999f);
+        UpdateAmmoBar();
     }
 
     public Squad GetSquad()
@@ -128,6 +147,108 @@ public class SquadIconUI : MonoBehaviour, IPointerClickHandler
     {
         UpdateIconPosition();
         UpdateOrganizationBar();
+        UpdateAmmoBar();
+    }
+
+    /// <summary>
+    /// 프리팹 내 구현된 탄약 게이지 바(AmmoBarRoot, AmmoFill)를 바인딩합니다.
+    /// </summary>
+    private void EnsureAmmoBarUI()
+    {
+        if (targetSquad == null || !targetSquad.IsRangedSquad)
+        {
+            if (ammoBarRoot != null && ammoBarRoot.activeSelf) ammoBarRoot.SetActive(false);
+            return;
+        }
+
+        if (ammoBarRoot == null)
+        {
+            Transform existing = transform.Find("AmmoBarRoot");
+            if (existing != null)
+            {
+                ammoBarRoot = existing.gameObject;
+                ammoBarImage = existing.Find("AmmoFill")?.GetComponent<Image>() ?? existing.GetComponent<Image>();
+            }
+            else
+            {
+                // 🎨 프리팹 누락 시 방어적 자동 복원
+                GameObject rootGo = new GameObject("AmmoBarRoot", typeof(RectTransform));
+                rootGo.transform.SetParent(transform, false);
+                RectTransform rootRect = rootGo.GetComponent<RectTransform>();
+                rootRect.anchorMin = new Vector2(0f, 0f);
+                rootRect.anchorMax = new Vector2(1f, 0f);
+                rootRect.pivot = new Vector2(0.5f, 1f);
+                rootRect.anchoredPosition = new Vector2(0f, -4f);
+                rootRect.sizeDelta = new Vector2(0f, 5f);
+
+                Image bgImage = rootGo.AddComponent<Image>();
+                bgImage.color = new Color(0.08f, 0.08f, 0.1f, 0.85f);
+
+                GameObject fillGo = new GameObject("AmmoFill", typeof(RectTransform));
+                fillGo.transform.SetParent(rootGo.transform, false);
+                RectTransform fillRect = fillGo.GetComponent<RectTransform>();
+                fillRect.anchorMin = Vector2.zero;
+                fillRect.anchorMax = Vector2.one;
+                fillRect.sizeDelta = Vector2.zero;
+                fillRect.anchoredPosition = Vector2.zero;
+
+                ammoBarImage = fillGo.AddComponent<Image>();
+                ammoBarImage.type = Image.Type.Filled;
+                ammoBarImage.fillMethod = Image.FillMethod.Horizontal;
+                ammoBarImage.fillOrigin = (int)Image.OriginHorizontal.Left;
+                ammoBarImage.fillAmount = 1f;
+                ammoBarImage.color = new Color(1.0f, 0.72f, 0.05f, 0.95f);
+
+                ammoBarRoot = rootGo;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 🎯 [토탈워 삼국 스타일] 탄을 쏘기 전(100%)에는 숨겼다가, 첫 사격을 시작한 순간부터 게이지를 표시합니다.
+    /// </summary>
+    private void UpdateAmmoBar()
+    {
+        if (targetSquad == null || !targetSquad.IsRangedSquad)
+        {
+            if (ammoBarRoot != null && ammoBarRoot.activeSelf) ammoBarRoot.SetActive(false);
+            return;
+        }
+
+        if (ammoBarRoot == null || ammoBarImage == null)
+        {
+            EnsureAmmoBarUI();
+        }
+
+        float ratio = targetSquad.AmmoRatio;
+
+        // 🏹 첫 화살을 쏘는 순간(100% 미만으로 감소) 게이지 표시 활성화!
+        if (ratio < 0.999f)
+        {
+            hasFiredAmmo = true;
+        }
+
+        bool shouldShow = hasFiredAmmo;
+
+        if (ammoBarRoot != null && ammoBarRoot.activeSelf != shouldShow)
+        {
+            ammoBarRoot.SetActive(shouldShow);
+        }
+
+        if (shouldShow && ammoBarImage != null)
+        {
+            ammoBarImage.fillAmount = ratio;
+
+            // 탄약 전량 소진 시 시각적 경고(어두운 붉은색), 잔여 시 선명한 골드
+            if (ratio <= 0.001f)
+            {
+                ammoBarImage.color = new Color(0.6f, 0.2f, 0.2f, 0.7f);
+            }
+            else
+            {
+                ammoBarImage.color = new Color(1.0f, 0.72f, 0.05f, 0.95f);
+            }
+        }
     }
 
     private void UpdateOrganizationBar()

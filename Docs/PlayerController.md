@@ -12,7 +12,7 @@
 ## 🌳 2. 아키텍처 트리 맵 (Architecture Tree Map)
 
 - 📁 **1. 초기화 및 선택 시스템 (Lifecycle & Selection System)**
-  - `Awake()`, `EnsureLineRenderer()`, `Update()`
+  - `Awake()`, `EnsureLineRenderer()`, `SetDragLineTerrainConforming()`, `Update()`
   - `SelectSquad()`, `DeselectSquad()`, `SelectUnit()`, `DeselectAll()`
   - `SelectSingleUnitOrSquad()`: 단일 유닛/부대 클릭 선택
   - `SelectUnitsInScreenRect()`: 화면 드래그 박스 영역 내 일괄 선택

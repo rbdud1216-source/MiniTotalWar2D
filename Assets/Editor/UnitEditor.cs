@@ -23,11 +23,15 @@ public class UnitEditor : Editor
     private SerializedProperty maxSpreadRadius;
     private SerializedProperty trajectoryMode;
     private SerializedProperty projectileSpeed;
+    private SerializedProperty projectileDrag;
     private SerializedProperty gravityScale;
+    private SerializedProperty launchPoint;
+    private SerializedProperty launchOffset;
     private SerializedProperty ignoreArmor;
     private SerializedProperty armorPiercingRatio;
     private SerializedProperty armorShredAmount;
     private SerializedProperty meleeSwitchDistance;
+    private SerializedProperty rangedKnockbackPower;
 
     // 📐 원거리 3축 공간 및 사선 클리어런스 (밀집도 & 언덕 사면)
     private SerializedProperty minRearSpacing;
@@ -97,6 +101,11 @@ public class UnitEditor : Editor
     private SerializedProperty mySquad;
     private SerializedProperty fixedTargetPos;
 
+    // ⛰️ 지형 및 경사면 설정
+    private SerializedProperty alignToSlope;
+    private SerializedProperty groundYOffset;
+    private static bool showSlope = true;
+
     // 카테고리 접기/펼치기 상태 플래그
     private static bool showRangedWeapon = true;
     private static bool showSurvival = true;
@@ -125,11 +134,15 @@ public class UnitEditor : Editor
         maxSpreadRadius = serializedObject.FindProperty("maxSpreadRadius");
         trajectoryMode = serializedObject.FindProperty("trajectoryMode");
         projectileSpeed = serializedObject.FindProperty("projectileSpeed");
+        projectileDrag = serializedObject.FindProperty("projectileDrag");
         gravityScale = serializedObject.FindProperty("gravityScale");
+        launchPoint = serializedObject.FindProperty("launchPoint");
+        launchOffset = serializedObject.FindProperty("launchOffset");
         ignoreArmor = serializedObject.FindProperty("ignoreArmor");
         armorPiercingRatio = serializedObject.FindProperty("armorPiercingRatio");
         armorShredAmount = serializedObject.FindProperty("armorShredAmount");
         meleeSwitchDistance = serializedObject.FindProperty("meleeSwitchDistance");
+        rangedKnockbackPower = serializedObject.FindProperty("rangedKnockbackPower");
         minRearSpacing = serializedObject.FindProperty("minRearSpacing");
         minLateralSpacing = serializedObject.FindProperty("minLateralSpacing");
         headClearanceMargin = serializedObject.FindProperty("headClearanceMargin");
@@ -193,6 +206,9 @@ public class UnitEditor : Editor
 
         mySquad = serializedObject.FindProperty("mySquad");
         fixedTargetPos = serializedObject.FindProperty("fixedTargetPos");
+
+        alignToSlope = serializedObject.FindProperty("alignToSlope");
+        groundYOffset = serializedObject.FindProperty("groundYOffset");
     }
 
     public override void OnInspectorGUI()
@@ -267,9 +283,60 @@ public class UnitEditor : Editor
                 if (trajectoryMode != null)
                     EditorGUILayout.PropertyField(trajectoryMode, new GUIContent("사격 궤적 모드", "HighArc: 하늘 높이 넘겨 쏘는 곡사(활), Flat: 낮고 빠르게 쏘는 직사(쇠뇌)"));
                 if (projectileSpeed != null)
-                    EditorGUILayout.PropertyField(projectileSpeed, new GUIContent("화살 비행 속도 (m/s)", "화살의 공중 순항 속도입니다. (기본: 30.0m/s)"));
+                    EditorGUILayout.PropertyField(projectileSpeed, new GUIContent("화살 초기 발사 속도 (m/s)", "화살이 시위를 떠날 때의 초기 물리 속력입니다. 직사/곡사 모두 동일하게 적용됩니다. (기본: 30.0m/s)"));
+                if (projectileDrag != null)
+                    EditorGUILayout.Slider(projectileDrag, 0.0f, 1.0f, new GUIContent("화살 공기 저항 감속률", "비행 중 공기 저항(항력)으로 인해 속도가 줄어드는 비율입니다. (0 = 무저항 등속, 0.25 = 자연스러운 감속 후 묵직한 착탄)"));
                 if (gravityScale != null)
                     EditorGUILayout.PropertyField(gravityScale, new GUIContent("중력 포물선 높이 계수", "곡사 시 포물선 최고점 높이를 조절하는 배율입니다. (기본: 1.0)"));
+
+                EditorGUILayout.Space(4);
+                // D-2. 원거리 무기 발사 위치 설정 (양방향 동기화)
+                EditorGUILayout.LabelField("🎯 원거리 무기 발사 위치 (Launch / Muzzle Point)", EditorStyles.miniBoldLabel);
+
+                EditorGUI.BeginChangeCheck();
+                if (launchPoint != null)
+                    EditorGUILayout.PropertyField(launchPoint, new GUIContent("발사점 빈 오브젝트", "씬 뷰에서 기즈모로 조절 가능한 자식 빈 오브젝트입니다."));
+                if (launchOffset != null)
+                    EditorGUILayout.PropertyField(launchOffset, new GUIContent("발사 위치 로컬 오프셋", "피벗(발) 기준 로컬 오프셋 (X:우측손, Y:어깨높이, Z:전방팔뻗음)"));
+
+                if (EditorGUI.EndChangeCheck())
+                {
+                    serializedObject.ApplyModifiedProperties();
+                    if (unit.launchPoint != null)
+                    {
+                        Undo.RecordObject(unit.launchPoint, "Sync Launch Point From Offset");
+                        unit.launchPoint.localPosition = unit.launchOffset;
+                    }
+                }
+                else if (unit.launchPoint != null && (unit.launchPoint.localPosition - unit.launchOffset).sqrMagnitude > 0.0001f)
+                {
+                    Undo.RecordObject(unit, "Sync Launch Offset From Point");
+                    unit.launchOffset = unit.launchPoint.localPosition;
+                    if (launchOffset != null) launchOffset.vector3Value = unit.launchOffset;
+                    EditorUtility.SetDirty(unit);
+                }
+
+                EditorGUILayout.BeginHorizontal();
+                if (unit.launchPoint == null)
+                {
+                    if (GUILayout.Button("🎯 발사점 빈 오브젝트 자동 생성", GUILayout.Height(24)))
+                    {
+                        CreateOrAttachLaunchPoint(unit);
+                    }
+                }
+                else
+                {
+                    if (GUILayout.Button("🔍 씬 뷰에서 발사점 선택", GUILayout.Height(24)))
+                    {
+                        Selection.activeGameObject = unit.launchPoint.gameObject;
+                    }
+                }
+
+                if (GUILayout.Button("🔄 표준 발사 위치로 리셋 (스케일 자동 연동)", GUILayout.Height(24)))
+                {
+                    ResetLaunchPointToDefault(unit);
+                }
+                EditorGUILayout.EndHorizontal();
 
                 EditorGUILayout.Space(4);
                 // E. 방어력 관통 및 근접 전환
@@ -280,6 +347,8 @@ public class UnitEditor : Editor
                     EditorGUILayout.Slider(armorPiercingRatio, 0.0f, 1.0f, new GUIContent("방어력 무시 관통 비율", "대미지의 몇 %를 방어력 무시 고정 피해로 넣을지 결정합니다. (기본: 25%)"));
                 if (armorShredAmount != null)
                     EditorGUILayout.PropertyField(armorShredAmount, new GUIContent("방어력 삭감 관통 수치", "적 방어력을 깎아내고 계산하는 수치입니다. (만분율 단위)"));
+                if (rangedKnockbackPower != null)
+                    EditorGUILayout.Slider(rangedKnockbackPower, 0.0f, 3.0f, new GUIContent("원거리 피격 넉백 세기 (m/s)", "화살/투사체 적중 시 피격된 유닛이 뒤로 밀려나는 물리 충격 속도입니다. (기본: 0.35m/s, 0이면 넉백 없음)"));
                 if (meleeSwitchDistance != null)
                     EditorGUILayout.PropertyField(meleeSwitchDistance, new GUIContent("근접 백병전 강제 전환 거리 (m)", "적 보병이 이 거리 안으로 파고들면 즉시 활을 거두고 칼을 뽑아 백병전을 수행합니다. (기본: 5.0m)"));
 
@@ -492,6 +561,38 @@ public class UnitEditor : Editor
             float r = runSpeed != null ? runSpeed.floatValue : 2.8f;
             float c = chargeSpeed != null ? chargeSpeed.floatValue : 4.8f;
             EditorGUILayout.HelpBox($"⚡ [기동 배율 비교]\n• 제식 보행: {w:F1} m/s (1.0x)\n• 전술 구보: {r:F1} m/s ({(r / Mathf.Max(0.1f, w)):F1}배 빠름)\n• 돌격 쇄도: {c:F1} m/s ({(c / Mathf.Max(0.1f, w)):F1}배 전력질주)", MessageType.None);
+
+            EditorGUILayout.EndVertical();
+            EditorGUILayout.Space(4);
+        }
+
+        // ⛰️ 지형 굴곡 및 경사각 설정 (Terrain & Slope Alignment)
+        showSlope = EditorGUILayout.Foldout(showSlope, "⛰️ 지형 굴곡 및 경사각 설정 (Terrain & Slope)", true);
+        if (showSlope)
+        {
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            if (alignToSlope != null)
+            {
+                EditorGUILayout.PropertyField(alignToSlope, new GUIContent("경사면 몸체 기울기 반영 (옵션 B)", 
+                    "• 체크(V - 옵션 B): 언덕이나 경사면의 기울기(Normal)에 맞춰 유닛의 몸체가 앞뒤/좌우로 기울어집니다. (전차, 공성 병기 권장)\n• 해제(□ - 옵션 A): 지면 고도(Y)는 완벽히 밀착하되 몸체는 중력 수직(하늘)을 유지합니다. (보병/궁병 군단 표준 및 최고 성능 권장)"));
+            }
+
+            if (groundYOffset != null)
+            {
+                EditorGUILayout.PropertyField(groundYOffset, new GUIContent("지면 밀착 높이 오프셋 (m)", 
+                    "지형 표면으로부터 유닛 중심의 Y축 띄움 거리입니다. (기본: 0.39m = 높이 0.78m 큐브의 절반)"));
+            }
+
+            bool isB = alignToSlope != null && alignToSlope.boolValue;
+            if (isB)
+            {
+                EditorGUILayout.HelpBox("📐 [현재 모드: 옵션 B - 지형 경사각 반영]\n지형의 표면 법선(Normal)에 맞춰 몸체가 기울어집니다.", MessageType.Info);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox("🪖 [현재 모드: 옵션 A - 수직 자세 유지]\n지면 높이를 따라 이동하되, 몸체는 중력 반대 방향으로 똑바로 서 있습니다. (군단 RTS 표준 & 초고속 성능)", MessageType.Info);
+            }
 
             EditorGUILayout.EndVertical();
             EditorGUILayout.Space(4);
@@ -720,5 +821,147 @@ public class UnitEditor : Editor
         EditorGUILayout.LabelField($"🏃 기동성: 제식 {unit.walkSpeed:F1}m/s | 구보 {unit.runSpeed:F1}m/s | 돌격 {unit.chargeSpeed:F1}m/s | ⚖️ 질량: {unit.mass:F0}kg");
 
         EditorGUILayout.EndVertical();
+    }
+
+    private void CreateOrAttachLaunchPoint(Unit unit)
+    {
+        // 1. 이미 자식 중에 LaunchPoint가 존재하는지 먼저 확인
+        Transform existing = unit.transform.Find("LaunchPoint");
+        if (existing != null)
+        {
+            Undo.RecordObject(unit, "Bind Existing LaunchPoint");
+            unit.launchPoint = existing;
+            if (launchPoint != null) launchPoint.objectReferenceValue = existing;
+            serializedObject.ApplyModifiedProperties();
+            EditorUtility.SetDirty(unit);
+            return;
+        }
+
+        // 2. 프로젝트 뷰의 프리팹 에셋 파일(Persistent Asset)인 경우
+        if (EditorUtility.IsPersistent(unit.gameObject))
+        {
+            string assetPath = AssetDatabase.GetAssetPath(unit.gameObject);
+            GameObject contentsRoot = PrefabUtility.LoadPrefabContents(assetPath);
+            Unit rootUnit = contentsRoot.GetComponent<Unit>();
+
+            Transform p = contentsRoot.transform.Find("LaunchPoint");
+            if (p == null)
+            {
+                GameObject newPoint = new GameObject("LaunchPoint");
+                newPoint.transform.SetParent(contentsRoot.transform, false);
+                newPoint.transform.localPosition = rootUnit.launchOffset;
+                newPoint.transform.localRotation = Quaternion.identity;
+                newPoint.transform.localScale = Vector3.one;
+                rootUnit.launchPoint = newPoint.transform;
+            }
+            else
+            {
+                rootUnit.launchPoint = p;
+            }
+
+            PrefabUtility.SaveAsPrefabAsset(contentsRoot, assetPath);
+            PrefabUtility.UnloadPrefabContents(contentsRoot);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+        else
+        {
+            // 3. 프리팹 스테이지(Prefab Stage) 또는 씬(Scene) 인스턴스인 경우
+            GameObject newPoint = new GameObject("LaunchPoint");
+            Undo.RegisterCreatedObjectUndo(newPoint, "Create LaunchPoint Object");
+            Undo.SetTransformParent(newPoint.transform, unit.transform, "Set LaunchPoint Parent");
+            newPoint.transform.localPosition = unit.launchOffset;
+            newPoint.transform.localRotation = Quaternion.identity;
+            newPoint.transform.localScale = Vector3.one;
+
+            Undo.RecordObject(unit, "Assign LaunchPoint");
+            unit.launchPoint = newPoint.transform;
+            if (launchPoint != null) launchPoint.objectReferenceValue = newPoint.transform;
+            serializedObject.ApplyModifiedProperties();
+            EditorUtility.SetDirty(unit);
+
+            UnityEditor.SceneManagement.PrefabStage stage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+            if (stage != null)
+            {
+                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(stage.scene);
+            }
+        }
+    }
+
+    private void ResetLaunchPointToDefault(Unit unit)
+    {
+        Vector3 defaultOffset = new Vector3(0.25f, 0.15f, 0.45f);
+        Undo.RecordObject(unit, "Reset Launch Offset to 0.5 Scale Default");
+        unit.launchOffset = defaultOffset;
+        if (launchOffset != null) launchOffset.vector3Value = defaultOffset;
+
+        if (unit.launchPoint != null)
+        {
+            Undo.RecordObject(unit.launchPoint, "Reset Launch Point Transform");
+            unit.launchPoint.localPosition = defaultOffset;
+            unit.launchPoint.localRotation = Quaternion.identity;
+            unit.launchPoint.localScale = Vector3.one;
+            EditorUtility.SetDirty(unit.launchPoint);
+        }
+
+        serializedObject.ApplyModifiedProperties();
+        EditorUtility.SetDirty(unit);
+
+        UnityEditor.SceneManagement.PrefabStage stage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+        if (stage != null)
+        {
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(stage.scene);
+        }
+    }
+
+    private void OnSceneGUI()
+    {
+        Unit unit = (Unit)target;
+        if (unit == null || !unit.isRangedUnit) return;
+
+        // 🎯 씬 뷰 발사 위치 시각화 및 3D 포지션 핸들 조작
+        Vector3 worldLaunchPos = unit.GetWorldLaunchPosition();
+
+        // 1. 발사점 Cyan 구체 기즈모 표시 및 유닛 중심 연결 점선
+        Handles.color = new Color(0f, 0.9f, 1f, 0.9f);
+        Handles.SphereHandleCap(0, worldLaunchPos, Quaternion.identity, 0.08f, EventType.Repaint);
+        Handles.color = new Color(0f, 0.7f, 1f, 0.5f);
+        Handles.DrawDottedLine(unit.transform.position, worldLaunchPos, 2.5f);
+        Handles.Label(worldLaunchPos + Vector3.up * 0.06f, "🎯 발사점 (Muzzle)");
+
+        // 2. 씬 뷰 마우스 드래그 3D 포지션 핸들 (유닛 스케일 0.5 역보정)
+        EditorGUI.BeginChangeCheck();
+        Vector3 newWorldPos = Handles.PositionHandle(worldLaunchPos, unit.transform.rotation);
+        if (EditorGUI.EndChangeCheck())
+        {
+            Undo.RecordObject(unit, "Move Launch Point Handle");
+            Vector3 diff = Quaternion.Inverse(unit.transform.rotation) * (newWorldPos - unit.transform.position);
+            Vector3 unitScale = unit.transform.localScale;
+            Vector3 newLocalOffset = new Vector3(
+                Mathf.Abs(unitScale.x) > 0.001f ? diff.x / unitScale.x : diff.x,
+                Mathf.Abs(unitScale.y) > 0.001f ? diff.y / unitScale.y : diff.y,
+                Mathf.Abs(unitScale.z) > 0.001f ? diff.z / unitScale.z : diff.z
+            );
+
+            unit.launchOffset = newLocalOffset;
+            if (launchOffset != null) launchOffset.vector3Value = newLocalOffset;
+
+            if (unit.launchPoint != null)
+            {
+                Undo.RecordObject(unit.launchPoint, "Move Launch Point Handle");
+                unit.launchPoint.localPosition = newLocalOffset;
+                unit.launchPoint.localScale = Vector3.one;
+                EditorUtility.SetDirty(unit.launchPoint);
+            }
+
+            serializedObject.ApplyModifiedProperties();
+            EditorUtility.SetDirty(unit);
+
+            UnityEditor.SceneManagement.PrefabStage stage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+            if (stage != null)
+            {
+                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(stage.scene);
+            }
+        }
     }
 }

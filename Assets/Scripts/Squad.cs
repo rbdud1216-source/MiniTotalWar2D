@@ -36,6 +36,10 @@ public class Squad : MonoBehaviour
     public bool isPlayer = true;
     [Tooltip("부대의 병과 및 전술 역할 (보병, 창병, 궁병, 기병 등)")]
     public UnitType unitType = UnitType.MeleeInfantry;
+    [Tooltip("부대의 투사체 궤적 모드 (HighArc: 포물선 곡사, Flat: 직사)")]
+    public TrajectoryMode trajectoryMode = TrajectoryMode.HighArc;
+    [Tooltip("부대의 기본 원거리 유효 사거리")]
+    public float rangedAttackRange = 150f;
 
     /// <summary>
     /// 부대가 원거리(궁병) 병과인지 여부를 반환합니다.
@@ -44,9 +48,106 @@ public class Squad : MonoBehaviour
     {
         get
         {
-            if (unitType == UnitType.Archer) return true;
+            if (unitType == UnitType.Archer || unitType == UnitType.Gunner) return true;
             if (members != null && members.Count > 0 && members[0] != null && members[0].isRangedUnit) return true;
             return false;
+        }
+    }
+
+    /// <summary>
+    /// 원거리 부대에 잔여 탄약(화살/투사체)이 남아있는지 여부를 반환합니다.
+    /// (원거리 부대가 아니면 항상 false 반환, 화살을 모두 쏘면 false가 되어 근접 보병으로 전환)
+    /// </summary>
+    public bool HasAmmo
+    {
+        get
+        {
+            if (!IsRangedSquad) return false;
+            return GetCurrentTotalAmmo() > 0;
+        }
+    }
+
+    /// <summary>
+    /// 현재 부대의 실시간 잔여 화살(투사체) 총량을 반환합니다.
+    /// (하이브리드 GameObject 모드 및 Pure ECS 모드 듀얼 완벽 지원)
+    /// </summary>
+    public int GetCurrentTotalAmmo()
+    {
+        if (!IsRangedSquad) return 0;
+
+        bool pureEcsMode = isPureECS || (BattleManager.Instance != null && BattleManager.Instance.usePureECS);
+        if (pureEcsMode)
+        {
+            if (SpatialHashGridSystem.TryGetSquadAmmo(GetInstanceID(), out int currentAmmo, out _))
+            {
+                return currentAmmo;
+            }
+            // 🛡️ ECS 집계 시스템 가동 전 초기 프레임 탄약 안전 보장 (돌격 오인 방지)
+            if (!hasEcsInitialized && initialUnitCount > 0)
+            {
+                return initialUnitCount * 25;
+            }
+            return 0;
+        }
+
+        if (members == null || members.Count == 0) return 0;
+        int total = 0;
+        for (int i = 0; i < members.Count; i++)
+        {
+            if (members[i] != null && members[i].currentHp > 0)
+            {
+                total += members[i].currentAmmo;
+            }
+        }
+        return total;
+    }
+
+    /// <summary>
+    /// 부대의 최대 화살(투사체) 총량을 반환합니다.
+    /// (생존 병력 기준 최대 탄약 용량)
+    /// </summary>
+    public int GetMaxTotalAmmo()
+    {
+        if (!IsRangedSquad) return 0;
+
+        bool pureEcsMode = isPureECS || (BattleManager.Instance != null && BattleManager.Instance.usePureECS);
+        if (pureEcsMode)
+        {
+            if (SpatialHashGridSystem.TryGetSquadAmmo(GetInstanceID(), out _, out int maxAmmo))
+            {
+                return maxAmmo;
+            }
+            // 🛡️ ECS 집계 시스템 가동 전 초기 프레임 최대 탄약 안전 보장
+            if (!hasEcsInitialized && initialUnitCount > 0)
+            {
+                return initialUnitCount * 25;
+            }
+            return 0;
+        }
+
+        if (members == null || members.Count == 0) return 0;
+        int total = 0;
+        for (int i = 0; i < members.Count; i++)
+        {
+            if (members[i] != null && members[i].currentHp > 0)
+            {
+                total += members[i].maxAmmo;
+            }
+        }
+        return total;
+    }
+
+    /// <summary>
+    /// 현재 부대의 실시간 잔여 탄약 비율 (0.0f ~ 1.0f)을 반환합니다.
+    /// </summary>
+    public float AmmoRatio
+    {
+        get
+        {
+            if (!IsRangedSquad) return 0f;
+            int max = GetMaxTotalAmmo();
+            if (max <= 0) return 0f;
+            return Mathf.Clamp01((float)GetCurrentTotalAmmo() / max);
         }
     }
 
@@ -220,6 +321,7 @@ public class Squad : MonoBehaviour
 
     private Vector3 ecsVisualCenter = Vector3.zero;
     private bool hasEcsVisualCenter = false;
+    private bool hasChargedAfterEmptyAmmo = false;
 
     private void Start()
     {
@@ -307,21 +409,60 @@ public class Squad : MonoBehaviour
 
         if (isMoving || waypointQueue.Count > 0)
         {
-            List<Vector3> points = new List<Vector3> { transform.position + Vector3.up * 0.1f };
-            if (isMoving) points.Add(moveDestination + Vector3.up * 0.1f);
+            List<Vector3> points = new List<Vector3>();
+            Vector3 currentPos = GetVisualCenter();
 
-            foreach (var wp in waypointQueue)
+            if (isMoving)
             {
-                points.Add(wp.destination + Vector3.up * 0.1f);
+                AddTerrainConformingSegment(points, currentPos, moveDestination, 1.0f);
             }
 
-            pathLineRenderer.positionCount = points.Count;
-            pathLineRenderer.SetPositions(points.ToArray());
-            pathLineRenderer.enabled = true;
+            Vector3 lastDest = isMoving ? moveDestination : currentPos;
+            foreach (var wp in waypointQueue)
+            {
+                AddTerrainConformingSegment(points, lastDest, wp.destination, 1.0f);
+                lastDest = wp.destination;
+            }
+
+            if (points.Count >= 2)
+            {
+                pathLineRenderer.positionCount = points.Count;
+                pathLineRenderer.SetPositions(points.ToArray());
+                pathLineRenderer.enabled = true;
+            }
+            else
+            {
+                pathLineRenderer.enabled = false;
+            }
         }
         else
         {
             pathLineRenderer.enabled = false;
+        }
+    }
+
+    /// <summary>
+    /// 두 점 start와 end 사이를 1m 단위로 분할하여 지형 높이를 샘플링함으로써,
+    /// 언덕이나 굴곡 지형에서도 이동 경로선이 땅속에 파묻히지 않고 지표면 굴곡을 따라 완벽히 밀착 표시되도록 합니다.
+    /// </summary>
+    private void AddTerrainConformingSegment(List<Vector3> points, Vector3 start, Vector3 end, float stepDistance = 1.0f)
+    {
+        float dist = Vector2.Distance(new Vector2(start.x, start.z), new Vector2(end.x, end.z));
+        int segments = Mathf.Clamp(Mathf.CeilToInt(dist / Mathf.Max(0.5f, stepDistance)), 1, 80);
+
+        if (points.Count == 0)
+        {
+            Vector3 p0 = start;
+            p0.y = TerrainHeightManager.SampleHeightFast(p0.x, p0.z) + 0.15f;
+            points.Add(p0);
+        }
+
+        for (int i = 1; i <= segments; i++)
+        {
+            float t = (float)i / segments;
+            Vector3 pt = Vector3.Lerp(start, end, t);
+            pt.y = TerrainHeightManager.SampleHeightFast(pt.x, pt.z) + 0.15f;
+            points.Add(pt);
         }
     }
 
@@ -951,7 +1092,12 @@ public class Squad : MonoBehaviour
     /// </summary>
     public void ApplyFormationSettingsFromUnitPrefab(Unit unitPrefab)
     {
-        if (unitPrefab == null || !unitPrefab.overrideSquadFormationDefaults) return;
+        if (unitPrefab == null) return;
+
+        trajectoryMode = unitPrefab.trajectoryMode;
+        if (unitPrefab.rangedAttackRange > 10f) rangedAttackRange = unitPrefab.rangedAttackRange;
+
+        if (!unitPrefab.overrideSquadFormationDefaults) return;
 
         if (unitPrefab.recommendedSquadSpacingX > 0.1f)
         {
@@ -975,9 +1121,9 @@ public class Squad : MonoBehaviour
             sequentialRowDelay = unitPrefab.recommendedSequentialRowDelay;
 
         // 원거리 유닛 여부 및 병과 자동 동기화
-        if (unitPrefab.isRangedUnit && unitType != UnitType.Archer)
+        if (unitPrefab.isRangedUnit && unitType != UnitType.Archer && unitType != UnitType.Gunner)
         {
-            unitType = UnitType.Archer;
+            unitType = unitPrefab.unitType != UnitType.MeleeInfantry ? unitPrefab.unitType : UnitType.Archer;
         }
 
         // 시뮬레이션 버퍼 즉시 갱신
@@ -1109,7 +1255,7 @@ public class Squad : MonoBehaviour
         ApplyFormationAndStanceModifiers();
     }
 
-    public void CommandMoveWithFormation(Vector3 destination, Quaternion rotation, int columns = -1, bool forceSort = false, UnitCommandState cmdState = UnitCommandState.Move)
+    public void CommandMoveWithFormation(Vector3 destination, Quaternion rotation, int columns = -1, bool forceSort = false, UnitCommandState cmdState = UnitCommandState.Move, bool preserveTarget = false)
     {
         int targetCols = (columns > 0) ? columns : currentColumns;
         bool colChanged = (targetCols != currentColumns);
@@ -1130,7 +1276,7 @@ public class Squad : MonoBehaviour
         targetSquadRotation = rotation;
         currentCommandState = cmdState;
 
-        if (cmdState == UnitCommandState.AttackMove)
+        if (cmdState == UnitCommandState.AttackMove || preserveTarget)
         {
             hasAttackMoveDestination = true;
             originalAttackMoveDestination = destination;
@@ -1178,7 +1324,7 @@ public class Squad : MonoBehaviour
 
         if (members.Count == 0 && initialUnitCount > 0)
         {
-            UpdateECSEntitiesTarget(destination, rotation, currentColumns, cmdState);
+            UpdateECSEntitiesTarget(destination, rotation, currentColumns, cmdState, preserveTarget);
             return;
         }
 
@@ -1190,7 +1336,7 @@ public class Squad : MonoBehaviour
         formationAssignmentCoroutine = StartCoroutine(AssignFormationPositionsRoutine(validMembers, targetSquadRotation, isLargeTurn, shouldSpatialSort));
     }
 
-    private void UpdateECSEntitiesTarget(Vector3 destination, Quaternion rotation, int cols, UnitCommandState cmdState)
+    private void UpdateECSEntitiesTarget(Vector3 destination, Quaternion rotation, int cols, UnitCommandState cmdState, bool preserveTarget = false)
     {
         moveDestination = destination;
         targetSquadRotation = rotation;
@@ -1318,17 +1464,28 @@ public class Squad : MonoBehaviour
                             tag.Row = slot.row;
                             tag.Col = slot.col;
 
-                            mov.TargetPosition = destination + (rotation * slot.localOffset);
+                            Vector3 targetPos = destination + (rotation * slot.localOffset);
+                            targetPos.y = TerrainHeightManager.SampleHeightFast(targetPos.x, targetPos.z) + (mov.GroundYOffset > 0.01f ? mov.GroundYOffset : 0.39f);
+                            mov.TargetPosition = targetPos;
                             mov.TargetRotation = rotation * slot.localRotation;
 
-                            // [수정] AttackMove 시 돌격 속도 4.8m/s 강제 적용 (targetSpeed는 도보/달리기 속도이며 돌격 속도가 아님)
+                            // [수정] AttackMove 시 돌격 속도 4.8m/s 적용 (단, 궁병이 탄약이 남아 전술 진격 중이면 제식/구보 속도 유지)
                             if (cmdState == UnitCommandState.AttackMove)
-                                mov.MoveSpeed = 4.8f;
+                                mov.MoveSpeed = (IsRangedSquad && HasAmmo) ? (isRunning ? runSpeed : walkSpeed) : 4.8f;
                             else
                                 mov.MoveSpeed = targetSpeed > 0 ? targetSpeed : 1.0f;
 
                             combat.CurrentState = (int)cmdState;
                             // [수정] TargetSquadId는 기존 값 유지 (SyncTargetSquadIdToSimulations에서 이미 주입됨)
+
+                            if ((cmdState == UnitCommandState.Move || cmdState == UnitCommandState.Idle) && !preserveTarget)
+                            {
+                                combat.EngagementStartTime = 0f;
+                                combat.TargetEntity = Unity.Entities.Entity.Null;
+                                combat.CachedEnemyPos = Unity.Mathematics.float3.zero;
+                                combat.ChargeImpactReady = 0;
+                                combat.KnockbackVelocity = Unity.Mathematics.float3.zero;
+                            }
 
                             em.SetComponentData(ent, tag);
                             em.SetComponentData(ent, mov);
@@ -1355,19 +1512,21 @@ public class Squad : MonoBehaviour
                     tag.Row = slot.row;
                     tag.Col = slot.col;
 
-                    mov.TargetPosition = destination + (rotation * slot.localOffset);
+                    Vector3 targetPos = destination + (rotation * slot.localOffset);
+                    targetPos.y = TerrainHeightManager.SampleHeightFast(targetPos.x, targetPos.z) + (mov.GroundYOffset > 0.01f ? mov.GroundYOffset : 0.39f);
+                    mov.TargetPosition = targetPos;
                     mov.TargetRotation = rotation * slot.localRotation;
 
-                    // [수정] AttackMove 시 돌격 속도 4.8m/s 강제 적용 (targetSpeed는 도보/달리기 속도이며 돌격 속도가 아님)
+                    // [수정] AttackMove 시 돌격 속도 4.8m/s 적용 (단, 궁병이 탄약이 남아 전술 진격 중이면 제식/구보 속도 유지)
                     if (cmdState == UnitCommandState.AttackMove)
-                        mov.MoveSpeed = 4.8f;
+                        mov.MoveSpeed = (IsRangedSquad && HasAmmo) ? (isRunning ? runSpeed : walkSpeed) : 4.8f;
                     else
                         mov.MoveSpeed = targetSpeed > 0 ? targetSpeed : 1.0f;
 
                     combat.CurrentState = (int)cmdState;
                     // [수정] TargetSquadId는 기존 값 유지 (SyncTargetSquadIdToSimulations에서 이미 주입됨)
 
-                    if (cmdState == UnitCommandState.Move || cmdState == UnitCommandState.Idle)
+                    if ((cmdState == UnitCommandState.Move || cmdState == UnitCommandState.Idle) && !preserveTarget)
                     {
                         combat.EngagementStartTime = 0f;
                         combat.TargetEntity = Unity.Entities.Entity.Null;
@@ -1448,7 +1607,9 @@ public class Squad : MonoBehaviour
                 tag.Row = slot.row;
                 tag.Col = slot.col;
 
-                mov.TargetPosition = anchorCenter + (rot * slot.localOffset);
+                Vector3 targetPos = anchorCenter + (rot * slot.localOffset);
+                targetPos.y = TerrainHeightManager.SampleHeightFast(targetPos.x, targetPos.z) + (mov.GroundYOffset > 0.01f ? mov.GroundYOffset : 0.39f);
+                mov.TargetPosition = targetPos;
                 mov.TargetRotation = rot * slot.localRotation;
                 mov.MoveSpeed = targetSpeed > 0 ? targetSpeed : 1.0f;
 
@@ -1495,6 +1656,7 @@ public class Squad : MonoBehaviour
                 var slot = (i < slots.Count) ? slots[i] : default;
                 Vector3 localOffset = (i < slots.Count) ? slot.localOffset : Vector3.zero;
                 Vector3 inPlaceSlotPos = actualCenter + (transform.rotation * localOffset);
+                inPlaceSlotPos.y = TerrainHeightManager.SampleHeightFast(inPlaceSlotPos.x, inPlaceSlotPos.z) + (member.groundYOffset > 0.01f ? member.groundYOffset : 0.39f);
 
                 member.fixedTargetPos = inPlaceSlotPos;
                 member.formationOffset = localOffset;
@@ -1660,6 +1822,7 @@ public class Squad : MonoBehaviour
                         u.SetGridPosition(slot.row, slot.col);
 
                         Vector3 targetWorldPos = moveDestination + (targetRotation * slot.localOffset);
+                        targetWorldPos.y = TerrainHeightManager.SampleHeightFast(targetWorldPos.x, targetWorldPos.z) + (u.groundYOffset > 0.01f ? u.groundYOffset : 0.39f);
                         Vector3 localOffset = slot.localOffset;
 
                         targetPosMap[u] = targetWorldPos;
@@ -1685,6 +1848,7 @@ public class Squad : MonoBehaviour
                 var slot = (i < slots.Count) ? slots[i] : default;
                 Vector3 localOffset = (i < slots.Count) ? slot.localOffset : Vector3.zero;
                 Vector3 targetWorldPos = moveDestination + (targetRotation * localOffset);
+                targetWorldPos.y = TerrainHeightManager.SampleHeightFast(targetWorldPos.x, targetWorldPos.z) + (member.groundYOffset > 0.01f ? member.groundYOffset : 0.39f);
 
                 targetPosMap[member] = targetWorldPos;
                 localOffsetMap[member] = localOffset;
@@ -1808,7 +1972,19 @@ public class Squad : MonoBehaviour
     private bool wasEngagedInCombat = false;
     private float postCombatReformTimer = 0f;
 
-    public Squad currentTargetSquad = null;
+    [SerializeField] private Squad _currentTargetSquad = null;
+    public Squad currentTargetSquad
+    {
+        get => _currentTargetSquad;
+        set
+        {
+            if (_currentTargetSquad != null && value == null)
+            {
+                Debug.LogError($"[TARGET NULL DETECTED] Squad: {name}, OldTarget: {_currentTargetSquad.name}\n{System.Environment.StackTrace}");
+            }
+            _currentTargetSquad = value;
+        }
+    }
     private float targetTrackTimer = 0f;
     private Vector3 lastTrackedTargetPos = Vector3.zero;
     private float lastTrackedEnemyWidth = 0f;
@@ -1869,10 +2045,16 @@ public class Squad : MonoBehaviour
     {
         if (enemySquad == null || enemySquad.MemberCount <= 0) return;
 
+        if (currentTargetSquad != enemySquad)
+        {
+            hasChargedAfterEmptyAmmo = false;
+        }
+
         currentTargetSquad = enemySquad;
 
-        // 🏹 [원거리 궁병 부대 전술 분기]: 적진으로 뛰어들지 않고 사거리 유지 일제사격 태세 발동!
-        if (IsRangedSquad)
+        // 🏹 [원거리 궁병 부대 전술 분기]: 화살이 남아있는 경우 사거리 유지 일제사격 태세 발동!
+        // (화살을 모두 소진한 경우 무기가 바닥났으므로 일반 근접 보병처럼 즉시 돌격 및 백병전 돌입)
+        if (IsRangedSquad && HasAmmo)
         {
             CommandRangedAttackSquad(enemySquad);
             return;
@@ -1919,8 +2101,186 @@ public class Squad : MonoBehaviour
     }
 
     /// <summary>
-    /// 🏹 [원거리 궁병 부대전술] 목표 적 부대를 향해 유효 사거리(150m)를 유지하며 정면 일제사격을 수행합니다.
-    /// 적이 사거리 밖이면 유효 사거리 내로 전술 전진하고, 사거리 안이면 제자리에 멈춰 서서 집중 사격을 퍼붓습니다.
+    /// <summary>
+    /// 🏹 [사선 차폐 아군 부대 검사]
+    /// 내 부대와 적 부대 사이의 직선 사선을 가로막고 있는 다른 아군 부대를 탐색합니다.
+    /// </summary>
+    private bool CheckAllyObstruction(Vector3 myPos, Vector3 targetPos, out Squad blockingAlly, out float allyRadius)
+    {
+        blockingAlly = null;
+        allyRadius = 0f;
+
+        if (BattleManager.Instance == null) return false;
+
+        var allSquads = BattleManager.Instance.GetAllSquads();
+        if (allSquads == null) return false;
+
+        Vector3 rayDir = targetPos - myPos;
+        rayDir.y = 0f;
+        float distToTarget = rayDir.magnitude;
+        if (distToTarget < 1f) return false;
+        rayDir.Normalize();
+
+        for (int i = 0; i < allSquads.Count; i++)
+        {
+            Squad ally = allSquads[i];
+            if (ally == null || ally == this || ally.isPlayer != this.isPlayer || ally.MemberCount <= 0) continue;
+
+            Vector3 allyPos = ally.GetVisualCenter();
+            Vector3 toAlly = allyPos - myPos;
+            toAlly.y = 0f;
+
+            float projDist = Vector3.Dot(toAlly, rayDir);
+            // 아군 부대가 나와 적 사이에 위치하는지 검사 (3m 전방 ~ 적 부대 5m 전방)
+            if (projDist > 3f && projDist < distToTarget - 5f)
+            {
+                Vector3 closestPointOnRay = myPos + rayDir * projDist;
+                float lateralDist = Vector3.Distance(allyPos, closestPointOnRay);
+
+                // 아군 부대의 대형 반경 계산 (너비의 절반 + 안전 여유 2m)
+                float approxRadius = Mathf.Max(4f, ally.currentColumns * ally.spacing * 0.5f + 2f);
+                if (lateralDist < approxRadius)
+                {
+                    blockingAlly = ally;
+                    allyRadius = approxRadius;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 👁️ [적 부대 종합 가시율(Visibility Ratio) 평가]
+    /// 적 부대의 5개 전술 지점(중앙, 좌익, 우익, 전열, 후열)과
+    /// 아군 부대의 3개 관측점(중앙, 좌익, 우익) 사이의 총 15개 시선(LoS)을 샘플링하여,
+    /// 언덕 지형에 가려지지 않고 실질적으로 직사 사격이 가능한 적 부대 노출 비율(0.0 ~ 1.0)을 산출합니다.
+    /// </summary>
+    public float CalculateEnemySquadVisibility(Squad enemySquad, Vector3 observerCenter)
+    {
+        if (enemySquad == null || enemySquad.MemberCount <= 0) return 0f;
+
+        Vector3 enemyCenter = enemySquad.GetVisualCenter();
+        Vector3 enemyFwd = enemySquad.transform.forward;
+        Vector3 enemyRight = enemySquad.transform.right;
+        float enemyHalfWidth = Mathf.Max(2.0f, enemySquad.currentColumns * enemySquad.spacing * 0.5f);
+        float enemyHalfDepth = Mathf.Max(1.5f, enemySquad.totalGridRows * enemySquad.spacing * 0.5f);
+
+        // 적 부대 5개 핵심 표적 지점
+        Vector3[] targetPoints = new Vector3[5]
+        {
+            enemyCenter,
+            enemyCenter - enemyRight * enemyHalfWidth,
+            enemyCenter + enemyRight * enemyHalfWidth,
+            enemyCenter + enemyFwd * enemyHalfDepth,
+            enemyCenter - enemyFwd * enemyHalfDepth
+        };
+
+        // 아군 부대 3개 관측점 (중앙, 좌익, 우익)
+        Vector3 myRight = transform.right;
+        float myHalfWidth = Mathf.Max(2.0f, currentColumns * spacing * 0.5f);
+        Vector3[] observerPoints = new Vector3[3]
+        {
+            observerCenter,
+            observerCenter - myRight * myHalfWidth,
+            observerCenter + myRight * myHalfWidth
+        };
+
+        int totalRays = 0;
+        int clearRays = 0;
+
+        for (int o = 0; o < observerPoints.Length; o++)
+        {
+            Vector3 obs = observerPoints[o];
+            obs.y = TerrainHeightManager.SampleHeightFast(obs.x, obs.z);
+
+            for (int t = 0; t < targetPoints.Length; t++)
+            {
+                Vector3 tgt = targetPoints[t];
+                tgt.y = TerrainHeightManager.SampleHeightFast(tgt.x, tgt.z);
+
+                totalRays++;
+                if (TerrainHeightManager.CheckLineOfSightFast(obs, tgt, 0.2f, 0.2f, 6))
+                {
+                    clearRays++;
+                }
+            }
+        }
+
+        return (totalRays > 0) ? ((float)clearRays / totalRays) : 0f;
+    }
+
+    /// <summary>
+    /// 🏹 [직사 전용 사선 확보 기동 (Maneuver to Shoot)]
+    /// 언덕 능선(Ridge Step Search) 또는 아군 차폐 측면 우회(Flank Clearance)를 통해
+    /// 적을 향한 유효 직사 사선(가시율 35% 이상)이 확보되는 최적의 기동 목적지와 횡대 열 수를 산출합니다.
+    /// </summary>
+    private Vector3 CalculateDirectFireManeuverPosition(Vector3 myPos, Squad enemySquad, Vector3 enemyCenter, Vector3 dirToEnemy, float maxRange, out int wideColumns)
+    {
+        // 횡대 전개: 직사 부대는 종심이 깊으면 뒷열이 못 쏘므로, 2열 이하가 되도록 횡대 폭을 넓힘
+        wideColumns = Mathf.Max(currentColumns, Mathf.CeilToInt(MemberCount / 2f));
+
+        // 1. 아군 부대 차폐 우회 (Flank Clearance)
+        if (CheckAllyObstruction(myPos, enemyCenter, out Squad blockingAlly, out float allyRadius))
+        {
+            Vector3 allyCenter = blockingAlly.GetVisualCenter();
+            Vector3 rightDir = Quaternion.Euler(0, 90, 0) * dirToEnemy.normalized;
+
+            // 좌측 우회 지점과 우측 우회 지점 후보 산출
+            float offsetDist = allyRadius + (wideColumns * spacing * 0.5f) + 3f;
+            Vector3 leftCandidate = allyCenter - rightDir * offsetDist;
+            Vector3 rightCandidate = allyCenter + rightDir * offsetDist;
+
+            // 지형 높이 보정
+            leftCandidate.y = TerrainHeightManager.SampleHeightFast(leftCandidate.x, leftCandidate.z);
+            rightCandidate.y = TerrainHeightManager.SampleHeightFast(rightCandidate.x, rightCandidate.z);
+
+            // 각 후보 지점에서의 가시율 확인
+            float leftVis = CalculateEnemySquadVisibility(enemySquad, leftCandidate);
+            float rightVis = CalculateEnemySquadVisibility(enemySquad, rightCandidate);
+
+            float distLeft = Vector3.Distance(myPos, leftCandidate);
+            float distRight = Vector3.Distance(myPos, rightCandidate);
+
+            if (leftVis >= 0.35f && rightVis >= 0.35f)
+            {
+                return distLeft <= distRight ? leftCandidate : rightCandidate;
+            }
+            if (leftVis >= 0.35f) return leftCandidate;
+            if (rightVis >= 0.35f) return rightCandidate;
+
+            return leftVis >= rightVis ? leftCandidate : rightCandidate;
+        }
+
+        // 2. 언덕 능선/정상 탐색 (Ridge Step Search)
+        // 현재 위치에서 적 방향으로 3m 간격으로 전진하며 적 가시율이 35% 이상 확보되는 능선 마루 지점을 찾음
+        float distToEnemy = dirToEnemy.magnitude;
+        float maxSearchDist = Mathf.Min(distToEnemy - 15f, maxRange * 0.75f);
+
+        for (float step = 3f; step <= maxSearchDist; step += 3f)
+        {
+            Vector3 stepPos = myPos + dirToEnemy.normalized * step;
+            stepPos.y = TerrainHeightManager.SampleHeightFast(stepPos.x, stepPos.z);
+
+            float candidateVis = CalculateEnemySquadVisibility(enemySquad, stepPos);
+            if (candidateVis >= 0.35f)
+            {
+                // 적 부대 가시율 35% 이상 확보되는 능선 마루 발견!
+                return stepPos;
+            }
+        }
+
+        // 끝까지 안 트인다면 사거리의 50% 지점으로 전술 전진
+        Vector3 fallbackPos = enemyCenter - (dirToEnemy.normalized * (maxRange * 0.5f));
+        fallbackPos.y = TerrainHeightManager.SampleHeightFast(fallbackPos.x, fallbackPos.z);
+        return fallbackPos;
+    }
+
+    /// <summary>
+    /// 🏹 [원거리 궁병/직사 부대전술] 목표 적 부대를 향해 유효 사거리를 유지하며 정면 일제사격을 수행합니다.
+    /// 곡사 무기(활): 언덕 너머/아군 머리 위로 고각 사격이 가능하므로 제자리 사격 엄수.
+    /// 직사 무기(총): 적 가시율 35% 미만 차폐 시 능선/측면 사선 확보 기동(Maneuver to Shoot) 및 횡대 전개 수행.
     /// </summary>
     public void CommandRangedAttackSquad(Squad enemySquad)
     {
@@ -1941,32 +2301,64 @@ public class Squad : MonoBehaviour
 
         SyncTargetSquadIdToSimulations(enemySquad.GetInstanceID());
 
-        // 궁병 유효 사거리 (기본 150m, 적정 교전 거리 약 100m)
-        float maxRange = 150f;
-        if (members != null && members.Count > 0 && members[0] != null && members[0].rangedAttackRange > 10f)
+        // 원거리 유닛 유효 사거리 및 탄도 궤적 모드(직사 vs 곡사) 조회
+        float maxRange = rangedAttackRange > 10f ? rangedAttackRange : 150f;
+        TrajectoryMode trajMode = trajectoryMode;
+        if (members != null && members.Count > 0 && members[0] != null)
         {
-            maxRange = members[0].rangedAttackRange;
+            if (members[0].rangedAttackRange > 10f) maxRange = members[0].rangedAttackRange;
+            trajMode = members[0].trajectoryMode;
         }
 
-        float optimalEngageDist = maxRange * 0.70f; // 약 105m 거리에서 사격 포지션 유지
+        float optimalEngageDist = maxRange * 0.70f;
 
-        if (distToEnemy > maxRange * 0.90f)
+        // 🏹 [곡사 무기: 활/투석기]
+        if (trajMode == TrajectoryMode.HighArc)
         {
-            // 🚶‍♂️ 사거리 밖(> 135m): 적을 향해 사격 최적 거리까지 정규 대형으로 전술 전진 (돌격하지 않고 도보 전진)
-            Vector3 targetStandPos = enemyCenter - (dirToEnemy.normalized * optimalEngageDist);
-            lastTrackedTargetPos = targetStandPos;
-            CommandMoveWithFormation(targetStandPos, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.Move);
+            // 사거리 밖이면 유효 사거리 내로 전술 전진, 사거리 안이면 언덕/아군 불문 제자리 고각 사격!
+            if (distToEnemy > maxRange * 0.90f)
+            {
+                Vector3 targetStandPos = enemyCenter - (dirToEnemy.normalized * optimalEngageDist);
+                targetStandPos.y = TerrainHeightManager.SampleHeightFast(targetStandPos.x, targetStandPos.z);
+                lastTrackedTargetPos = targetStandPos;
+                CommandMoveWithFormation(targetStandPos, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.AttackMove, preserveTarget: true);
+            }
+            else
+            {
+                // 제자리 고각 일제사격 태세
+                lastTrackedTargetPos = myPos;
+                CommandRangedHaltAndFire(faceRot, enemySquad);
+            }
         }
         else
         {
-            // 🎯 사거리 안(<= 135m): 적진으로 무모하게 뛰어들지 않고, 현재 위치에서 제자리에 서서 일제사격 유지!
-            lastTrackedTargetPos = myPos;
-            CommandRangedHaltAndFire(faceRot, enemySquad);
+            // 🔫 [직사 무기: 총병]
+            // 적 부대 종합 가시율(Visibility Ratio) 평가 및 아군 차폐 검사
+            float enemyVis = CalculateEnemySquadVisibility(enemySquad, myPos);
+            bool isBlockedByAlly = CheckAllyObstruction(myPos, enemyCenter, out Squad _, out _);
+
+            // 🚨 적 유닛이 일부만 보이거나(가시율 < 35%) 아군에 막혔거나 사거리 밖이면 사선 확보 기동 단행!
+            bool needsReposition = (distToEnemy > maxRange * 0.90f) || (enemyVis < 0.35f) || isBlockedByAlly;
+
+            if (needsReposition)
+            {
+                // 🚶‍♂️ 사선 확보 기동 (Maneuver to Shoot) 및 횡대 전개
+                Vector3 maneuverPos = CalculateDirectFireManeuverPosition(myPos, enemySquad, enemyCenter, dirToEnemy, maxRange, out int wideColumns);
+                lastTrackedTargetPos = maneuverPos;
+                Debug.Log($"<color=#FFCC00><b>[Squad] 🔫 직사 총병 부대({squadName}) 사선 확보 기동 개시! (적 가시율: {enemyVis * 100f:F0}%, 열수: {wideColumns})</b></color>");
+                CommandMoveWithFormation(maneuverPos, faceRot, wideColumns, forceSort: false, cmdState: UnitCommandState.AttackMove, preserveTarget: true);
+            }
+            else
+            {
+                // 적 부대의 35% 이상이 훤히 보이고 사선이 완벽 확보됨 -> 제자리 사격 유지!
+                lastTrackedTargetPos = myPos;
+                CommandRangedHaltAndFire(faceRot, enemySquad);
+            }
         }
 
         if (currentTargetSquad != enemySquad || !hasActiveEnemyTarget)
         {
-            Debug.Log($"<color=#00FFAA><b>[Squad] 🏹 궁병 부대({squadName})가 적 부대({enemySquad.name})를 목표로 제자리 사격 자세를 취합니다. (거리: {distToEnemy:F1}m, 사거리: {maxRange}m)</b></color>");
+            Debug.Log($"<color=#00FFAA><b>[Squad] 🏹 원거리 부대({squadName})가 적 부대({enemySquad.name}) 공격 태세를 취합니다. (거리: {distToEnemy:F1}m, 사거리: {maxRange}m)</b></color>");
         }
     }
 
@@ -1987,6 +2379,7 @@ public class Squad : MonoBehaviour
         moveDestination = actualCenter;
         targetSquadRotation = faceRot;
         transform.rotation = faceRot;
+        currentCommandState = UnitCommandState.Idle;
 
         currentTargetSquad = enemySquad;
         hasActiveEnemyTarget = (enemySquad != null);
@@ -2007,6 +2400,7 @@ public class Squad : MonoBehaviour
                 var slot = (i < slots.Count) ? slots[i] : default;
                 Vector3 localOffset = (i < slots.Count) ? slot.localOffset : Vector3.zero;
                 Vector3 inPlaceSlotPos = actualCenter + (faceRot * localOffset);
+                inPlaceSlotPos.y = TerrainHeightManager.SampleHeightFast(inPlaceSlotPos.x, inPlaceSlotPos.z) + (member.groundYOffset > 0.01f ? member.groundYOffset : 0.39f);
 
                 member.fixedTargetPos = inPlaceSlotPos;
                 member.formationOffset = localOffset;
@@ -2029,6 +2423,11 @@ public class Squad : MonoBehaviour
                     MiniTotalWar.ECS.SquadECSSimulationBridge.Instance.UpdateEntityTarget(member, inPlaceSlotPos, member.targetRotation, UnitCommandState.Idle);
                 }
             }
+        }
+        else if (initialUnitCount > 0)
+        {
+            // Pure ECS 모드: 제자리 사격 태세로 슬롯 및 상태 정렬 (목표 부대 ID 보존)
+            UpdateECSEntitiesTarget(actualCenter, faceRot, currentColumns, UnitCommandState.Idle, preserveTarget: true);
         }
     }
 
@@ -2125,6 +2524,79 @@ public class Squad : MonoBehaviour
 
         string stateText = fireAtWill ? "<color=#00FFAA><b>[ON - 자동 사격]</b></color>" : "<color=#FF6666><b>[OFF - 즉시 사격 중지 / 화살 절약]</b></color>";
         Debug.Log($"[Squad] 🏹 부대({squadName}) 자유 사격(Fire at Will) -> {stateText}");
+    }
+
+    /// <summary>
+    /// 🏹 [전우 탄약 융통 시스템 (Squadmate Resupply)]
+    /// 사격 유닛의 개인 탄약이 소진되었을 때, 사선이 막혀 탄약이 남아있는 다른 전우의 화살을 건네받아 지속 사격합니다.
+    /// 부대원 전체의 탄약이 진정으로 0발이 되면 false를 반환하고 부대 전체가 일제 돌격으로 전환합니다.
+    /// </summary>
+    public bool TryConsumeAmmoFromSquad(Unit shooter)
+    {
+        if (!IsRangedSquad) return false;
+
+        // 1순위: 사수 본인의 탄약통에 화살이 남아있으면 본인 화살 1발 소비
+        if (shooter != null && shooter.currentAmmo > 0)
+        {
+            shooter.currentAmmo--;
+            return true;
+        }
+
+        // 2순위: 사수 본인의 화살이 소진되었다면, 부대 내 다른 전우 중 화살이 남은 유닛(뒷열 등)의 화살 1발을 전달받아 소비
+        if (members != null && members.Count > 0)
+        {
+            Unit donor = null;
+            int maxDonorAmmo = 0;
+            for (int i = members.Count - 1; i >= 0; i--)
+            {
+                Unit m = members[i];
+                if (m != null && m != shooter && m.currentHp > 0 && m.currentAmmo > maxDonorAmmo)
+                {
+                    donor = m;
+                    maxDonorAmmo = m.currentAmmo;
+                }
+            }
+
+            if (donor != null && donor.currentAmmo > 0)
+            {
+                donor.currentAmmo--;
+                return true;
+            }
+        }
+
+        // 3순위: 부대원 전원의 화살이 0발(완전 고갈)인 경우 -> 전원 일제 돌격 전환!
+        OnSquadAmmoDepleted();
+        return false;
+    }
+
+    /// <summary>
+    /// ⚔️ 부대 총 탄약이 0발이 되었을 때, 모든 병사가 동시에 활을 거두고 칼을 뽑아 일제 돌격을 감행합니다.
+    /// </summary>
+    public void OnSquadAmmoDepleted()
+    {
+        if (hasChargedAfterEmptyAmmo) return;
+        hasChargedAfterEmptyAmmo = true;
+
+        Debug.Log($"<color=#FF9900><b>[Squad] 🏹 {name} 부대 탄약 전량 소진! 전원 주무기 백병전 무장 전환 및 돌격 개시!</b></color>");
+
+        // 1. 모든 멤버의 원거리 상태 해제
+        if (members != null)
+        {
+            for (int i = 0; i < members.Count; i++)
+            {
+                if (members[i] != null)
+                {
+                    members[i].isRangedUnit = false;
+                    members[i].currentAmmo = 0;
+                }
+            }
+        }
+
+        // 2. 만약 목표 적 부대가 있다면 즉시 전군 일제 맞돌격 명령 하달!
+        if (currentTargetSquad != null && currentTargetSquad.MemberCount > 0)
+        {
+            CommandAttackSquad(currentTargetSquad);
+        }
     }
 
     /// <summary>
@@ -2412,7 +2884,7 @@ public class Squad : MonoBehaviour
 
     private void UpdateTargetSquadTracking()
     {
-        // 🏹 원거리 궁병 부대가 활 공격 대상(currentTargetSquad)을 갖고 있는 경우, 사거리 추적 및 제자리 사격 전환을 위해 추적 허용!
+        // 🏹 원거리 궁병 부대가 활 공격 대상(currentTargetSquad)을 갖고 있는 경우, 사거리 추적 및 제자리 사격 전환, 탄약 소진 돌격 전환을 위해 추적 허용!
         bool isRangedTracking = IsRangedSquad && hasActiveEnemyTarget && currentTargetSquad != null;
 
         // 🚨 일반 부대: 플레이어가 이동/후퇴(Move) 명령을 내린 상태라면 적 부대 추적 및 포위 슬롯 갱신을 즉시 중단하여 탈출 보장!
@@ -2479,10 +2951,27 @@ public class Squad : MonoBehaviour
         // 🏹 [원거리 궁병 부대 실시간 전술 제어]:
         if (IsRangedSquad)
         {
-            float maxRange = 150f;
-            if (members != null && members.Count > 0 && members[0] != null && members[0].rangedAttackRange > 10f)
+            // 💥 [탄약 전량 소진]: 원거리 사격 대치 태세를 즉시 해제하고 적진 중심을 향해 단 1회 전군 돌격 발동!
+            if (!HasAmmo)
             {
-                maxRange = members[0].rangedAttackRange;
+                // 🚀 [최적화 - 단 1회 명령으로 돌격 완수]: 탄약 소진 직후 정확히 단 1회만 돌격을 하달하여 적진 중심으로 쇄도
+                if (!hasChargedAfterEmptyAmmo)
+                {
+                    hasChargedAfterEmptyAmmo = true;
+                    CommandAttackSquad(currentTargetSquad);
+                }
+                return;
+            }
+            else
+            {
+                hasChargedAfterEmptyAmmo = false;
+            }
+            float maxRange = 150f;
+            TrajectoryMode trajMode = TrajectoryMode.HighArc;
+            if (members != null && members.Count > 0 && members[0] != null)
+            {
+                if (members[0].rangedAttackRange > 10f) maxRange = members[0].rangedAttackRange;
+                trajMode = members[0].trajectoryMode;
             }
 
             // 🚨 적 보병이 15m 코앞까지 쇄도해오면, 사격을 멈추고 전원 백병전 돌격 전환!
@@ -2490,20 +2979,30 @@ public class Squad : MonoBehaviour
             {
                 if (!isRunning) SetRunMode(true);
                 Vector3 meleeChargeDestination = enemyCenter;
-                CommandMoveWithFormation(meleeChargeDestination, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.AttackMove);
+                CommandMoveWithFormation(meleeChargeDestination, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.AttackMove, preserveTarget: true);
                 return;
             }
 
-            // 사거리 밖(> 135m)이면 사거리 내(약 105m)로 전술 전진 (돌격이 아닌 정규 대형 도보 이동)
-            if (distToEnemy > maxRange * 0.90f)
+            // 🏔️ 부대 중심과 적 부대 중심 간 지형 사선(LoS) 차폐 검사
+            bool isLosClear = TerrainHeightManager.CheckLineOfSightFast(myPos, enemyCenter, 1.6f, 1.0f, 4);
+
+            // 🎯 직사 부대(총기/쇠뇌: Flat)인데 언덕에 가려져 사선이 없다면(!isLosClear),
+            // 사거리 내에 있더라도 적이 보이는 시야각이 나올 때까지 전진 지속!
+            bool needsAdvance = (distToEnemy > maxRange * 0.90f) || (trajMode == TrajectoryMode.Flat && !isLosClear);
+
+            if (needsAdvance)
             {
-                float optimalEngageDist = maxRange * 0.70f;
-                Vector3 targetStandPos = enemyCenter - (dirToEnemy.normalized * optimalEngageDist);
-                CommandMoveWithFormation(targetStandPos, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.Move);
+                float engageDist = (trajMode == TrajectoryMode.Flat && !isLosClear) ? (maxRange * 0.50f) : (maxRange * 0.70f);
+                Vector3 targetStandPos = enemyCenter - (dirToEnemy.normalized * engageDist);
+                if (Vector3.Distance(lastTrackedTargetPos, targetStandPos) > 1.0f || !isMoving)
+                {
+                    lastTrackedTargetPos = targetStandPos;
+                    CommandMoveWithFormation(targetStandPos, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.AttackMove, preserveTarget: true);
+                }
             }
             else
             {
-                // 이미 사거리 내이면 전진을 멈추고 제자리 사격 태세 유지!
+                // 이미 사거리 내이고 사선이 확보됨(또는 곡사 부대): 전진을 멈추고 제자리 사격 태세 유지!
                 if (isMoving)
                 {
                     CommandRangedHaltAndFire(faceRot, currentTargetSquad);
@@ -2558,11 +3057,25 @@ public class Squad : MonoBehaviour
 
     private void UpdatePostCombatAutoReform()
     {
-        if (members.Count == 0) return;
+        if (MemberCount <= 0) return;
 
-        for (int i = 0; i < members.Count; i++)
+        bool isPureEcsMode = isPureECS || (BattleManager.Instance != null && BattleManager.Instance.usePureECS);
+
+        if (!isPureEcsMode)
         {
-            if (members[i] != null && members[i].currentState == UnitCommandState.MeleeEngaged)
+            for (int i = 0; i < members.Count; i++)
+            {
+                if (members[i] != null && members[i].currentState == UnitCommandState.MeleeEngaged)
+                {
+                    wasEngagedInCombat = true;
+                    postCombatReformTimer = 0f;
+                    return;
+                }
+            }
+        }
+        else
+        {
+            if (MiniTotalWar.ECS.SpatialHashGridSystem.TryGetSquadAggregateData(GetInstanceID(), out _, out _, out int engagedCount) && engagedCount > 0)
             {
                 wasEngagedInCombat = true;
                 postCombatReformTimer = 0f;
@@ -2572,18 +3085,7 @@ public class Squad : MonoBehaviour
 
         if (wasEngagedInCombat)
         {
-            bool hasAliveTarget = false;
-            if (currentTargetSquad != null && currentTargetSquad.members != null)
-            {
-                for (int i = 0; i < currentTargetSquad.members.Count; i++)
-                {
-                    if (currentTargetSquad.members[i] != null && currentTargetSquad.members[i].currentHp > 0)
-                    {
-                        hasAliveTarget = true;
-                        break;
-                    }
-                }
-            }
+            bool hasAliveTarget = (currentTargetSquad != null && currentTargetSquad.MemberCount > 0);
 
             if (hasAliveTarget)
             {
@@ -2659,7 +3161,7 @@ public class Squad : MonoBehaviour
     {
         // 아군(Player)이고, 요격 모드가 켜져 있으며, 현재 단순 이동 중이 아닐 때 작동
         if (!isPlayer || MemberCount <= 0 || !autoAttackEnabled) return;
-        if (IsRangedSquad) return; // 🏹 원거리 궁병 부대는 근접 맞돌격을 하지 않고 제자리 사격 태세 유지!
+        if (IsRangedSquad && HasAmmo) return; // 🏹 원거리 궁병 부대는 화살이 남아있을 때 근접 맞돌격을 하지 않고 제자리 사격 태세 유지!
         if (isMoving && currentCommandState != UnitCommandState.AttackMove) return;
         if (currentCommandState == UnitCommandState.AttackMove) return; // 이미 공격/돌격 명령 수행 중이면 통과
 
@@ -2724,11 +3226,41 @@ public class Squad : MonoBehaviour
 
         Vector3 myPos = GetVisualCenter();
 
-        // 🔒 [끈질긴 목표 고수 (Sticky Target Lock)]:
-        // 현재 목표 부대가 유효하고 살아있으며, 아군이 도망쳐서 거리 80m 이상 완전히 멀어지지 않은 경우:
-        // 타겟을 절대로 변경하지 않고 끝까지 공격 유지! (접근 도중 타겟이 바뀌며 옆 부대로 꺾이는 현상 100% 원천 차단)
+        // 🔒 [유효 목표 부대 검사 및 능동 공격 지속 (Active Attack Sustain)]:
+        // 현재 목표 부대가 유효하고 살아있는 경우:
         if (currentTargetSquad != null && currentTargetSquad.MemberCount > 0)
         {
+            Vector3 targetPos = currentTargetSquad.GetVisualCenter();
+            float distToTarget = Vector3.Distance(myPos, targetPos);
+
+            // 🎯 [적 AI 정지/이탈 방지]: 부대가 목적지에 도착했거나 대기(Idle/!isMoving) 상태인데 적과 아직 멀다면,
+            // 멍하니 멈춰 서 있지 않고 플레이어를 향해 지속적인 공격/사격/돌격 명령을 자동 재발동!
+            bool isIdleOrStopped = !isMoving || currentCommandState == UnitCommandState.Idle;
+
+            if (IsRangedSquad && HasAmmo)
+            {
+                // 궁병: 유효 사거리(150m) 90% 이상 밖인데 멈춰있거나 이동 중이 아니면 전술 전진 재지시
+                float maxR = 150f;
+                if (members != null && members.Count > 0 && members[0] != null && members[0].rangedAttackRange > 10f)
+                    maxR = members[0].rangedAttackRange;
+
+                if (distToTarget > maxR * 0.90f && isIdleOrStopped)
+                {
+                    CommandAttackSquad(currentTargetSquad);
+                    return;
+                }
+            }
+            else
+            {
+                // 근접 보병(또는 화살 소진 궁병): 아직 적과 교전 접촉(6m) 전인데 멈춰 서 있거나 대기 상태라면 플레이어를 향해 돌격 재개!
+                if (distToTarget > 6.0f && isIdleOrStopped)
+                {
+                    CommandAttackSquad(currentTargetSquad);
+                    return;
+                }
+            }
+
+            // 정상적으로 이동/돌격/사격 중이면 현재 타겟 끝까지 유지
             return;
         }
 
@@ -3382,11 +3914,11 @@ public class Squad : MonoBehaviour
         }
 
         // 🌟 [공격/포위 시 부대 분할 없이 하나의 일체형 대형으로 완전 통합]:
-        // 🏹 원거리 궁병 부대(IsRangedSquad)는 적을 포위하지 않고 정규 사격 진형을 엄격히 유지!
-        // ⚔️ 근접 부대만 적의 정면/측면을 감싸 안는 포위 대형(CalculateEnvelopmentSlot) 발동!
+        // 🏹 원거리 궁병 부대(IsRangedSquad && HasAmmo)는 적을 포위하지 않고 정규 사격 진형을 엄격히 유지!
+        // ⚔️ 근접 부대 및 화살을 모두 소진한 원거리 부대만 적의 정면/측면을 감싸 안는 포위 대형(CalculateEnvelopmentSlot) 발동!
         // 단, 평행 횡대(Line) 진형에서는 양 날개가 벌어지며 옆 부대 전선을 침범하지 않도록,
         // 인위적 포위 왜곡을 배제하고 단단한 직사각형 방패벽 슬롯을 엄격히 유지합니다.
-        if (!IsRangedSquad && hasActiveEnemyTarget && currentTargetSquad != null && targetEnemyWidth > 0f && formType != SquadFormationType.Line)
+        if ((!IsRangedSquad || !HasAmmo) && hasActiveEnemyTarget && currentTargetSquad != null && targetEnemyWidth > 0f && formType != SquadFormationType.Line)
         {
             if (CalculateEnvelopmentSlot(row, col, columns, totalRows, formType, out Vector3 envelopSlot, out _))
             {
@@ -3512,6 +4044,7 @@ public class Squad : MonoBehaviour
         foreach (var slot in slots)
         {
             Vector3 pos = destination + (rotation * slot.localOffset);
+            pos.y = TerrainHeightManager.SampleHeightFast(pos.x, pos.z);
             Quaternion rot = rotation * slot.localRotation;
             list.Add((pos, rot));
         }
@@ -3534,7 +4067,9 @@ public class Squad : MonoBehaviour
         List<SlotInfo> slots = GenerateFormationSlots(count, cols, out int totalRows, currentFormationType);
         foreach (var slot in slots)
         {
-            positions.Add(destination + (rotation * slot.localOffset));
+            Vector3 pos = destination + (rotation * slot.localOffset);
+            pos.y = TerrainHeightManager.SampleHeightFast(pos.x, pos.z);
+            positions.Add(pos);
         }
 
         customCurvature = oldCurv;

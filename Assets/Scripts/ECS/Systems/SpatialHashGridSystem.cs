@@ -22,13 +22,15 @@ namespace MiniTotalWar.ECS
     }
 
     /// <summary>
-    /// 부대별 중심 좌표 및 생존자 수, 백병전 교전 인원을 O(1)로 일괄 집계하는 구조체
+    /// 부대별 중심 좌표 및 생존자 수, 백병전 교전 인원, 잔여 탄약을 O(1)로 일괄 집계하는 구조체
     /// </summary>
     public struct SquadAggregateData
     {
         public float3 PositionSum;
         public int AliveCount;
         public int MeleeEngagedCount;
+        public int CurrentAmmoSum;
+        public int MaxAmmoSum;
     }
 
     /// <summary>
@@ -126,6 +128,31 @@ namespace MiniTotalWar.ECS
             return false;
         }
 
+        /// <summary>
+        /// Pure ECS 모드에서 부대의 실시간 잔여 탄약 총량 및 최대 탄약 총량을 O(1)로 조회합니다.
+        /// </summary>
+        public static bool TryGetSquadAmmo(int squadId, out int currentAmmo, out int maxAmmo)
+        {
+            currentAmmo = 0;
+            maxAmmo = 0;
+
+            var world = World.DefaultGameObjectInjectionWorld;
+            if (world == null || !world.IsCreated) return false;
+
+            var systemHandle = world.GetExistingSystem<SpatialHashGridSystem>();
+            if (systemHandle == SystemHandle.Null) return false;
+
+            ref var spatialGrid = ref world.Unmanaged.GetUnsafeSystemRef<SpatialHashGridSystem>(systemHandle);
+            if (spatialGrid.SquadAggregates.IsCreated && spatialGrid.SquadAggregates.TryGetValue(squadId, out var agg))
+            {
+                currentAmmo = agg.CurrentAmmoSum;
+                maxAmmo = agg.MaxAmmoSum;
+                return true;
+            }
+
+            return false;
+        }
+
         public static int HashCoords(int3 coord)
         {
             unchecked
@@ -204,11 +231,16 @@ namespace MiniTotalWar.ECS
 
             if (tag.SquadId != -1)
             {
+                int ammoCur = (combat.IsRangedUnit == 1) ? combat.CurrentAmmo : 0;
+                int ammoMax = (combat.IsRangedUnit == 1) ? combat.MaxAmmo : 0;
+
                 if (SquadAggregates.TryGetValue(tag.SquadId, out var agg))
                 {
                     agg.PositionSum += movement.Position;
                     agg.AliveCount++;
                     if (combat.CurrentState == 3) agg.MeleeEngagedCount++;
+                    agg.CurrentAmmoSum += ammoCur;
+                    agg.MaxAmmoSum += ammoMax;
                     SquadAggregates[tag.SquadId] = agg;
                 }
                 else
@@ -217,7 +249,9 @@ namespace MiniTotalWar.ECS
                     {
                         PositionSum = movement.Position,
                         AliveCount = 1,
-                        MeleeEngagedCount = (combat.CurrentState == 3) ? 1 : 0
+                        MeleeEngagedCount = (combat.CurrentState == 3) ? 1 : 0,
+                        CurrentAmmoSum = ammoCur,
+                        MaxAmmoSum = ammoMax
                     });
                 }
             }

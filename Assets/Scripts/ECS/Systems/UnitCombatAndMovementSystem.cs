@@ -67,9 +67,13 @@ namespace MiniTotalWar.ECS
                 SquadMap = spatialGrid.SquadMap,
                 AllAliveUnits = spatialGrid.AllAliveUnits.AsDeferredJobArray(),
                 AllAliveEntityMap = spatialGrid.AllAliveEntityMap,
+                SquadAggregates = spatialGrid.SquadAggregates,
                 EngagedSquads = engagedSquads,
                 DamageQueue = damageQueue.AsParallelWriter(),
                 ArrowQueue = arrowQueue.AsParallelWriter(),
+                TerrainData = (TerrainHeightManager.Instance != null && TerrainHeightManager.Instance.IsDataReady)
+                    ? TerrainHeightManager.Instance.HeightData
+                    : default,
                 DeltaTime = deltaTime,
                 CurrentTime = currentTime,
                 InvCellSize = SpatialHashGridSystem.INV_CELL_SIZE
@@ -99,6 +103,7 @@ namespace MiniTotalWar.ECS
                         cmd.shooterPos,
                         cmd.targetPos,
                         cmd.projectileSpeed,
+                        cmd.projectileDrag,
                         cmd.damage,
                         cmd.armorPiercingRatio,
                         cmd.armorShredAmount,
@@ -107,7 +112,8 @@ namespace MiniTotalWar.ECS
                         cmd.gravityScale,
                         cmd.spreadRadius,
                         cmd.hasAllyObstruction == 1,
-                        cmd.shooterRow
+                        cmd.shooterRow,
+                        cmd.knockbackPower
                     );
                 }
             }
@@ -154,9 +160,11 @@ namespace MiniTotalWar.ECS
         [ReadOnly] public NativeParallelMultiHashMap<int, EntitySpatialData> SquadMap;
         [ReadOnly] public NativeArray<EntitySpatialData> AllAliveUnits;
         [ReadOnly] public NativeParallelHashMap<Entity, EntitySpatialData> AllAliveEntityMap;
+        [ReadOnly] public NativeParallelHashMap<int, SquadAggregateData> SquadAggregates;
         [ReadOnly] public NativeParallelHashSet<int> EngagedSquads;
         public NativeQueue<DamageEvent>.ParallelWriter DamageQueue;
         public NativeQueue<ArrowLaunchCommand>.ParallelWriter ArrowQueue;
+        [ReadOnly] public TerrainHeightData TerrainData;
         public float DeltaTime;
         public float CurrentTime;
         public float InvCellSize;
@@ -259,6 +267,16 @@ namespace MiniTotalWar.ECS
 
                                 float cost = sqrDist + (lateralSqr * 2.5f);
                                 if (fwdDist < 0f) cost += 1000f; // 등 뒤의 적은 큰 페널티
+
+                                // 🏔️ 직사 사수(TrajectoryMode == 1): 지형 차폐 시 큰 페널티를 부여하여 시야가 트인 적을 최우선 락온!
+                                if (combat.IsRangedUnit == 1 && combat.TrajectoryMode == 1 && TerrainData.isValid == 1)
+                                {
+                                    bool isLoSClear = TerrainData.CheckLineOfSight(currentPos, other.Position, 0.2f, 0.2f, 4);
+                                    if (!isLoSClear)
+                                    {
+                                        cost += 500000f; // 시야가 막힌 적은 최후순위로 격하
+                                    }
+                                }
 
                                 if (cost < targetSquadMinCost)
                                 {
@@ -411,8 +429,14 @@ namespace MiniTotalWar.ECS
                         bool isSquadAttacking = isAttacking || (foundEnemy && (combat.TargetSquadId != -1 || distToEnemy <= 25.0f));
                         bool isSquadEngaged = (tag.SquadId != -1 && EngagedSquads.Contains(tag.SquadId));
 
-                        // 🏹 원거리 궁병(IsRangedUnit == 1)은 적이 백병전 거리 밖이고 탄약이 있으면 대형 슬롯 위치를 지키며 사격!
-                        if (combat.IsRangedUnit == 1 && distToEnemy > combat.MeleeSwitchDistance && combat.CurrentAmmo > 0)
+                        bool squadHasAmmo = false;
+                        if (tag.SquadId != -1 && SquadAggregates.TryGetValue(tag.SquadId, out SquadAggregateData agg1))
+                        {
+                            squadHasAmmo = (agg1.CurrentAmmoSum > 0);
+                        }
+
+                        // 🏹 원거리 궁병(IsRangedUnit == 1)은 적이 백병전 거리 밖이고 탄약(개인 또는 부대 탄약)이 있으면 대형 슬롯 위치를 지키며 사격!
+                        if (combat.IsRangedUnit == 1 && distToEnemy > combat.MeleeSwitchDistance && (combat.CurrentAmmo > 0 || squadHasAmmo))
                         {
                             targetDest = movement.TargetPosition;
                             isCharging = false;
@@ -515,8 +539,13 @@ namespace MiniTotalWar.ECS
                 {
                     // 🚨 백병전 교전 중(CurrentState == 3)이거나 5m 이내에 적이 들어왔으면 사격 100% 절대 금지!
                     bool isEngagedInMelee = (combat.CurrentState == 3);
-                    bool isInsideMelee = (distToEnemy <= combat.MeleeSwitchDistance) || (meleeTargetDist <= combat.MeleeSwitchDistance);
-                    bool hasAmmo = (combat.CurrentAmmo > 0);
+                    bool isInsideMelee = (distToEnemy <= combat.MeleeSwitchDistance);
+                    bool squadHasAmmo = false;
+                    if (tag.SquadId != -1 && SquadAggregates.TryGetValue(tag.SquadId, out SquadAggregateData agg2))
+                    {
+                        squadHasAmmo = (agg2.CurrentAmmoSum > 0);
+                    }
+                    bool hasAmmo = (combat.CurrentAmmo > 0 || squadHasAmmo);
                     // 🚀 [이동 중 사격 판정 (자유사격 이동 데드락 원천 방지)]:
                     // 1) 이동 중 사격 가능 유닛(CanFireWhileMoving == 1)은 이동 중에도 사격 허용
                     // 2) 이동 중 사격 불가(CanFireWhileMoving == 0) 유닛:
@@ -561,12 +590,12 @@ namespace MiniTotalWar.ECS
 
                         // 탄도 앙각에 따른 전열 머리 위 고도 상승치
                         float baseAngle;
-                        if (combat.TrajectoryMode == 1) // Parabolic (곡사)
+                        if (combat.TrajectoryMode == 0) // HighArc (곡사: 활)
                         {
                             float angleRatio = math.clamp(distToEnemy / math.max(1.0f, combat.RangedAttackRange), 0f, 1f);
                             baseAngle = math.lerp(0.26f, 0.61f, angleRatio); // 15° ~ 35°
                         }
-                        else // Direct (직사)
+                        else // Flat (직사: 총/쇠뇌)
                         {
                             baseAngle = 0.035f; // 약 2° 조준각
                         }
@@ -578,7 +607,41 @@ namespace MiniTotalWar.ECS
 
                     bool isClearanceSatisfied = rearClear && lateralClear && frontClear;
 
-                    if (!isEngagedInMelee && !isInsideMelee && hasAmmo && canShootFireAtWill && canShootMovement && isClearanceSatisfied && distToEnemy <= combat.RangedAttackRange && distToEnemy >= combat.RangedMinRange)
+                    // 🏔️ [지형 사선(Line of Sight, LoS) 차폐 검사 및 직사/곡사 사격 분기 (유닛 체급 0.2m 눈높이 정밀화)]
+                    bool isLosClear = (TerrainData.isValid == 1)
+                        ? TerrainData.CheckLineOfSight(currentPos, enemyPos, 0.2f, 0.15f, 4)
+                        : true;
+
+                    bool canShootTerrainLoS;
+                    int forceHighArc = 0;
+
+                    if (combat.TrajectoryMode == 1) // Flat (직사: 총/쇠뇌)
+                    {
+                        // 🔫 [직사 무기 규칙]: 실제 시야에 적이 보일 때만 사격 허용! (강제 곡사 완전 금지)
+                        canShootTerrainLoS = isLosClear;
+                        forceHighArc = 0;
+                    }
+                    else // HighArc (곡사: 활/투석기)
+                    {
+                        // 🏹 [곡사 무기 규칙]: 
+                        // 1) 시야가 트여 있으면 자유 사격 및 사격 허용
+                        // 2) 언덕에 가려져 있어도 지휘관이 지정한 목표 부대(combat.TargetSquadId != -1)라면 언덕 너머 고각 곡사 사격 허용!
+                        // 3) 단, 자유 사격(combat.TargetSquadId == -1)일 때는 화살 낭비 방지를 위해 사격 금지
+                        if (isLosClear)
+                        {
+                            canShootTerrainLoS = true;
+                        }
+                        else
+                        {
+                            canShootTerrainLoS = (combat.TargetSquadId != -1);
+                            if (canShootTerrainLoS)
+                            {
+                                forceHighArc = 1; // 언덕을 넘길 수 있도록 고각(HighArc) 탄도 발사 유도
+                            }
+                        }
+                    }
+
+                    if (!isEngagedInMelee && !isInsideMelee && hasAmmo && canShootFireAtWill && canShootMovement && isClearanceSatisfied && canShootTerrainLoS && distToEnemy <= combat.RangedAttackRange && distToEnemy >= combat.RangedMinRange)
                     {
                         isRangedShooting = true;
 
@@ -587,34 +650,78 @@ namespace MiniTotalWar.ECS
 
                         if (CurrentTime >= combat.LastRangedAttackTime + combat.RangedAttackCooldown + rowTimingOffset)
                         {
-                            combat.LastRangedAttackTime = CurrentTime - rowTimingOffset;
-                            combat.CurrentAmmo--;
+                            // 🏹 [인체 역학적 무기 발사 위치 및 조준 앙각 사전 산출 (Pure ECS)]:
+                            float3 toEnemy = enemyPos - currentPos;
+                            float horizD = math.sqrt(toEnemy.x * toEnemy.x + toEnemy.z * toEnemy.z);
+                            float3 fwdDir = horizD > 0.001f ? new float3(toEnemy.x / horizD, 0f, toEnemy.z / horizD) : new float3(0f, 0f, 1f);
+                            float3 rightDir = new float3(fwdDir.z, 0f, -fwdDir.x);
 
-                            float distRatio = math.clamp((distToEnemy - combat.OptimalRange) / math.max(1.0f, combat.RangedAttackRange - combat.OptimalRange), 0f, 1f);
-                            float finalDmg = combat.RangedBaseDamage * (1.0f - (1.0f - combat.MinDamageRatioAtMax) * distRatio);
-                            float spread = math.lerp(combat.MinSpreadRadius, combat.MaxSpreadRadius, distRatio);
+                            float targetH = enemyPos.y + math.max(0.15f, combat.LaunchOffset.y);
+                            float shoulderH = currentPos.y + combat.LaunchOffset.y;
+                            float aimPitch = math.atan2(targetH - shoulderH, math.max(0.1f, horizD));
 
-                            // 🛡️ [앞에 아군 부대 존재 여부 감지]:
-                            // 전방 적이 아군과 백병전 중일 때만 고각 곡사! (후열이라고 억지로 45도 이상 고각 쏘지 않고, 기준 탄도 + 행별 미세 분산 적용)
-                            bool isEnemyInMelee = (localTargetSquadId != -1 && EngagedSquads.Contains(localTargetSquadId));
-                            int hasAlly = isEnemyInMelee ? 1 : 0;
+                            float finalLaunchY = shoulderH + math.sin(aimPitch) * combat.LaunchOffset.z;
+                            float reachDist = math.cos(aimPitch) * combat.LaunchOffset.z;
+                            if (aimPitch < 0f) reachDist += (combat.LaunchOffset.z * 0.25f) * (-math.sin(aimPitch)); // 유닛 스케일(팔 길이)에 완전 비례하는 하향 턱 내밀기
 
-                            ArrowQueue.Enqueue(new ArrowLaunchCommand
+                            // ⛰️ [발사 전 주변 지형 사전 검사 (Pre-Shot Terrain Clearance)]:
+                            // 내 바로 앞 0.8~2.4m의 오르막 경사면이나 언덕 턱에 탄도가 걸리는지 검사하여 앞땅 낭비 방지!
+                            bool isTerrainClearAhead = true;
+                            if (TerrainData.isValid == 1)
                             {
-                                isPlayer = tag.Faction,
-                                shooterPos = currentPos,
-                                targetPos = enemyPos,
-                                projectileSpeed = combat.ProjectileSpeed,
-                                damage = finalDmg,
-                                armorPiercingRatio = combat.ArmorPiercingRatio,
-                                armorShredAmount = combat.ArmorShredAmount,
-                                ignoreArmor = combat.IgnoreArmor,
-                                trajectoryMode = combat.TrajectoryMode,
-                                gravityScale = combat.GravityScale,
-                                spreadRadius = spread,
-                                hasAllyObstruction = hasAlly,
-                                shooterRow = tag.Row
-                            });
+                                float upwardRatio = math.sin(aimPitch);
+                                for (float checkD = 0.8f; checkD <= 2.4f; checkD += 0.8f)
+                                {
+                                    float checkX = currentPos.x + fwdDir.x * checkD;
+                                    float checkZ = currentPos.z + fwdDir.z * checkD;
+                                    float groundH = TerrainData.SampleHeight(checkX, checkZ);
+                                    float expectedH = finalLaunchY + (upwardRatio * checkD);
+                                    if (expectedH <= groundH + 0.05f)
+                                    {
+                                        isTerrainClearAhead = false;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // 앞땅에 부딪힐 각도가 아닐 때만 정상 발사 및 탄약 차감!
+                            if (isTerrainClearAhead)
+                            {
+                                combat.LastRangedAttackTime = CurrentTime - rowTimingOffset;
+                                if (combat.CurrentAmmo > 0) combat.CurrentAmmo--;
+
+                                float distRatio = math.clamp((distToEnemy - combat.OptimalRange) / math.max(1.0f, combat.RangedAttackRange - combat.OptimalRange), 0f, 1f);
+                                float finalDmg = combat.RangedBaseDamage * (1.0f - (1.0f - combat.MinDamageRatioAtMax) * distRatio);
+                                float spread = math.lerp(combat.MinSpreadRadius, combat.MaxSpreadRadius, distRatio);
+
+                                // 🛡️ [앞에 아군 부대 존재 여부 또는 언덕 넘김 고각 사격 트리거]:
+                                // 전방 적이 아군과 백병전 중이거나 언덕 너머 지정 사격일 때 아군/언덕 머리 위를 넘기는 고각 곡사! (직사 무기는 일절 제외)
+                                bool isEnemyInMelee = (localTargetSquadId != -1 && EngagedSquads.Contains(localTargetSquadId));
+                                int hasAlly = (combat.TrajectoryMode == 0 && (isEnemyInMelee || forceHighArc == 1)) ? 1 : 0;
+
+                                float3 muzzlePos = new float3(currentPos.x, finalLaunchY, currentPos.z)
+                                                 + (fwdDir * reachDist)
+                                                 + (rightDir * combat.LaunchOffset.x);
+
+                                ArrowQueue.Enqueue(new ArrowLaunchCommand
+                                {
+                                    isPlayer = tag.Faction,
+                                    shooterPos = muzzlePos,
+                                    targetPos = new float3(enemyPos.x, targetH, enemyPos.z),
+                                    projectileSpeed = combat.ProjectileSpeed,
+                                    projectileDrag = combat.ProjectileDrag,
+                                    damage = finalDmg,
+                                    armorPiercingRatio = combat.ArmorPiercingRatio,
+                                    armorShredAmount = combat.ArmorShredAmount,
+                                    ignoreArmor = combat.IgnoreArmor,
+                                    trajectoryMode = combat.TrajectoryMode,
+                                    gravityScale = combat.GravityScale,
+                                    spreadRadius = spread,
+                                    hasAllyObstruction = hasAlly,
+                                    shooterRow = tag.Row,
+                                    knockbackPower = combat.RangedKnockbackPower
+                                });
+                            }
                         }
                     }
                 }
@@ -747,6 +854,17 @@ namespace MiniTotalWar.ECS
             float baseSpeed = isCharging ? combat.ChargeSpeed : (isCombatRunning ? math.max(combatRunSpd, movement.MoveSpeed) : movement.MoveSpeed);
             float maxDesiredSpeed = baseSpeed;
 
+            // 🎯 [슬롯/목적지 도착 감속 (Arrival Deceleration - Pure ECS)]:
+            // 대형 복귀 또는 단순 이동 시 목적지 2.0m 이내로 접근하면 서서히 감속하여 부드럽게 슬롯에 안착 (튕김 및 급제동 방지)
+            if (combat.CurrentState == 1 || (combat.CurrentState == 0 && tag.SquadId != -1))
+            {
+                if (distToDest < 2.0f)
+                {
+                    float arrivalFactor = math.clamp(distToDest / 2.0f, 0f, 1f);
+                    maxDesiredSpeed *= math.lerp(0.25f, 1.0f, arrivalFactor);
+                }
+            }
+
             // 🗡️ 백병전 정지 거리(effectiveStoppingDist 이내)에서는 발을 딛고 교전 (미끄러짐 및 스루 어택 방지)
             // 🚨 [옆 부대 적 접촉 시 정지 트랩 방지]:
             // 주 목표 부대가 지정되어 있다면(TargetSquadId != -1), 해당 목표 부대와의 거리(distToEnemy)가 유효할 때에만 제자리에 섭니다.
@@ -834,7 +952,32 @@ namespace MiniTotalWar.ECS
             movement.Velocity = (DeltaTime > 0.0001f) ? (finalMove / DeltaTime) : float3.zero;
             movement.Position += finalMove;
 
-            // 6. 회전 갱신 (5도 불감대 및 초당 180도 부드러운 회전)
+            // ⛰️ 지형 고저차 실시간 밀착 반영 (Pure ECS 터레인 굴곡 추적)
+            if (TerrainData.isValid == 1)
+            {
+                float groundY = TerrainData.SampleHeight(movement.Position.x, movement.Position.z);
+                movement.Position.y = groundY + movement.GroundYOffset;
+            }
+
+            // 🛑 [경사면 3D 합성 속도 강제 제한 (Slope Velocity Clamp - Pure ECS)]:
+            // 수평 이동 중 가파른 내리막이나 턱을 지날 때 Y축 낙차로 인해 3D 합성 속도가 폭증하여 "굴러 떨어지듯 가속"되는 현상 원천 차단!
+            // (단, 수평 이동이 없는 정지/스폰 상태에서는 지면 밀착을 억제하지 않음)
+            float horizMoveSq = finalMove.x * finalMove.x + finalMove.z * finalMove.z;
+            if (horizMoveSq > 0.0001f)
+            {
+                float3 delta3D = movement.Position - currentPos;
+                float actualDist3D = math.length(delta3D);
+                float maxAllowed3DSpeed = isCharging ? math.max(combat.ChargeSpeed * 1.25f, 6.0f) : math.max(movement.MoveSpeed * 1.5f, 5.5f);
+                float maxAllowed3DDist = maxAllowed3DSpeed * DeltaTime;
+
+                if (actualDist3D > maxAllowed3DDist && actualDist3D > 0.0001f)
+                {
+                    movement.Position = currentPos + (delta3D / actualDist3D) * maxAllowed3DDist;
+                    movement.Velocity = (DeltaTime > 0.0001f) ? ((movement.Position - currentPos) / DeltaTime) : float3.zero;
+                }
+            }
+
+            // 6. 회전 갱신 (옵션 A: 수직 유지 / 옵션 B: 지형 경사각 반영)
             float3 lookDir = float3.zero;
 
             if (foundEnemy && distToEnemy <= 8.0f && (combat.CurrentState == 3 || distToEnemy <= effectiveAttackRange))
@@ -848,23 +991,49 @@ namespace MiniTotalWar.ECS
                 lookDir.y = 0f;
             }
 
+            quaternion targetRot = quaternion.identity;
             if (math.lengthsq(lookDir) > 0.001f)
             {
-                quaternion targetRot = quaternion.LookRotationSafe(lookDir, math.up());
-                float angleDiff = CalculateAngleDegrees(movement.Rotation, targetRot);
-                if (angleDiff > 5f)
-                {
-                    movement.Rotation = RotateTowards(movement.Rotation, targetRot, 180f * DeltaTime);
-                }
+                targetRot = quaternion.LookRotationSafe(math.normalize(lookDir), math.up());
             }
             else if (!movement.TargetRotation.Equals(quaternion.identity))
             {
-                float angleDiff = CalculateAngleDegrees(movement.Rotation, movement.TargetRotation);
-                if (angleDiff > 5f)
-                {
-                    movement.Rotation = RotateTowards(movement.Rotation, movement.TargetRotation, 180f * DeltaTime);
-                }
+                targetRot = movement.TargetRotation;
             }
+            else
+            {
+                targetRot = movement.Rotation;
+            }
+
+            // ⛰️ 옵션 B: 경사면 법선(Normal)에 맞춘 몸체 기울기 반영
+            if (movement.AlignToSlope == 1 && TerrainData.isValid == 1)
+            {
+                float3 surfaceNormal = TerrainData.SampleNormal(movement.Position.x, movement.Position.z);
+                quaternion slopeRot = FromToRotationSafe(math.up(), surfaceNormal);
+                targetRot = math.mul(slopeRot, targetRot);
+            }
+
+            float angleDiff = CalculateAngleDegrees(movement.Rotation, targetRot);
+            if (angleDiff > 3f)
+            {
+                movement.Rotation = RotateTowards(movement.Rotation, targetRot, 180f * DeltaTime);
+            }
+        }
+
+        private static quaternion FromToRotationSafe(float3 from, float3 to)
+        {
+            float dot = math.dot(from, to);
+            if (dot >= 0.99999f) return quaternion.identity;
+            if (dot <= -0.99999f)
+            {
+                float3 ortho = math.cross(from, new float3(1, 0, 0));
+                if (math.lengthsq(ortho) < 0.001f)
+                    ortho = math.cross(from, new float3(0, 0, 1));
+                return quaternion.AxisAngle(math.normalize(ortho), math.PI);
+            }
+            float3 cross = math.cross(from, to);
+            float4 q = new float4(cross.x, cross.y, cross.z, 1.0f + dot);
+            return math.normalize(new quaternion(q.x, q.y, q.z, q.w));
         }
 
         private static float MoveTowards(float current, float target, float maxDelta)

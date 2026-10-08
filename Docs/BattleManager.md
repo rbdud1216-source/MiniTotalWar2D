@@ -58,16 +58,42 @@ flowchart TD
 
 ## ⚙️ 5. 주요 설정 변수 및 인스펙터 옵션 (Inspector Fields)
 
-| 변수명 | 타입 | 기본값 | 설명 |
-| :--- | :--- | :--- | :--- |
-| `usePureECS` | `bool` | `false` | `true` 시 게임오브젝트 없이 순수 ECS 엔티티로만 시뮬레이션 및 GPU 렌더링 구동 |
-| `unitPrefab` | `GameObject` | - | GameObject 모드에서 개별 병사로 생성할 프리팹 (NavMeshAgent 및 콜라이더 포함) |
-| `squadPrefab` | `GameObject` | - | 부대 지휘 및 대형 관리를 담당할 `Squad` 루트 프리팹 |
-| `unitCount` | `int` | `60` | 부대 기본 병사 수 (60 ~ 200명) |
-| `columns` | `int` | `15` | 부대 기본 가로 열 수 |
-| `useCustomPosition` | `bool` | `false` | 체크 시 사전 정의된 시나리오 좌표 대신 사용자 지정 좌표에 스폰 |
-| `customPosition` | `Vector3` | `(0, 0, 0)` | 사용자 지정 스폰 중심 좌표 |
-| `customRotationY` | `float` | `0f` | 사용자 지정 스폰 부대 회전 각도 |
+`BattleManagerEditor.cs` 커스텀 에디터를 통해 유니티 인스펙터에서 100% 직관적인 한국어 라벨과 요약 박스로 시각화됩니다:
+
+| 분류 / 라벨 | 변수명 | 타입 | 기본값 | 상세 설명 |
+| :--- | :--- | :--- | :--- | :--- |
+| **⚡ 시뮬레이션 모드** | `usePureECS` | `bool` | `false` | `true` 시 게임오브젝트 없이 순수 GPU 인스턴싱 ECS 엔티티로만 5만 기 시뮬레이션 구동 |
+| **📦 기본 프리팹** | `playerUnitPrefab` | `GameObject` | - | 아군 기본 근접 보병 프리팹 |
+| | `playerMissilePrefab` | `GameObject` | - | 아군 기본 원거리 궁병 프리팹 |
+| | `enemyUnitPrefab` | `GameObject` | - | 적군 기본 근접 보병 프리팹 |
+| | `enemyMissilePrefab` | `GameObject` | - | 적군 기본 원거리 궁병 프리팹 |
+| | `squadPrefab` | `GameObject` | - | 부대 관리자(`Squad`) 루트 프리팹 |
+| **📍 진영 스폰 기준** | `playerSpawnCenter` | `Vector3` | `(0, 0, -60)` | 아군 군단 기본 스폰 중심 좌표 (120m 대치 간격) |
+| | `playerFacingAngle` | `float` | `0f` | 아군 군단 기본 정면 각도 (0도 = 북쪽 정면) |
+| | `enemySpawnCenter` | `Vector3` | `(0, 0, 60)` | 적군 군단 기본 스폰 중심 좌표 (120m 대치 간격) |
+| | `enemyFacingAngle` | `float` | `180f` | 적군 군단 기본 정면 각도 (180도 = 남쪽 정면) |
+| | `squadSpacing` | `float` | `4.0f` | 군단 횡대 자동 배치 시 인접 부대 간의 가로 여유 간격 (미터) |
+| **🛡️ 전역 방진 튜닝** | `overrideSquadFormationSettings` | `bool` | `true` | 체크 시 아래의 전역 방진/산개도 스탯을 전체 부대에 강제 덮어쓰기 |
+| | `globalLooseSpacingThreshold` | `float` | `2.2f` | 완전 산개 기준 간격 (이 거리 이상이면 밀집 보너스 0%) |
+| | `globalTightSpacingThreshold` | `float` | `0.7f` | 최대 밀집 기준 간격 (이 거리 이하이면 밀집 보너스 100%) |
+| | `globalNormalBonus` | `FormationStatModifier` | - | 일반 방진(Normal) 전역 보너스 계수 |
+| | `globalWedgeBonus` | `FormationStatModifier` | - | 쐐기진(Wedge) 전역 보너스 계수 (돌격 특화) |
+| | `globalSquareBonus` | `FormationStatModifier` | - | 사각방진(Square) 전역 보너스 계수 (방어 특화) |
+| | `globalCircleBonus` | `FormationStatModifier` | - | 원형진(Circle) 전역 보너스 계수 (결사항전 특화) |
+| | `globalDiamondBonus` | `FormationStatModifier` | - | 마름모진(Diamond) 전역 보너스 계수 (기동 돌파 특화) |
+| **🚩 군단 편성 목록** | `playerArmyConfigs` | `List<SquadSpawnConfig>` | 2개 부대 | 아군 군단에 소속될 부대들의 개별 상세 설정 리스트 |
+| | `enemyArmyConfigs` | `List<SquadSpawnConfig>` | 2개 부대 | 적군 군단에 소속될 부대들의 개별 상세 설정 리스트 |
+
+### 📋 개별 부대 설정 속성 (`SquadSpawnConfig`)
+* `squadName` (부대 명칭): UI 및 로그에 표기될 고유 이름 (예: "제1 보병대", "선봉 창병대")
+* `unitType` (병과 종류): `MeleeInfantry`(보병), `SpearInfantry`(창병), `Archer`(궁병), `Cavalry`(기병)
+* `unitCount` (총 인원 수): 부대원 수 (기본: 60명, 슬라이더: 1~200명)
+* `columns` (가로 열 수): 횡대 열 수 (기본: 15열, 슬라이더: 1~50열)
+* `formationType` (초기 진형): `Normal`, `Wedge`, `Square`, `Circle`, `Diamond`
+* `useCustomPosition` (수동 좌표 사용 여부): 체크 시 진영 횡대 자동 배치를 건너뛰고 수동 지정 좌표에 스폰
+* `customPosition` (수동 스폰 좌표): 월드 X, Y, Z 스폰 좌표
+* `customRotationY` (수동 회전 각도): Y축 기준 회전 각도 (0~360도)
+* `customUnitPrefab` (커스텀 프리팹): 특수 유닛 배치 시 지정 (미지정 시 진영 기본 프리팹 사용)
 
 ---
 

@@ -72,8 +72,22 @@ public class Unit : MonoBehaviour
     [Tooltip("화살 순수 비행 속도 (m/s, 기본: 30.0m/s)")]
     public float projectileSpeed = 30.0f;
 
+    [Tooltip("화살 공기 저항(항력) 감속 계수 (0 = 무저항 등속, 0.25 = 비행할수록 자연스럽게 감속되어 묵직하게 착탄, 높을수록 급감속)")]
+    [Range(0.0f, 1.0f)]
+    public float projectileDrag = 0.25f;
+
     [Tooltip("중력 가속도 영향 배율 (곡사 시 포물선 최고점 높이 계수, 기본: 1.0)")]
     public float gravityScale = 1.0f;
+
+    [Header("🎯 원거리 무기 발사 위치 설정 (Launch / Muzzle Point)")]
+    [Tooltip("프리팹 자식의 발사 위치 빈 오브젝트 (씬 뷰에서 마우스로 직접 조절 가능. 지정 시 launchOffset과 양방향 자동 동기화)")]
+    public Transform launchPoint;
+
+    [Tooltip("유닛 피벗 기준 원거리 무기 발사 로컬 오프셋 (유닛 0.5 스케일 구체 기준: X=0.25 우측손, Y=0.15 어깨높이, Z=0.45 전방팔뻗음)")]
+    public Vector3 launchOffset = new Vector3(0.25f, 0.15f, 0.45f);
+
+    [Tooltip("원거리 화살/투사체 적중 시 피격 유닛에게 가하는 물리 넉백 충격 세기 (m/s 단위, 기본: 0.35m/s, 0이면 넉백 없음)")]
+    public float rangedKnockbackPower = 0.35f;
 
     [Tooltip("방어력 100% 완전 무시 여부 (체크 시 트루 데미지 적용)")]
     public bool ignoreArmor = false;
@@ -255,6 +269,13 @@ public class Unit : MonoBehaviour
     [SerializeField] private float separationForce = 1.2f;
     private static readonly Collider[] separationBuffer = new Collider[16];
 
+    [Header("⛰️ 지형 및 경사면 설정 (Terrain & Slope)")]
+    [Tooltip("지형 경사면 기울기 반영 여부 (체크(V) 시 경사면 법선에 맞춰 몸체가 기울어짐(옵션 B), 해제 시 중력 수직 유지(옵션 A))")]
+    public bool alignToSlope = false;
+
+    [Tooltip("지면으로부터 유닛 중심의 Y축 높이 오프셋 (m 단위, 기본: 0.39m = 큐브 크기 0.78m의 절반)")]
+    public float groundYOffset = 0.39f;
+
     private NavMeshAgent agent;
     private Renderer unitRenderer;
 
@@ -353,13 +374,17 @@ public class Unit : MonoBehaviour
         // 🏹 원거리(사격) 유닛 전용 초기화
         if (isRangedUnit)
         {
-            unitType = UnitType.Archer;
+            if (unitType != UnitType.Archer && unitType != UnitType.Gunner)
+            {
+                unitType = UnitType.Archer;
+            }
             currentAmmo = maxAmmo;
             if (rangedAttackRange < 10.0f) rangedAttackRange = 150.0f;
             if (optimalRange < 5.0f) optimalRange = 50.0f;
             if (rangedMinRange < 1.0f) rangedMinRange = 5.0f;
             if (rangedBaseDamage < 1.0f) rangedBaseDamage = 15.0f;
             if (projectileSpeed < 10.0f) projectileSpeed = 30.0f;
+            if (projectileDrag < 0f) projectileDrag = 0.25f;
             if (meleeSwitchDistance < 1.0f) meleeSwitchDistance = 5.0f;
         }
         else
@@ -977,5 +1002,52 @@ public class Unit : MonoBehaviour
         {
             UnitJobSimulationManager.Instance.UpdateUnitTargetPosition(this, transform.position, transform.rotation, UnitCommandState.Idle);
         }
+    }
+
+    private void OnValidate()
+    {
+        // 🎯 빈 오브젝트와 로컬 오프셋의 양방향 자동 동기화
+        if (launchPoint != null)
+        {
+            launchOffset = launchPoint.localPosition;
+        }
+        else if (launchOffset.sqrMagnitude < 0.001f)
+        {
+            // 기본값 안전 보정: 어깨/가슴 높이 (유닛 메쉬 기준 로컬 비율)
+            launchOffset = new Vector3(0.25f, 0.15f, 0.45f);
+        }
+    }
+
+    /// <summary>
+    /// 유닛의 현재 회전과 스케일(localScale), 위치를 고려하여 월드 공간의 실제 무기 발사 위치를 반환합니다.
+    /// (유닛의 프리팹 스케일이 0.5든 1.0이든 2.0이든 크기 변경 시 자동으로 100% 비례 반영됨)
+    /// </summary>
+    public Vector3 GetWorldLaunchPosition()
+    {
+        if (launchPoint != null)
+        {
+            return launchPoint.position;
+        }
+        Vector3 scaledOffset = Vector3.Scale(launchOffset, transform.localScale);
+        return transform.position + (transform.rotation * scaledOffset);
+    }
+
+    /// <summary>
+    /// 원거리 사격 시 탄약을 1발 소비합니다.
+    /// (소속 부대가 있으면 전우 탄약 융통 시스템을 통해 내 화살 또는 전우 화살을 소비)
+    /// </summary>
+    public bool ConsumeAmmo()
+    {
+        if (mySquad != null)
+        {
+            return mySquad.TryConsumeAmmoFromSquad(this);
+        }
+
+        if (currentAmmo > 0)
+        {
+            currentAmmo--;
+            return true;
+        }
+        return false;
     }
 }

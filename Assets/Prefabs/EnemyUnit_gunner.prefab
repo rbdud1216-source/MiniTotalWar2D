@@ -16,7 +16,7 @@ GameObject:
   - component: {fileID: 4100000000000000007}
   - component: {fileID: 6527269224040373458}
   m_Layer: 0
-  m_Name: EnemyUnit_missile
+  m_Name: EnemyUnit_gunner
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -54,41 +54,41 @@ MonoBehaviour:
   maxHp: 100
   currentHp: 0
   armor: 0
-  unitType: 2
+  unitType: 3
   isRangedUnit: 1
   canFireWhileMoving: 0
   fireAtWill: 1
-  maxAmmo: 25
-  currentAmmo: 25
-  rangedAttackRange: 150
-  optimalRange: 50
+  maxAmmo: 20
+  currentAmmo: 20
+  rangedAttackRange: 90
+  optimalRange: 45
   rangedMinRange: 5
-  rangedBaseDamage: 15
-  minDamageRatioAtMax: 0.55
-  rangedAttackCooldown: 2.2
-  minSpreadRadius: 0.3
-  maxSpreadRadius: 3.5
-  trajectoryMode: 0
-  projectileSpeed: 35
-  projectileDrag: 0.15
+  rangedBaseDamage: 22
+  minDamageRatioAtMax: 0.7
+  rangedAttackCooldown: 3.5
+  minSpreadRadius: 0.15
+  maxSpreadRadius: 1.8
+  trajectoryMode: 1
+  projectileSpeed: 100
+  projectileDrag: 0.05
   gravityScale: 1
   launchPoint: {fileID: 2956549097863766872}
   launchOffset: {x: 0.25, y: 0.15, z: 0.45}
-  rangedKnockbackPower: 0.35
+  rangedKnockbackPower: 0.5
   ignoreArmor: 0
-  armorPiercingRatio: 0.25
-  armorShredAmount: 10
+  armorPiercingRatio: 0.45
+  armorShredAmount: 20
   meleeSwitchDistance: 5
-  minRearSpacing: 0.8
+  minRearSpacing: 0
   minLateralSpacing: 0.75
-  headClearanceMargin: 0.25
+  headClearanceMargin: 0.15
   allowStaggeredRank2DirectFire: 1
   overrideSquadFormationDefaults: 1
-  recommendedSquadSpacingX: 1
+  recommendedSquadSpacingX: 1.1
   recommendedSquadSpacingZ: 1
-  recommendedStaggeredFormation: 0
-  recommendedSequentialFire: 0
-  recommendedSequentialRowDelay: 0.4
+  recommendedStaggeredFormation: 1
+  recommendedSequentialFire: 1
+  recommendedSequentialRowDelay: 0.5
   damage: 10
   attackCooldown: 2
   attackRange: 1.45
@@ -106,17 +106,17 @@ MonoBehaviour:
   sidearmKnockbackPower: 0.1
   sidearmBaseKnockback: 0.2
   sidearmMaxKnockbackCap: 0.8
-  combatStoppingDistance: 1.05
-  engagementOffset: 0.4
+  combatStoppingDistance: 4
+  engagementOffset: 3.5
   isRunning: 0
-  walkSpeed: 1.2
-  runSpeed: 2.8
-  chargeSpeed: 4.8
-  unitMaxSpeed: 5.5
+  walkSpeed: 1.1
+  runSpeed: 2.6
+  chargeSpeed: 4.5
+  unitMaxSpeed: 5.2
   canReflectCharge: 0
   mass: 80
-  chargeBonus: 15
-  maxChargeDamage: 35
+  chargeBonus: 12
+  maxChargeDamage: 30
   knockdownSpeedThreshold: 2
   knockdownDuration: 3
   isImmuneToKnockdown: 0
@@ -126,7 +126,7 @@ MonoBehaviour:
   autoAttackEnabled: 1
   detectRange: 5
   reformThreshold: 0.25
-  reformDelay: 3
+  reformDelay: 5
   separationRadius: 0.45
   separationForce: 1.2
   alignToSlope: 0
@@ -150,10 +150,10 @@ NavMeshAgent:
   m_Speed: 0.6
   m_Acceleration: 2
   avoidancePriority: 50
-  m_AngularSpeed: 720
-  m_StoppingDistance: 0
+  m_AngularSpeed: 0
+  m_StoppingDistance: 0.5
   m_AutoTraverseOffMeshLink: 1
-  m_AutoBraking: 0
+  m_AutoBraking: 1
   m_AutoRepath: 1
   m_Height: 1
   m_BaseOffset: 0

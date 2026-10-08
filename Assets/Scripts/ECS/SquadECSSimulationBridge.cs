@@ -274,7 +274,9 @@ namespace MiniTotalWar.ECS
                 Acceleration = unit.isRunning ? 8.0f : 5.0f,
                 StoppingDistance = 0.2f,
                 IsCharging = 0,
-                IsCombatRunning = 0
+                IsCombatRunning = 0,
+                AlignToSlope = unit.alignToSlope ? 1 : 0,
+                GroundYOffset = (unit.groundYOffset > 0.01f) ? unit.groundYOffset : 0.39f
             });
 
             entityManager.SetComponentData(entity, new UnitCombatData
@@ -334,6 +336,11 @@ namespace MiniTotalWar.ECS
                 RangedAttackCooldown = (unit.rangedAttackCooldown > 0.05f) ? unit.rangedAttackCooldown : 2.2f,
                 LastRangedAttackTime = Time.time - UnityEngine.Random.Range(0f, unit.rangedAttackCooldown),
                 ProjectileSpeed = (unit.projectileSpeed > 1.0f) ? unit.projectileSpeed : 30.0f,
+                ProjectileDrag = (unit.projectileDrag >= 0f) ? unit.projectileDrag : 0.25f,
+                LaunchOffset = new Unity.Mathematics.float3(
+                    ((unit.launchPoint != null) ? unit.launchPoint.localPosition.x : unit.launchOffset.x) * unit.transform.localScale.x,
+                    ((unit.launchPoint != null) ? unit.launchPoint.localPosition.y : unit.launchOffset.y) * unit.transform.localScale.y,
+                    ((unit.launchPoint != null) ? unit.launchPoint.localPosition.z : unit.launchOffset.z) * unit.transform.localScale.z),
                 MinSpreadRadius = unit.minSpreadRadius,
                 MaxSpreadRadius = (unit.maxSpreadRadius > 0.1f) ? unit.maxSpreadRadius : 3.5f,
                 TrajectoryMode = (int)unit.trajectoryMode,
@@ -342,6 +349,7 @@ namespace MiniTotalWar.ECS
                 ArmorShredAmount = unit.armorShredAmount,
                 IgnoreArmor = unit.ignoreArmor ? 1 : 0,
                 MeleeSwitchDistance = (unit.meleeSwitchDistance > 0.1f) ? unit.meleeSwitchDistance : 5.0f,
+                RangedKnockbackPower = (unit.rangedKnockbackPower >= 0f) ? unit.rangedKnockbackPower : 0.35f,
 
                 // 📐 원거리 3축 공간 및 사선 클리어런스
                 MinRearSpacing = unit.minRearSpacing,
@@ -596,6 +604,102 @@ namespace MiniTotalWar.ECS
                     if (combat.CurrentHp <= 0 && unit.gameObject.activeSelf)
                     {
                         unit.TakeDamage(9999f); // 사망 이벤트 트리거
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 화살이 지면에 착탄했을 때, 착탄 좌표(impactPos) 반경 1.0m 내의 적 진영 ECS 엔티티를 탐색하여 방관 대미지를 적용합니다.
+        /// (Pure ECS 모드에서 화살 피격 사망 및 넉백 처리)
+        /// </summary>
+        public void ApplyArrowDamageAtPosition(
+            Vector3 impactPos,
+            int shooterIsPlayer,
+            float damage,
+            float armorPiercingRatio,
+            int armorShredAmount,
+            bool ignoreArmor,
+            float hitRadius = 1.0f,
+            float knockbackPower = 0.35f)
+        {
+            if (!isInitialized || defaultWorld == null || !defaultWorld.IsCreated) return;
+
+            float hitRadiusSqr = hitRadius * hitRadius;
+            float3 impactF3 = new float3(impactPos.x, impactPos.y, impactPos.z);
+            int shooterFaction = shooterIsPlayer;
+
+            // 1. SpatialHashGridSystem을 통한 O(1) 초고속 인접 그리드 엔티티 탐색
+            var systemHandle = defaultWorld.GetExistingSystem<SpatialHashGridSystem>();
+            if (systemHandle != SystemHandle.Null)
+            {
+                ref var spatialGrid = ref defaultWorld.Unmanaged.GetUnsafeSystemRef<SpatialHashGridSystem>(systemHandle);
+                if (spatialGrid.SpatialMap.IsCreated)
+                {
+                    int centerCoordX = (int)math.floor(impactF3.x * SpatialHashGridSystem.INV_CELL_SIZE);
+                    int centerCoordZ = (int)math.floor(impactF3.z * SpatialHashGridSystem.INV_CELL_SIZE);
+
+                    int hitCount = 0;
+
+                    // 착탄 지점 주변 3x3 격자 탐색 (반경 2.0m 커버)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        for (int dz = -1; dz <= 1; dz++)
+                        {
+                            int hash = SpatialHashGridSystem.HashCoords(new int3(centerCoordX + dx, 0, centerCoordZ + dz));
+                            if (spatialGrid.SpatialMap.TryGetFirstValue(hash, out EntitySpatialData other, out var it))
+                            {
+                                do
+                                {
+                                    if (other.IsAlive == 1 && other.Faction != shooterFaction)
+                                    {
+                                        float3 diff = other.Position - impactF3;
+                                        diff.y = 0f;
+                                        if (math.lengthsq(diff) <= hitRadiusSqr)
+                                        {
+                                            Entity e = other.Entity;
+                                            if (entityManager.Exists(e) && entityManager.HasComponent<UnitCombatData>(e) && entityManager.HasComponent<UnitEntityTag>(e))
+                                            {
+                                                var combat = entityManager.GetComponentData<UnitCombatData>(e);
+                                                var tag = entityManager.GetComponentData<UnitEntityTag>(e);
+
+                                                if (tag.IsAlive == 1)
+                                                {
+                                                    float effectiveArmor = (ignoreArmor || combat.Armor < 0) ? 0f : math.max(0f, combat.Armor - armorShredAmount);
+                                                    float damageReduction = math.clamp(effectiveArmor, 0, 10000) / 10000f;
+
+                                                    float apDamage = damage * armorPiercingRatio;
+                                                    float normalDamage = damage * (1.0f - armorPiercingRatio);
+                                                    float finalDamage = apDamage + math.max(1.0f, normalDamage * (1.0f - damageReduction));
+
+                                                    combat.CurrentHp -= finalDamage;
+                                                    if (combat.CurrentHp <= 0f)
+                                                    {
+                                                        combat.CurrentHp = 0f;
+                                                        tag.IsAlive = 0;
+                                                    }
+
+                                                    // 유닛 설정에 따른 가변 피격 넉백 (0이면 넉백 없음)
+                                                    if (knockbackPower > 0f)
+                                                    {
+                                                        float3 pushDir = math.normalize(diff);
+                                                        if (math.lengthsq(pushDir) < 0.001f) pushDir = new float3(0, 0, 1);
+                                                        combat.KnockbackVelocity += pushDir * knockbackPower;
+                                                    }
+
+                                                    entityManager.SetComponentData(e, combat);
+                                                    entityManager.SetComponentData(e, tag);
+
+                                                    hitCount++;
+                                                    if (hitCount >= 1) return; // 화살 1발당 1명 타격
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                while (spatialGrid.SpatialMap.TryGetNextValue(out other, ref it));
+                            }
+                        }
                     }
                 }
             }

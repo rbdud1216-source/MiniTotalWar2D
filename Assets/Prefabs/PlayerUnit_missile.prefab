@@ -34,7 +34,8 @@ Transform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 904593306342883386}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &3100000000000000003
@@ -68,8 +69,12 @@ MonoBehaviour:
   minSpreadRadius: 0.3
   maxSpreadRadius: 3.5
   trajectoryMode: 0
-  projectileSpeed: 30
+  projectileSpeed: 35
+  projectileDrag: 0.15
   gravityScale: 1
+  launchPoint: {fileID: 904593306342883386}
+  launchOffset: {x: 0.25, y: 0.15, z: 0.45}
+  rangedKnockbackPower: 0.35
   ignoreArmor: 0
   armorPiercingRatio: 0.25
   armorShredAmount: 10
@@ -124,6 +129,8 @@ MonoBehaviour:
   reformDelay: 5
   separationRadius: 0.45
   separationForce: 1.2
+  alignToSlope: 0
+  groundYOffset: 0.39
   mySquad: {fileID: 0}
   fixedTargetPos: {x: 0, y: 0, z: 0}
   formationOffset: {x: 0, y: 0, z: 0}
@@ -257,3 +264,34 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!1 &4132051304941176863
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 904593306342883386}
+  m_Layer: 0
+  m_Name: LaunchPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &904593306342883386
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4132051304941176863}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.25, y: 0.15, z: 0.45}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3100000000000000002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}

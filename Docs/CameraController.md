@@ -15,12 +15,12 @@
   - `Start()`: 메인 카메라 캐싱, 초기 3D/2D 높이 및 각도 백업
   - `Update()`: 시점 전환, 이동, 회전, 줌, 경계 제한 일괄 호출
 - 📁 **2. 시점 모드 전환 (`HandleViewToggle`)**
-  - `Tab 키`: **3D 자유 쿼터뷰** (기본 고도 5~150m, 피치 10~85도) ↔ **2D 전술지도 탑다운 뷰** (90도 완전 수직, 고도 20~350m) 전환
+  - `Tab 키`: **3D 자유 쿼터뷰** (기본 고도 5~150m, 피치 -45~88도로 언덕 위/하늘 상향 시야 완전 개방) ↔ **2D 전술지도 탑다운 뷰** (90도 완전 수직, 고도 20~350m) 전환
 - 📁 **3. 조작 및 내비게이션 서브시스템 (Navigation Subsystems)**
   - `HandleMovement()`: `WASD` 평면 이동 + `Q/E` 수직 Y축 상승/하강 + `LeftShift` 2배 가속
-  - `HandlePanOrRotate()`: 마우스 휠 클릭 드래그 시 (2D 모드: 화면 팬 Pan / 3D 모드: 360도 궤도 회전)
+  - `HandlePanOrRotate()`: 마우스 휠 클릭 드래그 시 (2D 모드: 화면 팬 Pan / 3D 모드: 360도 궤도 회전, -45도 상향 올려다보기 지원)
   - `HandleZoom()`: 마우스 휠 스크롤 시 고도 비례 부드러운 줌인/줌아웃
-  - `ClampPosition()`: $1000 \times 1000$ 맵 바운드(`minXZ`, `maxXZ`) 및 최소/최대 고도 클램핑
+  - `ClampPosition()`: 1000x1000 맵 바운드(`minXZ`, `maxXZ`) 및 언덕 지형 관통 방지 최소 고도(`terrainH + 1.5f`) 보장
 - 📁 **4. 원격 포커싱 및 미니맵 연동 (Focus & Minimap)**
   - `FocusOnPosition(targetPos, dist, smooth)`: 부대 더블클릭 시 0.25초 부드러운 포커싱 코루틴 (`Co_FocusOn`)
   - `PanToWorldXZ(targetXZ, smooth)`: 미니맵 클릭 시 해당 지형 XZ 좌표로 카메라 지면 중심 이동

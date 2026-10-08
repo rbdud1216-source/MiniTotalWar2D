@@ -47,59 +47,75 @@ public class BattleManager : MonoBehaviour
 {
     public static BattleManager Instance { get; private set; }
 
-    [Header("초고성능 순수 ECS 모드 (Pure ECS Zero-GameObject)")]
-    [Tooltip("체크 시 GameObject를 0개로 만들고 순수 GPU Instanced ECS Entity로만 5만 기 시뮬레이션")]
+    [Header("⚡ 1. 초고성능 순수 ECS 시뮬레이션 모드")]
+    [Tooltip("체크 시 유니티 GameObject 생성을 배제하고 순수 GPU 인스턴싱 ECS 엔티티로 5만 기 시뮬레이션을 구동합니다.")]
     public bool usePureECS = false;
 
-    [Header("기본 프리팹 설정")]
+    [Header("📦 2. 기본 유닛 및 부대 프리팹 설정")]
+    [Tooltip("플레이어 기본 근접 보병 유닛 프리팹")]
     [SerializeField] private GameObject playerUnitPrefab;
+    [Tooltip("플레이어 기본 원거리 궁병 유닛 프리팹")]
     [SerializeField] private GameObject playerMissilePrefab;
+    [Tooltip("플레이어 기본 원거리 총병 유닛 프리팹")]
+    [SerializeField] private GameObject playerGunnerPrefab;
+    [Tooltip("적군 기본 근접 보병 유닛 프리팹")]
     [SerializeField] private GameObject enemyUnitPrefab;
+    [Tooltip("적군 기본 원거리 궁병 유닛 프리팹")]
     [SerializeField] private GameObject enemyMissilePrefab;
+    [Tooltip("적군 기본 원거리 총병 유닛 프리팹")]
+    [SerializeField] private GameObject enemyGunnerPrefab;
+    [Tooltip("부대 관리 컴포넌트(Squad) 프리팹")]
     [SerializeField] private GameObject squadPrefab;
 
-    [Header("진영 기본 스폰 위치 및 방향 (X-Z 평면)")]
+    [Header("📍 3. 진영 기본 스폰 위치 및 정면 방향")]
     [Tooltip("플레이어 군단 기본 스폰 중심 좌표 (실제 활 유효사거리 150m 고증에 맞춰 120m 대치 간격)")]
     [SerializeField] private Vector3 playerSpawnCenter = new Vector3(0f, 0f, -60f);
-    [Tooltip("플레이어 군단 기본 정면 회전 각도 (Y축, 기본: 0도 북쪽)")]
+    [Tooltip("플레이어 군단 기본 정면 회전 각도 (Y축 기준, 0도 = 북쪽 정면)")]
     [SerializeField] private float playerFacingAngle = 0f;
 
     [Tooltip("적군 군단 기본 스폰 중심 좌표 (실제 활 유효사거리 150m 고증에 맞춰 120m 대치 간격)")]
     [SerializeField] private Vector3 enemySpawnCenter = new Vector3(0f, 0f, 60f);
-    [Tooltip("적군 군단 기본 정면 회전 각도 (Y축, 기본: 180도 남쪽)")]
+    [Tooltip("적군 군단 기본 정면 회전 각도 (Y축 기준, 180도 = 남쪽 정면)")]
     [SerializeField] private float enemyFacingAngle = 180f;
 
-    [Header("군단 자동 횡대 배치 설정")]
-    [Tooltip("자동 배치 시 부대와 부대 사이 가로 여유 간격 (미터)")]
+    [Header("↔️ 4. 군단 자동 횡대 배치 간격")]
+    [Tooltip("자동 횡대 배치 시 인접 부대 간의 가로 여유 간격 (미터 단위, 기본: 4.0m)")]
     [SerializeField] private float squadSpacing = 4.0f;
 
-    [Header("전역 방진 및 산개도 스탯 튜닝 (전체 부대 공통 인스펙터 조절)")]
-    [Tooltip("체크 시 부대 생성 시 아래의 전역 방진/산개도 스탯 계수를 부대에 덮어씁니다.")]
+    [Header("🛡️ 5. 전역 방진 및 산개도 스탯 튜닝 (전체 부대 공통 적용)")]
+    [Tooltip("체크 시 부대 생성 시 아래의 전역 방진/산개도 스탯 계수를 전체 부대에 일괄 덮어씁니다.")]
     public bool overrideSquadFormationSettings = true;
 
-    [Tooltip("완전 산개 기준 간격(m) - 이 간격 이상이면 밀집 보너스가 0% 적용 (기본: 2.2m)")]
+    [Tooltip("완전 산개 기준 간격(m) - 이 간격 이상으로 벌어지면 밀집 보너스가 0% 적용 (기본: 2.2m)")]
     public float globalLooseSpacingThreshold = 2.2f;
 
-    [Tooltip("최대 밀집 기준 간격(m) - 이 간격 이하이면 밀집 보너스가 100% 최대로 적용 (기본: 0.7m)")]
+    [Tooltip("최대 밀집 기준 간격(m) - 이 간격 이하로 좁혀지면 밀집 보너스가 100% 최대로 적용 (기본: 0.7m)")]
     public float globalTightSpacingThreshold = 0.7f;
 
+    [Tooltip("일반 방진(Normal) 전역 스탯 계수")]
     public Squad.FormationStatModifier globalNormalBonus = new Squad.FormationStatModifier(500, 1.2f, 1000, 1.5f, 0.50f);     // 일반 방진 (공속 50% - 2.0초당 1회)
+    [Tooltip("쐐기진(Wedge) 전역 스탯 계수 (돌격 특화)")]
     public Squad.FormationStatModifier globalWedgeBonus = new Squad.FormationStatModifier(200, 1.4f, 500, 1.8f, 0.55f);        // 쐐기진 (돌격 특화, 공속 55% - 1.82초당 1회)
+    [Tooltip("사각방진(Square) 전역 스탯 계수 (방어 특화)")]
     public Squad.FormationStatModifier globalSquareBonus = new Squad.FormationStatModifier(1000, 1.5f, 1500, 2.0f, 0.50f);      // 사각방진 (방어 특화, 공속 50% - 2.0초당 1회)
+    [Tooltip("원형진(Circle) 전역 스탯 계수 (결사항전 특화)")]
     public Squad.FormationStatModifier globalCircleBonus = new Squad.FormationStatModifier(1200, 1.6f, 1800, 2.2f, 0.45f);      // 원형진 (결사항전, 공속 45% - 2.22초당 1회)
+    [Tooltip("마름모진(Diamond) 전역 스탯 계수 (기동 돌파 특화)")]
     public Squad.FormationStatModifier globalDiamondBonus = new Squad.FormationStatModifier(400, 1.3f, 600, 1.6f, 0.52f);     // 마름모진 (기동 돌파, 공속 52% - 1.92초당 1회)
 
-    [Header("플레이어 군단 편성 (Player Army)")]
+    [Header("🚩 6. 플레이어 군단 편성 목록 (Player Army)")]
     [SerializeField] private List<SquadSpawnConfig> playerArmyConfigs = new List<SquadSpawnConfig>()
     {
         new SquadSpawnConfig { squadName = "제1 보병대", unitType = UnitType.MeleeInfantry, unitCount = 60, columns = 15 },
-        new SquadSpawnConfig { squadName = "제2 궁병대", unitType = UnitType.Archer, unitCount = 40, columns = 10 }
+        new SquadSpawnConfig { squadName = "제2 총병대", unitType = UnitType.Gunner, unitCount = 40, columns = 20 },
+        new SquadSpawnConfig { squadName = "제3 궁병대", unitType = UnitType.Archer, unitCount = 40, columns = 10 }
     };
 
-    [Header("적군 군단 편성 (Enemy Army)")]
+    [Header("⚔️ 7. 적군 군단 편성 목록 (Enemy Army)")]
     [SerializeField] private List<SquadSpawnConfig> enemyArmyConfigs = new List<SquadSpawnConfig>()
     {
         new SquadSpawnConfig { squadName = "적 선봉 보병대", unitType = UnitType.MeleeInfantry, unitCount = 60, columns = 15 },
+        new SquadSpawnConfig { squadName = "적 중앙 총병대", unitType = UnitType.Gunner, unitCount = 40, columns = 20 },
         new SquadSpawnConfig { squadName = "적 후방 궁병대", unitType = UnitType.Archer, unitCount = 40, columns = 10 }
     };
 
@@ -129,9 +145,17 @@ public class BattleManager : MonoBehaviour
             {
                 playerMissilePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/PlayerUnit_missile.prefab");
             }
+            if (playerGunnerPrefab == null)
+            {
+                playerGunnerPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/PlayerUnit_gunner.prefab");
+            }
             if (enemyMissilePrefab == null)
             {
                 enemyMissilePrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/EnemyUnit_missile.prefab");
+            }
+            if (enemyGunnerPrefab == null)
+            {
+                enemyGunnerPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/EnemyUnit_gunner.prefab");
             }
 #endif
         }
@@ -320,6 +344,8 @@ public class BattleManager : MonoBehaviour
             return null;
         }
 
+        centerPosition.y = TerrainHeightManager.SampleHeightFast(centerPosition.x, centerPosition.z);
+
         GameObject squadObj = Instantiate(squadPrefab, centerPosition, spawnRotation);
         if (!string.IsNullOrEmpty(config.squadName))
         {
@@ -356,7 +382,11 @@ public class BattleManager : MonoBehaviour
         GameObject defaultPrefab = null;
         if (isPlayer)
         {
-            if (config.unitType == UnitType.Archer)
+            if (config.unitType == UnitType.Gunner)
+            {
+                defaultPrefab = playerGunnerPrefab != null ? playerGunnerPrefab : (playerMissilePrefab != null ? playerMissilePrefab : playerUnitPrefab);
+            }
+            else if (config.unitType == UnitType.Archer)
             {
                 defaultPrefab = playerMissilePrefab != null ? playerMissilePrefab : playerUnitPrefab;
             }
@@ -367,7 +397,11 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
-            if (config.unitType == UnitType.Archer)
+            if (config.unitType == UnitType.Gunner)
+            {
+                defaultPrefab = enemyGunnerPrefab != null ? enemyGunnerPrefab : (enemyMissilePrefab != null ? enemyMissilePrefab : enemyUnitPrefab);
+            }
+            else if (config.unitType == UnitType.Archer)
             {
                 defaultPrefab = enemyMissilePrefab != null ? enemyMissilePrefab : enemyUnitPrefab;
             }
@@ -438,8 +472,8 @@ public class BattleManager : MonoBehaviour
                 float defaultMoveSpeed = squad.targetSpeed > 0 ? squad.targetSpeed : ((prefabUnit != null && prefabUnit.walkSpeed > 0f) ? prefabUnit.walkSpeed : 1.0f);
                 int defaultAutoAttack = (prefabUnit != null && !prefabUnit.autoAttackEnabled) ? 0 : 1;
 
-                int unitTypeInt = (config.unitType == UnitType.Archer || (prefabUnit != null && prefabUnit.isRangedUnit)) ? 2 : (int)config.unitType;
-                int isRanged = (unitTypeInt == 2 || (prefabUnit != null && prefabUnit.isRangedUnit)) ? 1 : 0;
+                int unitTypeInt = (config.unitType == UnitType.Gunner) ? 3 : ((config.unitType == UnitType.Archer || (prefabUnit != null && prefabUnit.isRangedUnit)) ? 2 : (int)config.unitType);
+                int isRanged = (config.unitType == UnitType.Archer || config.unitType == UnitType.Gunner || (prefabUnit != null && prefabUnit.isRangedUnit)) ? 1 : 0;
                 int defaultCanFireMoving = (prefabUnit != null && !prefabUnit.canFireWhileMoving) ? 0 : 1;
                 int defaultMaxAmmo = (prefabUnit != null) ? prefabUnit.maxAmmo : 25;
                 float defaultRangedRange = (prefabUnit != null && prefabUnit.rangedAttackRange > 1f) ? prefabUnit.rangedAttackRange : 150f;
@@ -449,6 +483,8 @@ public class BattleManager : MonoBehaviour
                 float defaultMinDmgRatio = (prefabUnit != null && prefabUnit.minDamageRatioAtMax > 0.05f) ? prefabUnit.minDamageRatioAtMax : 0.55f;
                 float defaultRangedCooldown = (prefabUnit != null && prefabUnit.rangedAttackCooldown > 0.05f) ? prefabUnit.rangedAttackCooldown : 2.2f;
                 float defaultProjectileSpeed = (prefabUnit != null && prefabUnit.projectileSpeed > 1f) ? prefabUnit.projectileSpeed : 30f;
+                float defaultProjectileDrag = (prefabUnit != null && prefabUnit.projectileDrag >= 0f) ? prefabUnit.projectileDrag : 0.25f;
+                Vector3 defaultLaunchOffset = (prefabUnit != null) ? prefabUnit.launchOffset : new Vector3(0.15f, 1.35f, 0.45f);
                 float defaultMinSpread = (prefabUnit != null) ? prefabUnit.minSpreadRadius : 0.3f;
                 float defaultMaxSpread = (prefabUnit != null && prefabUnit.maxSpreadRadius > 0.1f) ? prefabUnit.maxSpreadRadius : 3.5f;
                 int defaultTrajectory = (prefabUnit != null) ? (int)prefabUnit.trajectoryMode : 0;
@@ -463,6 +499,7 @@ public class BattleManager : MonoBehaviour
                     var slot = (i < spawnSlots.Count) ? spawnSlots[i] : default;
                     Vector3 localOffset = (i < spawnSlots.Count) ? slot.localOffset : Vector3.zero;
                     Vector3 spawnPos = centerPosition + (spawnRotation * localOffset);
+                    spawnPos.y = TerrainHeightManager.SampleHeightFast(spawnPos.x, spawnPos.z);
 
                     Entity entity = em.CreateEntity(archetype);
 
@@ -542,6 +579,8 @@ public class BattleManager : MonoBehaviour
                         RangedAttackCooldown = defaultRangedCooldown,
                         LastRangedAttackTime = -100f,
                         ProjectileSpeed = defaultProjectileSpeed,
+                        ProjectileDrag = defaultProjectileDrag,
+                        LaunchOffset = new Unity.Mathematics.float3(defaultLaunchOffset.x, defaultLaunchOffset.y, defaultLaunchOffset.z),
                         MinSpreadRadius = defaultMinSpread,
                         MaxSpreadRadius = defaultMaxSpread,
                         TrajectoryMode = defaultTrajectory,
@@ -597,6 +636,7 @@ public class BattleManager : MonoBehaviour
             var slot = (i < spawnSlots.Count) ? spawnSlots[i] : default;
             Vector3 localOffset = (i < spawnSlots.Count) ? slot.localOffset : Vector3.zero;
             Vector3 spawnPos = centerPosition + (spawnRotation * localOffset);
+            spawnPos.y = TerrainHeightManager.SampleHeightFast(spawnPos.x, spawnPos.z);
 
             if (NavMesh.SamplePosition(spawnPos, out NavMeshHit hit, 3.0f, NavMesh.AllAreas))
             {
