@@ -3171,6 +3171,47 @@ public class PlayerController : MonoBehaviour
         bool isAnyLoose = false;
         foreach (Squad s in selectedSquads) if (s != null && s.isLooseFormation) { isAnyLoose = true; break; }
 
+        // 🏹 원거리 병과(부대 및 자유 유닛) 선택 여부 및 자유사격 On/Off 상태 검사
+        bool isAnyFireAtWill = false;
+        bool hasAnyRanged = false;
+        foreach (Squad s in selectedSquads)
+        {
+            if (s != null && s.IsRangedSquad)
+            {
+                hasAnyRanged = true;
+                if (s.fireAtWill) isAnyFireAtWill = true;
+            }
+        }
+        foreach (Unit u in selectedUnits)
+        {
+            if (u != null && u.isRangedUnit)
+            {
+                hasAnyRanged = true;
+                if (u.fireAtWill) isAnyFireAtWill = true;
+            }
+        }
+        if (selectedECSEntities.Count > 0)
+        {
+            var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
+            if (world != null && world.IsCreated)
+            {
+                var em = world.EntityManager;
+                for (int i = 0; i < selectedECSEntities.Count; i++)
+                {
+                    var ent = selectedECSEntities[i];
+                    if (em.Exists(ent) && em.HasComponent<MiniTotalWar.ECS.UnitCombatData>(ent))
+                    {
+                        var c = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(ent);
+                        if (c.IsRangedUnit == 1)
+                        {
+                            hasAnyRanged = true;
+                            if (c.FireAtWill == 1) isAnyFireAtWill = true;
+                        }
+                    }
+                }
+            }
+        }
+
         List<CommandButtonData> cmds = new List<CommandButtonData>();
 
         // 1. [다중 부대 전용] 군단 잠금 (부대가 2개 이상 선택되었을 때만 노출)
@@ -3193,6 +3234,18 @@ public class PlayerController : MonoBehaviour
         cmds.Add(new CommandButtonData { commandId = "Hold", buttonName = isAnyHold ? "자유 추격" : "위치 사수", hotkeyText = "C", onClickAction = () => { ToggleStance(UnitStance.HoldPosition); } });
         cmds.Add(new CommandButtonData { commandId = "RunToggle", buttonName = isAnyRunning ? "걷기" : "달리기", hotkeyText = "R", onClickAction = () => { ToggleRunMode(); } });
         cmds.Add(new CommandButtonData { commandId = "AutoAttack", buttonName = isAnyAutoAttack ? "돌격 요격" : "접촉 방어", hotkeyText = "V", onClickAction = () => { ToggleAutoAttack(); } });
+
+        // 🏹 [원거리 전용 명령] 원거리 유닛(자유 유닛 포함) 또는 부대 선택 시 자유 사격(F) 버튼 표시
+        if (hasAnyRanged)
+        {
+            cmds.Add(new CommandButtonData
+            {
+                commandId = "FireAtWill",
+                buttonName = isAnyFireAtWill ? "자동 사격" : "사격 금지",
+                hotkeyText = "F",
+                onClickAction = () => { ToggleFireAtWill(); }
+            });
+        }
 
         // 3. [부대 전용 명령] 부대(Squad)가 1개 이상 선택되었을 때만 노출되는 대형 진형 명령
         if (selectedSquads.Count > 0)
@@ -3265,21 +3318,29 @@ public class PlayerController : MonoBehaviour
             attackedSquads++;
         }
 
-        // 자유 유닛들도 적 부대 중심을 향해 사격 또는 돌격
+        int targetEnemySquadId = enemySquad.GetInstanceID();
+
+        // 자유 유닛들도 적 부대를 목표로 사격 자세 유지 또는 돌격
         foreach (Unit u in selectedUnits)
         {
             if (u != null && u.mySquad == null)
             {
-                if (!isAltPressed && u.isRangedUnit)
+                if (UnitJobSimulationManager.Instance != null)
+                {
+                    UnitJobSimulationManager.Instance.UpdateUnitTargetSquadId(u, targetEnemySquadId);
+                }
+
+                if (!isAltPressed && u.isRangedUnit && u.currentAmmo > 0)
                 {
                     float dist = Vector3.Distance(u.transform.position, enemyVisualCenter);
-                    if (dist <= u.rangedAttackRange * 0.90f)
+                    if (dist <= u.rangedAttackRange * 0.85f)
                     {
                         u.Stop();
                     }
                     else
                     {
-                        u.MoveTo(enemyVisualCenter - ((enemyVisualCenter - u.transform.position).normalized * (u.rangedAttackRange * 0.70f)));
+                        Vector3 standPos = enemyVisualCenter - ((enemyVisualCenter - u.transform.position).normalized * (u.rangedAttackRange * 0.70f));
+                        u.AttackMoveTo(standPos);
                     }
                 }
                 else
@@ -3289,7 +3350,7 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        // ⚡ 순수 ECS 자유 유닛들도 AttackMove
+        // ⚡ 순수 ECS 자유 유닛들도 원거리 사거리 유지 또는 돌격
         if (selectedECSEntities.Count > 0)
         {
             var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
@@ -3304,13 +3365,47 @@ public class PlayerController : MonoBehaviour
                         var mov = em.GetComponentData<MiniTotalWar.ECS.UnitMovementData>(ent);
                         var combat = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(ent);
 
-                        mov.TargetPosition = enemyVisualCenter;
-                        float spd = (mov.MoveSpeed >= 2.0f) ? 2.8f : 1.2f;
-                        mov.MoveSpeed = spd;
-                        mov.Acceleration = (spd >= 2.0f) ? 8.0f : 4.5f;
-                        combat.CurrentState = (int)UnitCommandState.AttackMove;
+                        combat.TargetSquadId = targetEnemySquadId;
                         combat.AutoAttackEnabled = 1;
-                        combat.ChargeImpactReady = 1;
+
+                        if (!isAltPressed && combat.IsRangedUnit == 1 && combat.CurrentAmmo > 0)
+                        {
+                            Unity.Mathematics.float3 myPos = mov.Position;
+                            Unity.Mathematics.float3 diff = (Unity.Mathematics.float3)enemyVisualCenter - myPos;
+                            diff.y = 0f;
+                            float dist = Unity.Mathematics.math.length(diff);
+                            float maxRange = combat.RangedAttackRange > 10f ? combat.RangedAttackRange : 60f;
+
+                            if (dist <= maxRange * 0.85f)
+                            {
+                                // 🎯 사거리 안: 제자리 정지 후 사격 태세 대기
+                                mov.TargetPosition = myPos;
+                                mov.MoveSpeed = 1.2f;
+                                mov.Acceleration = 5.0f;
+                                combat.CurrentState = (int)UnitCommandState.Idle;
+                            }
+                            else
+                            {
+                                // 🏃 사거리 밖: 사거리 안(70% 지점)까지만 전술 전진
+                                Unity.Mathematics.float3 dir = Unity.Mathematics.math.normalize(diff);
+                                Unity.Mathematics.float3 standPos = (Unity.Mathematics.float3)enemyVisualCenter - (dir * (maxRange * 0.70f));
+                                mov.TargetPosition = standPos;
+                                float spd = (mov.MoveSpeed >= 2.0f) ? 2.8f : 1.2f;
+                                mov.MoveSpeed = spd;
+                                mov.Acceleration = (spd >= 2.0f) ? 8.0f : 4.5f;
+                                combat.CurrentState = (int)UnitCommandState.AttackMove;
+                            }
+                        }
+                        else
+                        {
+                            // ⚔️ 근접 유닛 또는 Alt 강제 백병전 돌격
+                            mov.TargetPosition = enemyVisualCenter;
+                            float spd = (mov.MoveSpeed >= 2.0f) ? 2.8f : 1.2f;
+                            mov.MoveSpeed = spd;
+                            mov.Acceleration = (spd >= 2.0f) ? 8.0f : 4.5f;
+                            combat.CurrentState = (int)UnitCommandState.AttackMove;
+                            combat.ChargeImpactReady = 1;
+                        }
 
                         em.SetComponentData(ent, mov);
                         em.SetComponentData(ent, combat);
@@ -3533,16 +3628,17 @@ public class PlayerController : MonoBehaviour
         {
             if (u != null && u.mySquad == null)
             {
-                if (!isAltPressed && u.isRangedUnit)
+                if (!isAltPressed && u.isRangedUnit && u.currentAmmo > 0)
                 {
                     float dist = Vector3.Distance(u.transform.position, targetWorldPos);
-                    if (dist <= u.rangedAttackRange * 0.90f)
+                    if (dist <= u.rangedAttackRange * 0.85f)
                     {
                         u.Stop();
                     }
                     else
                     {
-                        u.MoveTo(targetWorldPos - ((targetWorldPos - u.transform.position).normalized * (u.rangedAttackRange * 0.70f)));
+                        Vector3 standPos = targetWorldPos - ((targetWorldPos - u.transform.position).normalized * (u.rangedAttackRange * 0.70f));
+                        u.AttackMoveTo(standPos);
                     }
                 }
                 else
@@ -3566,13 +3662,48 @@ public class PlayerController : MonoBehaviour
                         var mov = em.GetComponentData<MiniTotalWar.ECS.UnitMovementData>(ent);
                         var combat = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(ent);
 
-                        mov.TargetPosition = targetWorldPos;
-                        float spd = (mov.MoveSpeed >= 2.0f) ? 2.8f : 1.2f;
-                        mov.MoveSpeed = spd;
-                        mov.Acceleration = (spd >= 2.0f) ? 8.0f : 4.5f;
-                        combat.CurrentState = (int)UnitCommandState.AttackMove;
-                        combat.AutoAttackEnabled = 1;
-                        combat.ChargeImpactReady = 1;
+                        // 🏹 자유 ECS 유닛 중 원거리 유닛(탄약 보유)은 일반 우클릭 시 사거리 유지 전술 사격 하달
+                        if (!isAltPressed && combat.IsRangedUnit == 1 && combat.CurrentAmmo > 0)
+                        {
+                            Vector3 myPos = (Vector3)mov.Position;
+                            Vector3 dir = targetWorldPos - myPos;
+                            dir.y = 0f;
+                            float dist = dir.magnitude;
+                            float maxRange = combat.RangedAttackRange > 10f ? combat.RangedAttackRange : 60f;
+                            Quaternion faceRot = (dir.sqrMagnitude > 0.001f) ? Quaternion.LookRotation(dir.normalized) : (Quaternion)mov.TargetRotation;
+
+                            if (dist <= maxRange * 0.90f)
+                            {
+                                // 사거리 안: 제자리 정지 후 목표 지점 조준 사격
+                                mov.TargetPosition = myPos;
+                                mov.TargetRotation = faceRot;
+                                mov.MoveSpeed = 1.2f;
+                                combat.CurrentState = (int)UnitCommandState.Idle;
+                                combat.AutoAttackEnabled = 1;
+                            }
+                            else
+                            {
+                                // 사거리 밖: 사거리 안(70% 지점)으로 정규 전술 전진
+                                Vector3 standPos = targetWorldPos - (dir.normalized * (maxRange * 0.70f));
+                                mov.TargetPosition = standPos;
+                                mov.TargetRotation = faceRot;
+                                float spd = (mov.MoveSpeed >= 2.0f) ? 2.8f : 1.2f;
+                                mov.MoveSpeed = spd;
+                                mov.Acceleration = (spd >= 2.0f) ? 8.0f : 4.5f;
+                                combat.CurrentState = (int)UnitCommandState.AttackMove;
+                                combat.AutoAttackEnabled = 1;
+                            }
+                        }
+                        else
+                        {
+                            mov.TargetPosition = targetWorldPos;
+                            float spd = (mov.MoveSpeed >= 2.0f) ? 2.8f : 1.2f;
+                            mov.MoveSpeed = spd;
+                            mov.Acceleration = (spd >= 2.0f) ? 8.0f : 4.5f;
+                            combat.CurrentState = (int)UnitCommandState.AttackMove;
+                            combat.AutoAttackEnabled = 1;
+                            combat.ChargeImpactReady = 1;
+                        }
 
                         em.SetComponentData(ent, mov);
                         em.SetComponentData(ent, combat);

@@ -74,7 +74,8 @@
 | `HandleHotkeyInput` | `void ()` | 실제 13개 단축키(Z, X, C, V, B, R, G, [, ], /, N, M, ,, .) 종합 처리 | `Update` | [PlayerController.cs#L2405-L2476](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/PlayerController.cs#L2405-L2476) |
 | `StopSelected` | `void ()` | 선택 부대/유닛 즉시 정지 명령 | `HandleHotkeyInput`, `X키` | [PlayerController.cs#L2759-L2830](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/PlayerController.cs#L2759-L2830) |
 | `ToggleRunMode` | `void ()` | `R`키 달리기/걷기 모드 일괄 전환 | `HandleHotkeyInput` | [PlayerController.cs#L2975-L3044](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/PlayerController.cs#L2975-L3044) |
-| `CommandAttackTargetSquad` | `void (Squad enemySquad)` | 적 부대 우클릭 시 선택 부대 일제 돌격 지휘 | `HandleCommandInput`, `UI` | [PlayerController.cs#L3164-L3227](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/PlayerController.cs#L3164-L3227) |
+| `CommandAttackTargetSquad` | `void (Squad enemySquad, bool isAlt)` | 적 부대 우클릭 시 선택 부대 및 자유 유닛(GameObject/Pure ECS) 공격 지휘 (원거리 부대/유닛은 일반 우클릭 시 사거리 85% 내이면 제자리 정지 사격 자세, 사거리 밖이면 70% 지점으로 전술 전진, Alt 우클릭 시 강제 백병전 돌격) | `HandleCommandInput`, `UI` | [PlayerController.cs#L3230-L3335](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/PlayerController.cs#L3230-L3335) |
+| `CommandAttackTargetPosition` | `void (Vector3 targetWorldPos, bool isAlt)` | 특정 좌표/적 위치를 향해 부대 및 자유 유닛(GameObject/ECS)에게 어택땅 명령 하달 (원거리 유닛은 일반 우클릭 시 사거리 내이면 제자리 정지 사격 자세, 사거리 밖이면 사거리 내 접근 지점으로 전술 전진) | `HandleCommandInput` | [PlayerController.cs#L3490-L3586](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/PlayerController.cs#L3490-L3586) |
 | `TryGetEnemyUnderMouse` | `bool (out Squad, out pos)` | 마우스 커서 아래 적 부대/엔티티 정밀 픽킹 | `HandleCommandInput` | [PlayerController.cs#L3229-L3375](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/PlayerController.cs#L3229-L3375) |
 
 ---

@@ -312,20 +312,52 @@ public class ArrowSimulationManager : MonoBehaviour
                     : (v0Sq + adjSqrt) / (g * horizDist);
             }
 
-            // 라디안 및 각도(Deg) 산출 (-89.5도 ~ +89.5도 전방위 90도 사격 완벽 개방)
+            // 라디안 및 각도(Deg) 산출 (-89.5도 ~ +89.5도 전방위 90도 사격)
             float baseAngleRad = Mathf.Atan(tanTheta);
             float baseAngleDeg = baseAngleRad * Mathf.Rad2Deg;
 
+            // 🛑 [근거리 초고각 수직 사격 방지 (Anti-Slug Trajectory Clamp)]:
+            // 거리가 가까울수록 tanHigh가 85°~89° 수직 하늘로 치솟아 수평 속도가 1m/s로 기어가는 현상 원천 차단!
+            // 근접 거리에서는 최대 발사각 상한선을 두어, 화살이 하늘로 기어가지 않고 낮고 빠르게 직사/완만한 곡사로 꽂히도록 보정!
+            float maxAllowedAngle = 65.0f;
+            if (horizDist <= 15.0f)
+            {
+                maxAllowedAngle = (diffY < 0f) ? 25.0f : 40.0f; // 15m 이내 초근접: 최대 40도 (하향 시 25도 직사)
+            }
+            else if (horizDist <= 35.0f)
+            {
+                maxAllowedAngle = 50.0f; // 35m 이내 근접: 최대 50도
+            }
+
+            if (baseAngleDeg > maxAllowedAngle)
+            {
+                baseAngleDeg = maxAllowedAngle;
+                baseAngleRad = baseAngleDeg * Mathf.Deg2Rad;
+                tanTheta = Mathf.Tan(baseAngleRad);
+
+                // 각도가 낮아졌으므로 해당 각도로 horizDist와 diffY에 정확히 도달하기 위한 필요 속도 v0 재계산:
+                float cosT = Mathf.Cos(baseAngleRad);
+                float denom = 2.0f * (cosT * cosT) * (horizDist * tanTheta - diffY);
+                if (denom > 0.001f)
+                {
+                    float requiredV0Sq = (g * horizDist * horizDist) / denom;
+                    if (requiredV0Sq > 1.0f)
+                    {
+                        v0 = Mathf.Clamp(Mathf.Sqrt(requiredV0Sq), 15.0f, Mathf.Max(v0, 45.0f));
+                    }
+                }
+            }
+
             // 🏹 [일제사격 화살 다발(Volley Bundle) 연출]: 뒷열 사수는 앞사람 머리 위를 넘기도록 행당 +0.7도 미세 분산
-            float rowOffset = Mathf.Clamp(shooterRow * 0.7f, 0f, 3.5f);
-            launchAngleDeg = Mathf.Clamp(baseAngleDeg + rowOffset, -89.5f, 89.5f);
+            float rowOffset = Mathf.Clamp(shooterRow * 0.7f, 0f, 2.5f);
+            launchAngleDeg = Mathf.Clamp(baseAngleDeg + rowOffset, -89.5f, 85.0f);
             launchAngleRad = launchAngleDeg * Mathf.Deg2Rad;
 
             cosTheta = Mathf.Cos(launchAngleRad);
             sinTheta = Mathf.Sin(launchAngleRad);
 
             // 초기 수평/수직 분속도 벡터 크기
-            vHoriz = Mathf.Max(0.05f, v0 * cosTheta);
+            vHoriz = Mathf.Max(0.5f, v0 * cosTheta);
             v0Y = v0 * sinTheta;
         }
 
@@ -345,15 +377,18 @@ public class ArrowSimulationManager : MonoBehaviour
             flightDuration = horizDist / Mathf.Max(0.5f, vHoriz);
         }
 
-        // 수직 운동 기반 최소 비행 시간 보정 (수직 사격 시 horizDist가 작아도 정확한 낙하/상승 시간 보장)
-        if (Mathf.Abs(diffY) > 0.5f)
+        // 🛑 [수직 운동 기반 비행 시간 보정]:
+        // 오직 수평 거리가 0에 수렴하는 완전 수직 사격 특이해(R < 0.2m)에서만 적용!
+        // 일반 사격(R >= 0.2m)에서는 포물선 방정식 자체가 diffY와 horizDist를 엄밀하게 동시에 만족하므로,
+        // 수평 비행 시간을 100% 준수해야 직사/저각 사격 시 화살이 팽창된 시간 때문에 느려지는 현상이 발생하지 않음.
+        if (horizDist < 0.2f && Mathf.Abs(diffY) > 0.1f)
         {
             float vertFlightTime = (diffY < 0f)
-                ? ((-v0Y + Mathf.Sqrt(Mathf.Max(0.1f, v0Y * v0Y + 2f * g * Mathf.Abs(diffY)))) / g)
-                : Mathf.Abs(diffY) / Mathf.Max(1.0f, Mathf.Abs(v0Y));
+                ? Mathf.Sqrt(2f * Mathf.Abs(diffY) / g)
+                : (Mathf.Abs(diffY) / Mathf.Max(1.0f, Mathf.Abs(v0Y)));
             if (vertFlightTime > 0.05f && vertFlightTime < 10.0f)
             {
-                flightDuration = Mathf.Max(flightDuration, vertFlightTime);
+                flightDuration = vertFlightTime;
             }
         }
 
@@ -432,14 +467,14 @@ public class ArrowSimulationManager : MonoBehaviour
             // 🚀 실제 중력 가속도 물리 법칙을 따르는 실시간 위치 및 속도 벡터 연산
             Vector3 currentPos = CalculatePhysicsPosition(ref arrowPool[i], elapsed, out Vector3 velocity);
 
-            // 🏔️ [지형 및 언덕 충돌 판정]: 발사 직후 안전 마진(0.10초) 경과 후 화살이 지형 표면 이하로 떨어지면 충돌 검사
-            if (elapsed > 0.10f && TerrainHeightManager.HasInstance)
+            // 🏔️ [지형 및 언덕 충돌 판정]: 발사 직후 안전 마진(0.20초) 경과 후 화살이 지형 표면 이하로 떨어지면 충돌 검사
+            if (elapsed > 0.20f && TerrainHeightManager.HasInstance)
             {
                 float terrainH = TerrainHeightManager.SampleHeightFast(currentPos.x, currentPos.z);
                 if (currentPos.y <= terrainH)
                 {
-                    // 목표 지점 근접(체공 시간의 85% 이상 경과) 상태에서 지표면에 닿은 경우 -> 정상 착탄 대미지 적용!
-                    if (elapsed >= arrowPool[i].flightDuration * 0.85f)
+                    // 목표 지점 근접(체공 시간의 75% 이상 경과) 상태에서 지표면에 닿은 경우 -> 정상 착탄 대미지 적용!
+                    if (elapsed >= arrowPool[i].flightDuration * 0.75f)
                     {
                         OnArrowImpact(ref arrowPool[i]);
                     }

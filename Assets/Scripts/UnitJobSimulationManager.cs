@@ -564,6 +564,24 @@ public class UnitJobSimulationManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 개별 자유 유닛에게 목표 적 부대 ID(TargetSquadId)를 주입합니다.
+    /// </summary>
+    public void UpdateUnitTargetSquadId(Unit unit, int targetSquadId)
+    {
+        if (unit == null || !isNativeArraysAllocated || !unitDataArray.IsCreated) return;
+
+        simulationJobHandle.Complete();
+
+        int idx = unit.simulationIndex;
+        if (idx >= 0 && idx < registeredUnits.Count)
+        {
+            UnitJobData data = unitDataArray[idx];
+            data.targetSquadId = targetSquadId;
+            unitDataArray[idx] = data;
+        }
+    }
+
+    /// <summary>
     /// 진형/태세/밀집도에 따라 계산된 부대 소속 유닛들의 방어력, 무게(질량), 공격 쿨다운 및 원거리 클리어런스 파라미터를 일괄 갱신합니다.
     /// </summary>
     public void UpdateSquadCombatModifiers(
@@ -1247,6 +1265,7 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
         bool isCharging = false;
         bool isCombatRunning = false;
         bool isRangedShooting = false;
+        bool shouldHaltForRangedFire = false;
         float distToEnemy = 999f;
 
         // 1. 전투 및 타겟팅 판정 (외곽 접촉 기반 1:1 토탈워식 방진 전투 + 방어진 제자리 사수 반격)
@@ -1313,26 +1332,64 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                 {
                     bool isAttacking = (data.currentState == 2 || data.currentState == 3 || data.isPlayer == 0);
 
-                    // 1. 자유 유닛: 적을 향해 직접 추격
+                    // 1. 자유 유닛: 적을 향해 직접 추격 또는 원거리 사거리 유지
                     if (data.isFreeUnit == 1)
                     {
                         Vector3 toEnemy = (enemyPos - currentPos).normalized;
-                        targetDest = enemyPos - (toEnemy * Mathf.Max(0.70f, data.engagementOffset));
+                        if (toEnemy.sqrMagnitude < 0.001f) toEnemy = Vector3.forward;
 
-                        if (distToEnemy <= 12.0f)
+                        // 🏹 [원거리 자유 유닛 행동 원칙 (Stand & Fire & Tactical Advance)]
+                        // 탄약이 남아있고 적이 백병전 거리 밖이면 사거리 유지 및 제자리 사격
+                        if (data.isRangedUnit == 1 && data.currentAmmo > 0 && distToEnemy > data.meleeSwitchDistance)
                         {
-                            isCharging = true;
-                            isCombatRunning = false;
-                        }
-                        else if (distToEnemy <= 30.0f || isAttacking)
-                        {
-                            isCharging = false;
-                            isCombatRunning = true;
+                            float maxRangedDist = data.rangedAttackRange * 0.85f;
+                            if (distToEnemy > maxRangedDist)
+                            {
+                                // 🏃 [사거리 밖]: 적을 향해 무작정 돌격하지 않고, 사거리 안(70% 지점)까지만 전술 전진!
+                                targetDest = enemyPos - (toEnemy * (data.rangedAttackRange * 0.70f));
+                                isCharging = false;
+                                isCombatRunning = true;
+                            }
+                            else
+                            {
+                                // 🎯 [사거리 안]: 전진을 멈추고 제자리에 서서 조준 및 사격 태세 유지!
+                                targetDest = currentPos;
+                                isCharging = false;
+                                isCombatRunning = false;
+                            }
                         }
                         else
                         {
-                            isCharging = false;
-                            isCombatRunning = false;
+                            // ⚔️ [근접 자유 유닛 또는 탄약 소진 / 초근접 백병전 돌격]
+                            // 🚨 [무단 돌격 방지]: 대기(Idle: currentState == 0) 상태인 자유 유닛은
+                            // 적이 2.5m 내로 쇄도하지 않는 한 제자리를 사수하며 뛰어가지 않음!
+                            // 오직 공격 명령(isAttacking: currentState >= 2)을 받았거나 적이 2.5m 내로 붙었을 때만 맞돌격!
+                            if (isAttacking || distToEnemy <= 2.5f)
+                            {
+                                targetDest = enemyPos - (toEnemy * Mathf.Max(0.70f, data.engagementOffset));
+
+                                if (distToEnemy <= 12.0f)
+                                {
+                                    isCharging = true;
+                                    isCombatRunning = false;
+                                }
+                                else if (distToEnemy <= 30.0f || isAttacking)
+                                {
+                                    isCharging = false;
+                                    isCombatRunning = true;
+                                }
+                                else
+                                {
+                                    isCharging = false;
+                                    isCombatRunning = false;
+                                }
+                            }
+                            else
+                            {
+                                targetDest = data.targetPosition;
+                                isCharging = false;
+                                isCombatRunning = false;
+                            }
                         }
                     }
                     // 2. 부대 소속 유닛: 공격 상태 시 목표 적 부대원들을 기억하여 자유롭게 끝까지 추격 섬멸!
@@ -1392,7 +1449,7 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                     bool hasAmmo = (data.currentAmmo > 0 || data.squadHasAmmo == 1);
 
                     // 🏹 [자유 사격(Fire at Will) 검사]:
-                    // fireAtWill이 꺼져(0) 있으면, 지휘관이 명시적으로 적 부대를 지정(targetSquadId != -1)하지 않은 한 자동 사격을 하지 않고 화살 절약!
+                    // fireAtWill이 켜져있거나 목표 부대 지정 시 허용 (자유 유닛도 F키 토글 준수)
                     bool canShootFireAtWill = (data.fireAtWill == 1) || (data.targetSquadId != -1);
 
                     // 🚀 [이동 중 사격 판정 (자유사격 이동 데드락 원천 방지)]:
@@ -1452,11 +1509,12 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                         frontClear = (totalClearance >= data.headClearanceMargin);
                     }
 
-                    bool isClearanceSatisfied = rearClear && lateralClear && frontClear;
+                    // 🏹 자유 유닛은 방진 대형이 없는 독립 산개 상태이므로 3축 대형 클리어런스 검사 자동 통과 (지형 LoS만 판정)
+                    bool isClearanceSatisfied = (data.isFreeUnit == 1) ? true : (rearClear && lateralClear && frontClear);
 
-                    // 🏔️ [지형 사선(Line of Sight, LoS) 차폐 검사 및 직사/곡사 사격 분기 (유닛 체급 0.2m 눈높이 정밀화)]
+                    // 🏔️ [지형 사선(Line of Sight, LoS) 차폐 검사 (사수/타겟 눈높이 1.1m)]
                     bool isLosClear = (terrainData.isValid == 1)
-                        ? terrainData.CheckLineOfSight(currentPos, enemyPos, 0.2f, 0.15f, 4)
+                        ? terrainData.CheckLineOfSight(currentPos, enemyPos, 1.1f, 1.1f, 4)
                         : true;
 
                     bool canShootTerrainLoS;
@@ -1470,22 +1528,37 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                     }
                     else // HighArc (곡사: 활/투석기)
                     {
-                        // 🏹 [곡사 무기 규칙]: 시야가 트여 있거나, 지정 목표라면 언덕 너머 고각 곡사 허용
+                        float diffY = enemyPos.y - currentPos.y; // 목표물과의 수직 고저차
+                        bool isUphillTarget = (diffY >= 0.8f);    // 목표물이 사수보다 0.8m 이상 높은 오르막 지형
+                        bool isLongRangeArc = (distToEnemy >= 40.0f); // 40m 이상 거리에서는 오르막 지면 충돌 방지를 위해 곡사 권장
+
                         if (isLosClear)
                         {
                             canShootTerrainLoS = true;
+                            // 🏹 [오르막 지면 조기 충돌 방지]: 
+                            // 사선이 트여 있더라도 오르막 지형(diffY >= 0.8m)이거나 40m 이상 거리인 경우, 
+                            // 저각으로 쏘면 오르막 경사면에 화살이 긁혀 툭 떨어지므로 안전하게 고각 곡사(forceHighArc = 1) 채택!
+                            forceHighArc = (isUphillTarget || isLongRangeArc) ? 1 : 0;
                         }
                         else
                         {
-                            canShootTerrainLoS = (data.targetSquadId != -1);
-                            if (canShootTerrainLoS)
-                            {
-                                forceHighArc = 1;
-                            }
+                            // 🏹 [산 너머 곡사 사격 & 반격 허용]:
+                            // 1) 플레이어가 특정 적 부대를 우클릭 지정했거나(targetSquadId != -1),
+                            // 2) 자유 유닛 간 교전이거나, 적 부대 AI가 자유 유닛을 공격/반격할 때 산 너머 고각 곡사 허용!
+                            canShootTerrainLoS = true;
+                            forceHighArc = 1;
                         }
                     }
 
-                    if (!isEngagedInMelee && !isInsideMelee && hasAmmo && canShootFireAtWill && canShootMovement && isClearanceSatisfied && canShootTerrainLoS && distToEnemy <= data.rangedAttackRange && distToEnemy >= data.rangedMinRange)
+                    // 🎯 [사격 준비 및 조준 자격 (Readiness Check)]:
+                    // 이동 속도 조건을 제외하고 모든 사격 조건(탄약, 백병전 제외, 사거리, 사선, 클리어런스)을 만족했는가?
+                    bool isReadyToShoot = !isEngagedInMelee && !isInsideMelee && hasAmmo && canShootFireAtWill && isClearanceSatisfied && canShootTerrainLoS && distToEnemy <= data.rangedAttackRange && distToEnemy >= data.rangedMinRange;
+
+                    // 🛑 [사격 정지 제동 보장 (Volley Halt Guarantee)]:
+                    // 이동 중 사격 불가 유닛이 사격 자격을 갖추었으면, 계속 뛰어가지 않고 즉시 발을 멈추고 감속 제동!
+                    shouldHaltForRangedFire = isReadyToShoot && (data.canFireWhileMoving == 0) && !isMovingUnderOrder;
+
+                    if (isReadyToShoot && canShootMovement)
                     {
                         isRangedShooting = true;
 
@@ -1539,8 +1612,14 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                                 float finalDmg = data.rangedBaseDamage * (1.0f - (1.0f - data.minDamageRatioAtMax) * distRatio);
                                 float spread = Mathf.Lerp(data.minSpreadRadius, data.maxSpreadRadius, distRatio);
 
-                                // 직사 무기(Flat)는 절대로 강제 곡사를 타지 않음!
-                                int hasAlly = (data.trajectoryMode == 0 && (enemyData.currentState == 3 || forceHighArc == 1)) ? 1 : 0;
+                                // 🛡️ [앞에 아군 부대 존재 여부 또는 언덕 넘김 고각 사격 트리거]:
+                                // 직사 무기(trajectoryMode == 1)는 언제나 직사(0).
+                                // 곡사 무기(trajectoryMode == 0):
+                                // 1) 언덕 너머 지정 사격(forceHighArc == 1)이거나,
+                                // 2) 방진 내 2열 이상 뒷열(isBehindAllies)에서 앞사람 머리를 넘길 때에만 고각(1) 곡사!
+                                // 앞이 트인 1~2열 사수나 독립 자유 유닛은 적이 백병전 중이라도 낮고 빠른 직사(0)로 사살!
+                                bool isBehindAllies = (data.isFreeUnit == 0 && data.row >= 2);
+                                int hasAlly = (data.trajectoryMode == 0 && (forceHighArc == 1 || isBehindAllies)) ? 1 : 0;
 
                                 Vector3 muzzlePos = new Vector3(currentPos.x, finalLaunchY, currentPos.z)
                                                   + (fwdDir * reachDist)
@@ -1782,10 +1861,21 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                 maxDesiredSpeed = 0f;
             }
 
-            // 🏹 [궁병 제자리 사격 태세]: 이동 사격 불허 유닛은 활을 쏘는 동안(isRangedShooting) 발을 100% 멈춤 (돌격 방지)
-            if (isRangedShooting && data.canFireWhileMoving == 0)
+            // 🏹 [궁병 제자리 사격 태세]: 사격 자격을 갖추었거나 활을 쏘는 동안(shouldHaltForRangedFire || isRangedShooting) 즉시 발 멈춤
+            if ((shouldHaltForRangedFire || isRangedShooting) && data.canFireWhileMoving == 0)
             {
                 maxDesiredSpeed = 0f;
+            }
+
+            // 🛡️ [원거리 부대 사격 대형 슬롯 정지 보장]:
+            // 원거리 부대원이 교전 사거리 내에 있고 적이 백병전 거리(5m) 밖이라면,
+            // 사선 차폐나 쿨타임으로 지금 당장 사격을 못 하더라도 무단으로 앞열을 뚫고 적진으로 돌격하지 않고 제자리 대형 사수!
+            if (data.isRangedUnit == 1 && data.squadId != -1 && distToEnemy > data.meleeSwitchDistance && distToEnemy <= data.rangedAttackRange * 0.95f)
+            {
+                if (data.canFireWhileMoving == 0 && (remainingDist < 1.5f || shouldHaltForRangedFire || isRangedShooting))
+                {
+                    maxDesiredSpeed = 0f;
+                }
             }
 
             // 💫 넘어짐 무력화 중에는 이동 불가 (제자리에 쓰러짐)
@@ -1873,7 +1963,16 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
 
         // 4. 회전 갱신: 기본 수평 주시 방향(Flat Yaw) 결정
         Vector3 flatLookDir = Vector3.zero;
-        if (desiredDir.sqrMagnitude > 0.001f)
+        if ((isRangedShooting || shouldHaltForRangedFire || (data.isRangedUnit == 1 && distToEnemy <= data.rangedAttackRange)) && targetIdx >= 0 && targetIdx < totalCount && unitData[targetIdx].isAlive == 1)
+        {
+            Vector3 toEnemy = positions[targetIdx] - currentPos;
+            toEnemy.y = 0f;
+            if (toEnemy.sqrMagnitude > 0.001f)
+            {
+                flatLookDir = toEnemy.normalized;
+            }
+        }
+        else if (desiredDir.sqrMagnitude > 0.001f)
         {
             flatLookDir = desiredDir;
         }

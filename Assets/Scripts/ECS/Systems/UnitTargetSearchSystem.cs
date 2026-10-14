@@ -67,10 +67,18 @@ namespace MiniTotalWar.ECS
             int myFaction = tag.Faction;
             Entity bestTarget = Entity.Null;
             
-            float radarRange = 14.0f; // 🎯 목표 부대 미지정 유닛의 인접 적군 감지 반경 (14m)
+            float radarRange = 14.0f; // 기본 근접 보병 탐색 반경 (14m)
+            int searchCells = 7;      // 7 * 2.0m = 14m
+
+            // 🏹 원거리 유닛(IsRangedUnit == 1, 잔여 탄약 보유)은 사거리에 맞춰 탐색 반경을 최대 65m까지 동적 확장
+            if (combat.IsRangedUnit == 1 && combat.CurrentAmmo > 0)
+            {
+                float dynamicRange = math.clamp(combat.RangedAttackRange, 14.0f, 65.0f);
+                radarRange = dynamicRange;
+                searchCells = (int)math.ceil(radarRange * InvCellSize);
+            }
+
             float minSqrDist = radarRange * radarRange; 
-            
-            int searchCells = 7; // 7 * 2.0m = 14m (15x15 = 225개 셀로 76% 대폭 절감)
             int3 myCoord = new int3((int)math.floor(myPos.x * InvCellSize), 0, (int)math.floor(myPos.z * InvCellSize));
 
             for (int dx = -searchCells; dx <= searchCells; dx++)
@@ -89,7 +97,8 @@ namespace MiniTotalWar.ECS
                             float sqrDist = math.lengthsq(diff);
 
                             // 🛡️ [측면 옆 부대 오탐색 100% 차단]:
-                            // 목표 부대가 지정되지 않은 대기/이동 중에는 시선 정면(forwardDot > 0.25f)의 적만 탐색!
+                            // 목표 부대가 지정되지 않은 대기/이동 중 정규 부대원은 시선 정면(forwardDot > 0.25f)의 적만 탐색!
+                            // (자유 유닛은 사방 난전 및 전방위 견제를 위해 360도 전체 탐색 허용)
                             if (tag.IsFreeUnit == 0 && sqrDist > 0.001f)
                             {
                                 float3 myFwd = math.mul(movement.Rotation, new float3(0, 0, 1));

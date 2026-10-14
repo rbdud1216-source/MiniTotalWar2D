@@ -2966,8 +2966,8 @@ public class Squad : MonoBehaviour
             {
                 hasChargedAfterEmptyAmmo = false;
             }
-            float maxRange = 150f;
-            TrajectoryMode trajMode = TrajectoryMode.HighArc;
+            float maxRange = rangedAttackRange > 10f ? rangedAttackRange : 150f;
+            TrajectoryMode trajMode = trajectoryMode;
             if (members != null && members.Count > 0 && members[0] != null)
             {
                 if (members[0].rangedAttackRange > 10f) maxRange = members[0].rangedAttackRange;
@@ -2983,27 +2983,38 @@ public class Squad : MonoBehaviour
                 return;
             }
 
-            // 🏔️ 부대 중심과 적 부대 중심 간 지형 사선(LoS) 차폐 검사
-            bool isLosClear = TerrainHeightManager.CheckLineOfSightFast(myPos, enemyCenter, 1.6f, 1.0f, 4);
+            // 🏔️ 부대 중심, 전열, 좌익, 우익 다관측점 지형 사선(LoS) 차폐 검사
+            Vector3 squadRight = faceRot * Vector3.right;
+            float halfWidth = Mathf.Max(2f, currentColumns * spacing * 0.35f);
+            Vector3 leftObs = myPos - squadRight * halfWidth;
+            Vector3 rightObs = myPos + squadRight * halfWidth;
 
-            // 🎯 직사 부대(총기/쇠뇌: Flat)인데 언덕에 가려져 사선이 없다면(!isLosClear),
+            bool isLosClear = TerrainHeightManager.CheckLineOfSightFast(myPos, enemyCenter, 1.4f, 1.2f, 4) ||
+                              TerrainHeightManager.CheckLineOfSightFast(myFront, enemyCenter, 1.4f, 1.2f, 4) ||
+                              TerrainHeightManager.CheckLineOfSightFast(leftObs, enemyCenter, 1.4f, 1.2f, 4) ||
+                              TerrainHeightManager.CheckLineOfSightFast(rightObs, enemyCenter, 1.4f, 1.2f, 4);
+
+            // 🎯 직사 부대(총기/쇠뇌: Flat)인데 완전히 언덕에 가려져 사선이 전혀 없다면(!isLosClear),
             // 사거리 내에 있더라도 적이 보이는 시야각이 나올 때까지 전진 지속!
-            bool needsAdvance = (distToEnemy > maxRange * 0.90f) || (trajMode == TrajectoryMode.Flat && !isLosClear);
+            // 곡사 부대(활: HighArc) 또는 1개 관측점이라도 사선이 트인 직사 부대는 즉시 제자리 정지 사격!
+            bool needsAdvance = (distToEnemy > maxRange * 0.85f) || (trajMode == TrajectoryMode.Flat && !isLosClear);
 
             if (needsAdvance)
             {
                 float engageDist = (trajMode == TrajectoryMode.Flat && !isLosClear) ? (maxRange * 0.50f) : (maxRange * 0.70f);
                 Vector3 targetStandPos = enemyCenter - (dirToEnemy.normalized * engageDist);
+                targetStandPos.y = TerrainHeightManager.SampleHeightFast(targetStandPos.x, targetStandPos.z);
                 if (Vector3.Distance(lastTrackedTargetPos, targetStandPos) > 1.0f || !isMoving)
                 {
                     lastTrackedTargetPos = targetStandPos;
-                    CommandMoveWithFormation(targetStandPos, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.AttackMove, preserveTarget: true);
+                    // 🛡️ 사선 확보 기동 시에는 백병전 돌격(AttackMove)이 아닌 대형 유지 이동(Move)으로 차분하게 이동
+                    CommandMoveWithFormation(targetStandPos, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.Move, preserveTarget: true);
                 }
             }
             else
             {
-                // 이미 사거리 내이고 사선이 확보됨(또는 곡사 부대): 전진을 멈추고 제자리 사격 태세 유지!
-                if (isMoving)
+                // 이미 사거리 내이고 사선이 확보됨: 부대 전체가 전진을 즉각 멈추고 제자리 일제사격 태세 확립!
+                if (isMoving || currentCommandState != UnitCommandState.Idle)
                 {
                     CommandRangedHaltAndFire(faceRot, currentTargetSquad);
                 }
@@ -3318,81 +3329,232 @@ public class Squad : MonoBehaviour
             }
         }
 
-        if (bestTargetSquad != null)
-        {
-            // ⚔️ 1순위: 아군 부대를 향해 일제 돌격 명령
-            if (currentTargetSquad != bestTargetSquad || currentCommandState != UnitCommandState.AttackMove)
-            {
-                CommandAttackSquad(bestTargetSquad);
-            }
-        }
-        else
-        {
-            // 🦅 2순위 (아군 부대 전멸/부재 시): 살아있는 아군 자유 유닛 무리를 포위/추적하여 토벌
-            Vector3 bestFreeUnitPos = Vector3.zero;
-            float minFreeUnitSqrDist = float.MaxValue;
-            bool foundFreeUnit = false;
+        // 🦅 2. 살아있는 아군 자유 유닛(독립 병사들) 무리 탐색
+        // 🎯 [사선(LoS) 트인 적 1순위 / 산 뒤 은폐된 적 2순위 철저 분리]:
+        // 산 뒤에 숨은 적 때문에 옆에 훤히 보이는 적을 무시하는 현상 완전 차단!
+        Vector3 bestVisibleFreeUnitPos = Vector3.zero;
+        float minVisibleFreeUnitSqrDist = float.MaxValue;
+        bool foundVisibleFreeUnit = false;
 
-            // [A] 순수 ECS 자유 유닛 (Faction == 1 && (SquadId == -1 || IsFreeUnit == 1))
-            var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
-            if (world != null && world.IsCreated)
-            {
-                var em = world.EntityManager;
-                var query = em.CreateEntityQuery(
-                    typeof(MiniTotalWar.ECS.UnitEntityTag),
-                    typeof(MiniTotalWar.ECS.UnitMovementData)
-                );
+        Vector3 bestHiddenFreeUnitPos = Vector3.zero;
+        float minHiddenFreeUnitSqrDist = float.MaxValue;
+        bool foundHiddenFreeUnit = false;
 
-                using (var tags = query.ToComponentDataArray<MiniTotalWar.ECS.UnitEntityTag>(Unity.Collections.Allocator.Temp))
-                using (var movs = query.ToComponentDataArray<MiniTotalWar.ECS.UnitMovementData>(Unity.Collections.Allocator.Temp))
+        Vector3 myEye = myPos;
+        myEye.y = TerrainHeightManager.SampleHeightFast(myEye.x, myEye.z) + 1.2f;
+
+        // [A] 순수 ECS 자유 유닛 (Faction == 1 && (SquadId == -1 || IsFreeUnit == 1))
+        var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
+        if (world != null && world.IsCreated)
+        {
+            var em = world.EntityManager;
+            var query = em.CreateEntityQuery(
+                typeof(MiniTotalWar.ECS.UnitEntityTag),
+                typeof(MiniTotalWar.ECS.UnitMovementData)
+            );
+
+            using (var tags = query.ToComponentDataArray<MiniTotalWar.ECS.UnitEntityTag>(Unity.Collections.Allocator.Temp))
+            using (var movs = query.ToComponentDataArray<MiniTotalWar.ECS.UnitMovementData>(Unity.Collections.Allocator.Temp))
+            {
+                for (int i = 0; i < tags.Length; i++)
                 {
-                    for (int i = 0; i < tags.Length; i++)
+                    if (tags[i].Faction == 1 && tags[i].IsAlive == 1 && (tags[i].SquadId == -1 || tags[i].IsFreeUnit == 1))
                     {
-                        if (tags[i].Faction == 1 && tags[i].IsAlive == 1 && (tags[i].SquadId == -1 || tags[i].IsFreeUnit == 1))
+                        Vector3 pos = (Vector3)movs[i].Position;
+                        float dSqr = (pos - myPos).sqrMagnitude;
+
+                        Vector3 targetEye = pos;
+                        targetEye.y = TerrainHeightManager.SampleHeightFast(targetEye.x, targetEye.z) + 1.2f;
+                        bool isLoS = TerrainHeightManager.CheckLineOfSightFast(myEye, targetEye, 0.2f, 0.2f, 5);
+
+                        if (isLoS)
                         {
-                            Vector3 pos = (Vector3)movs[i].Position;
-                            float dSqr = (pos - myPos).sqrMagnitude;
-                            if (dSqr < minFreeUnitSqrDist)
+                            if (dSqr < minVisibleFreeUnitSqrDist)
                             {
-                                minFreeUnitSqrDist = dSqr;
-                                bestFreeUnitPos = pos;
-                                foundFreeUnit = true;
+                                minVisibleFreeUnitSqrDist = dSqr;
+                                bestVisibleFreeUnitPos = pos;
+                                foundVisibleFreeUnit = true;
+                            }
+                        }
+                        else
+                        {
+                            if (dSqr < minHiddenFreeUnitSqrDist)
+                            {
+                                minHiddenFreeUnitSqrDist = dSqr;
+                                bestHiddenFreeUnitPos = pos;
+                                foundHiddenFreeUnit = true;
                             }
                         }
                     }
                 }
             }
+        }
 
-            // [B] GameObject 자유 유닛
-            if (!foundFreeUnit)
+        // [B] GameObject 자유 유닛
+        if (!foundVisibleFreeUnit && !foundHiddenFreeUnit)
+        {
+            Unit[] allUnits = FindObjectsByType<Unit>(FindObjectsSortMode.None);
+            foreach (var u in allUnits)
             {
-                Unit[] allUnits = FindObjectsByType<Unit>(FindObjectsSortMode.None);
-                foreach (var u in allUnits)
+                if (u != null && u.isPlayer && u.mySquad == null && u.currentHp > 0)
                 {
-                    if (u != null && u.isPlayer && u.mySquad == null && u.currentHp > 0)
+                    Vector3 pos = u.transform.position;
+                    float dSqr = (pos - myPos).sqrMagnitude;
+
+                    Vector3 targetEye = pos;
+                    targetEye.y = TerrainHeightManager.SampleHeightFast(targetEye.x, targetEye.z) + 1.2f;
+                    bool isLoS = TerrainHeightManager.CheckLineOfSightFast(myEye, targetEye, 0.2f, 0.2f, 5);
+
+                    if (isLoS)
                     {
-                        float dSqr = (u.transform.position - myPos).sqrMagnitude;
-                        if (dSqr < minFreeUnitSqrDist)
+                        if (dSqr < minVisibleFreeUnitSqrDist)
                         {
-                            minFreeUnitSqrDist = dSqr;
-                            bestFreeUnitPos = u.transform.position;
-                            foundFreeUnit = true;
+                            minVisibleFreeUnitSqrDist = dSqr;
+                            bestVisibleFreeUnitPos = pos;
+                            foundVisibleFreeUnit = true;
+                        }
+                    }
+                    else
+                    {
+                        if (dSqr < minHiddenFreeUnitSqrDist)
+                        {
+                            minHiddenFreeUnitSqrDist = dSqr;
+                            bestHiddenFreeUnitPos = pos;
+                            foundHiddenFreeUnit = true;
                         }
                     }
                 }
             }
+        }
 
-            if (foundFreeUnit)
+        // 🎯 최종 타겟 선정: 눈에 보이는 적(1순위) 우선, 없을 때만 산 뒤 은폐 적(2순위) 선정!
+        Vector3 bestFreeUnitPos;
+        float minFreeUnitSqrDist;
+        bool foundFreeUnit;
+        bool isTargetFreeUnitVisible;
+
+        if (foundVisibleFreeUnit)
+        {
+            bestFreeUnitPos = bestVisibleFreeUnitPos;
+            minFreeUnitSqrDist = minVisibleFreeUnitSqrDist;
+            foundFreeUnit = true;
+            isTargetFreeUnitVisible = true;
+        }
+        else if (foundHiddenFreeUnit)
+        {
+            bestFreeUnitPos = bestHiddenFreeUnitPos;
+            minFreeUnitSqrDist = minHiddenFreeUnitSqrDist;
+            foundFreeUnit = true;
+            isTargetFreeUnitVisible = false;
+        }
+        else
+        {
+            bestFreeUnitPos = Vector3.zero;
+            minFreeUnitSqrDist = float.MaxValue;
+            foundFreeUnit = false;
+            isTargetFreeUnitVisible = false;
+        }
+
+        // 🎯 [우선순위 결정: 자유 유닛 vs 정규 아군 부대]
+        float maxRange = 150f;
+        if (members != null && members.Count > 0 && members[0] != null && members[0].rangedAttackRange > 10f)
+        {
+            maxRange = members[0].rangedAttackRange;
+        }
+
+        bool targetFreeUnit = false;
+        if (foundFreeUnit)
+        {
+            if (bestTargetSquad == null)
             {
-                Vector3 toFreeUnit = bestFreeUnitPos - myPos;
-                toFreeUnit.y = 0f;
-                Quaternion faceRot = (toFreeUnit.sqrMagnitude > 0.01f) ? Quaternion.LookRotation(toFreeUnit.normalized) : transform.rotation;
+                // 정규 부대가 없으면 자유 유닛을 최우선 섬멸
+                targetFreeUnit = true;
+            }
+            else
+            {
+                Vector3 toSquad = bestTargetSquad.GetVisualCenter() - myPos;
+                toSquad.y = 0f;
+                float distToSquad = toSquad.magnitude;
+                float distToFreeUnit = Mathf.Sqrt(minFreeUnitSqrDist);
 
-                // 목표와 3m 이상 차이날 때 자유 유닛 무리로 대형 유지 진격
-                if (currentCommandState != UnitCommandState.AttackMove || Vector3.Distance(moveDestination, bestFreeUnitPos) > 3.0f)
+                // 🎯 자유 유닛이 원거리 사거리 내(최대 사거리의 90%)에 들어와 있거나,
+                // 정규 부대보다 더 가깝거나(80% 거리), 40m 이내로 근접해 있으면
+                // 멀리 있는 정규 부대를 향해 등을 돌리지 않고 눈앞의 자유 유닛을 먼저 섬멸!
+                if (distToFreeUnit < distToSquad * 0.8f ||
+                    (IsRangedSquad && distToFreeUnit <= maxRange * 0.9f && distToFreeUnit < distToSquad) ||
+                    distToFreeUnit <= 40.0f)
                 {
+                    targetFreeUnit = true;
+                }
+            }
+        }
+
+        if (targetFreeUnit)
+        {
+            // 🦅 자유 유닛 무리를 향해 전술 공격 수행!
+            currentTargetSquad = null;
+            hasActiveEnemyTarget = false;
+            SyncTargetSquadIdToSimulations(-1); // 개별 유닛들이 가장 가까운 자유 유닛을 조준하도록 동기화
+
+            Vector3 toFreeUnit = bestFreeUnitPos - myPos;
+            toFreeUnit.y = 0f;
+            float distToFreeUnit = toFreeUnit.magnitude;
+            Quaternion faceRot = (toFreeUnit.sqrMagnitude > 0.01f) ? Quaternion.LookRotation(toFreeUnit.normalized) : transform.rotation;
+
+            // 🏹 [원거리 적 부대(IsRangedSquad && HasAmmo)의 자유 유닛 사격 전술 제어]:
+            if (IsRangedSquad && HasAmmo)
+            {
+                // 👁️ 사선 확보 여부 검사 (눈높이 1.2m - 상위 myEye 재활용)
+                bool isLoSClear = isTargetFreeUnitVisible;
+
+                // 🏹 [원거리 적 부대의 자유 유닛 스마트 교전 전술]:
+                // 1) 자유 유닛이 15m 코앞까지 쇄도한 경우: 백병전 맞돌격
+                if (distToFreeUnit <= 15.0f)
+                {
+                    if (!isRunning) SetRunMode(true);
                     CommandMoveWithFormation(bestFreeUnitPos, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.AttackMove);
                 }
+                // 2) 안전 유효 사거리(55m) 밖인 경우: 자유 유닛 전방 50m 안전 사거리 지점까지만 전술 전진!
+                else if (distToFreeUnit > 55.0f)
+                {
+                    Vector3 targetStandPos = bestFreeUnitPos - (toFreeUnit.normalized * 50.0f);
+                    targetStandPos.y = TerrainHeightManager.SampleHeightFast(targetStandPos.x, targetStandPos.z);
+                    if (Vector3.Distance(moveDestination, targetStandPos) > 2.0f || !isMoving)
+                    {
+                        CommandMoveWithFormation(targetStandPos, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.AttackMove);
+                    }
+                }
+                // 3) 안전 사거리 내(15m ~ 55m): 절대 앞으로 걸어가지 않고 그 자리에서 즉시 멈춰 서서 일제 사격 퍼붓기!
+                else
+                {
+                    if (isMoving || currentCommandState != UnitCommandState.Idle)
+                    {
+                        CommandRangedHaltAndFire(faceRot, null);
+                    }
+                    else
+                    {
+                        // 이미 멈춰서 사격 중이면 목표 방향으로 실시간 회전 정렬
+                        targetSquadRotation = faceRot;
+                        transform.rotation = faceRot;
+                    }
+                }
+            }
+            else
+            {
+                // ⚔️ 일반 근접 부대: 자유 유닛 무리를 향해 전속력 포위 돌격 및 적극적 섬멸
+                if (currentCommandState != UnitCommandState.AttackMove || Vector3.Distance(moveDestination, bestFreeUnitPos) > 2.5f)
+                {
+                    if (!isRunning) SetRunMode(true);
+                    CommandMoveWithFormation(bestFreeUnitPos, faceRot, currentColumns, forceSort: false, cmdState: UnitCommandState.AttackMove);
+                }
+            }
+        }
+        else if (bestTargetSquad != null)
+        {
+            // ⚔️ 정규 아군 부대를 향해 일제 돌격 명령
+            if (currentTargetSquad != bestTargetSquad || currentCommandState != UnitCommandState.AttackMove)
+            {
+                CommandAttackSquad(bestTargetSquad);
             }
         }
     }
@@ -4205,8 +4367,10 @@ public class Squad : MonoBehaviour
     public void DisbandSquad()
     {
         int mySquadId = GetInstanceID();
+        initialUnitCount = 0;
+        currentAliveCount = 0;
 
-        // 1. GameObject 모드 부대원 해체
+        // 1. GameObject 모드 부대원 해체 (대기 상태로 완전 정지 및 타겟 소거)
         List<Unit> currentMembers = new List<Unit>(members);
         foreach (Unit unit in currentMembers)
         {
@@ -4214,11 +4378,19 @@ public class Squad : MonoBehaviour
             {
                 unit.mySquad = null;
                 unit.SetGridPosition(-1, -1);
+                unit.Stop();
+                unit.fixedTargetPos = unit.transform.position;
+
+                if (UnitJobSimulationManager.HasInstance)
+                {
+                    UnitJobSimulationManager.Instance.UpdateUnitTargetPosition(unit, unit.transform.position, unit.transform.rotation, UnitCommandState.Idle);
+                    UnitJobSimulationManager.Instance.UpdateUnitTargetSquadId(unit, -1);
+                }
             }
         }
         members.Clear();
 
-        // 2. 순수 ECS 모드 엔티티 소속 해제 (자유 유닛으로 승격)
+        // 2. 순수 ECS 모드 엔티티 소속 해제 및 상태 정지 (자유 유닛으로 승격)
         var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
         if (world != null && world.IsCreated)
         {
@@ -4234,6 +4406,24 @@ public class Squad : MonoBehaviour
                         tag.SquadId = -1;
                         tag.IsFreeUnit = 1;
                         em.SetComponentData(entities[i], tag);
+
+                        if (em.HasComponent<MiniTotalWar.ECS.UnitCombatData>(entities[i]))
+                        {
+                            var combat = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(entities[i]);
+                            combat.TargetSquadId = -1;
+                            combat.TargetEntity = Unity.Entities.Entity.Null;
+                            combat.CurrentState = (int)UnitCommandState.Idle;
+                            em.SetComponentData(entities[i], combat);
+                        }
+
+                        if (em.HasComponent<MiniTotalWar.ECS.UnitMovementData>(entities[i]))
+                        {
+                            var mov = em.GetComponentData<MiniTotalWar.ECS.UnitMovementData>(entities[i]);
+                            mov.TargetPosition = mov.Position;
+                            mov.Velocity = Unity.Mathematics.float3.zero;
+                            mov.CurrentSpeed = 0f;
+                            em.SetComponentData(entities[i], mov);
+                        }
                     }
                 }
             }

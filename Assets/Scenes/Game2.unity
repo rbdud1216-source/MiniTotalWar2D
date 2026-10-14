@@ -487,15 +487,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81f2700e3159d7744a094d0ea42d05a6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BattleManager
-  usePureECS: 0
+  usePureECS: 1
   playerUnitPrefab: {fileID: 2351225476357572839, guid: a10c78584ca1c5b478e98939d533258d, type: 3}
-  playerMissilePrefab: {fileID: 3100000000000000001, guid: 5794a6bfe37ce2a4a90381c1b358b6ed, type: 3}
+  playerMissilePrefab: {fileID: 3100000000000000001, guid: e817bc1294ef4001a1d95013bb5a2001, type: 3}
+  playerGunnerPrefab: {fileID: 0}
   enemyUnitPrefab: {fileID: 5509464544926942317, guid: 6504436f67a21f34b877d98127a9683b, type: 3}
   enemyMissilePrefab: {fileID: 4100000000000000001, guid: 0397ba5a5474c884fa5578c35b55a17e, type: 3}
+  enemyGunnerPrefab: {fileID: 0}
   squadPrefab: {fileID: 2716882571220685384, guid: 3298a4031b02d7a4594860acb949f24b, type: 3}
-  playerSpawnCenter: {x: 0, y: 0, z: -60}
+  playerSpawnCenter: {x: 0, y: 0, z: -120}
   playerFacingAngle: 0
-  enemySpawnCenter: {x: 0, y: 0, z: 60}
+  enemySpawnCenter: {x: 0, y: 0, z: 120}
   enemyFacingAngle: 180
   squadSpacing: 4
   overrideSquadFormationSettings: 1
@@ -544,7 +546,7 @@ MonoBehaviour:
   enemyArmyConfigs:
   - squadName: "\uC801"
     unitCount: 200
-    columns: 5
+    columns: 20
     formationType: 0
     useCustomPosition: 0
     customPosition: {x: 0, y: 0, z: 0}
@@ -803,6 +805,8 @@ MonoBehaviour:
   rotationSpeed: 100
   minHeight3D: 5
   maxHeight3D: 150
+  minPitch: -45
+  maxPitch: 88
   tacticalMinHeight: 20
   tacticalMaxHeight: 350
   tacticalDefaultHeight: 130
@@ -1151,7 +1155,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -12.499756, y: -400}
+  m_AnchoredPosition: {x: -12.5, y: -400}
   m_SizeDelta: {x: -825, y: -800}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &828106363

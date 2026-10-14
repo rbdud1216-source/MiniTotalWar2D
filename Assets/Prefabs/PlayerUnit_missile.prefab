@@ -70,7 +70,7 @@ MonoBehaviour:
   maxSpreadRadius: 3.5
   trajectoryMode: 0
   projectileSpeed: 35
-  projectileDrag: 0.15
+  projectileDrag: 0.05
   gravityScale: 1
   launchPoint: {fileID: 904593306342883386}
   launchOffset: {x: 0.25, y: 0.15, z: 0.45}
