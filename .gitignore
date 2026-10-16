@@ -47,6 +47,4 @@ desktop.ini
 *.unitypackage
 *.app
 
-# 5. 삼국지 토탈워 100MB 초과 대용량 맵 데이터 (GitHub 100MB 단일 파일 제한 방지)
-*.tiles
-Assets/TotalWar_ThreeKingdoms_Extracted/DynamicTileSystem/tile_map.tiles
+
