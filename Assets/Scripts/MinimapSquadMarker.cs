@@ -13,6 +13,7 @@ public class MinimapSquadMarker : MonoBehaviour
     private Image mainBarImage;
     private Image directionArrowImage;
     private Image selectionBorderImage;
+    private CanvasGroup canvasGroup;
 
     private static readonly Color PlayerColor = new Color(0.12f, 0.82f, 1f, 0.95f);       // 아군: 선명한 청록/블루
     private static readonly Color EnemyColor = new Color(0.96f, 0.24f, 0.24f, 0.95f);      // 적군: 선명한 레드
@@ -25,6 +26,8 @@ public class MinimapSquadMarker : MonoBehaviour
         targetSquad = squad;
         minimapManager = manager;
         rectTransform = GetComponent<RectTransform>();
+        canvasGroup = GetComponent<CanvasGroup>();
+        if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
 
         BuildMarkerVisuals();
         UpdateMarkerVisuals();
@@ -85,6 +88,22 @@ public class MinimapSquadMarker : MonoBehaviour
             Destroy(gameObject);
             return;
         }
+
+        // 👁️ [삼국지 토탈워식 시야 은폐]: 적 부대의 실시간 가시성 알파(visibilityAlpha)에 맞춰 미니맵 마커 부드러운 페이드
+        float alpha = targetSquad.isPlayer ? 1.0f : targetSquad.visibilityAlpha;
+        bool isVisible = alpha > 0.001f;
+
+        if (canvasGroup != null)
+        {
+            canvasGroup.alpha = alpha;
+        }
+
+        if (gameObject.activeSelf != isVisible)
+        {
+            gameObject.SetActive(isVisible);
+        }
+
+        if (!isVisible) return;
 
         UpdateMarkerVisuals();
     }

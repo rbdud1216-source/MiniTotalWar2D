@@ -6,10 +6,12 @@ using UnityEngine;
 /// </summary>
 public class FormationPreviewer : MonoBehaviour
 {
-    [Header("프리뷰 도트 프리팹")]
+    [Header("프리뷰 도트 프리팹 설정")]
+    [KoreanLabel("프리뷰 마커 프리팹", "마우스 드래그 시 지면에 표시될 개별 유닛 슬롯 마커/도트 프리팹입니다.")]
     [SerializeField] private GameObject previewDotPrefab;
 
-    [Header("3D 지형 묻힘 방지 높이 (Y Offset)")]
+    [Header("지형 밀착 높이 설정")]
+    [KoreanLabel("지면 띄움 오프셋 (Y)", "프리뷰 도트가 지형 표면 아래로 파묻히지 않도록 살짝 띄우는 Y축 오프셋입니다. (단위: m, 기본: 0.05m)")]
     [SerializeField] private float yOffset = 0.05f;
 
     private readonly List<GameObject> activeDots = new List<GameObject>();

@@ -90,7 +90,7 @@ public struct TerrainHeightData
     /// 중간 언덕이나 지형에 의해 가려졌는지 O(1) 높이 샘플링으로 검사합니다.
     /// true: 시야 확보됨 (사격 가능), false: 언덕에 의해 시야 차폐됨.
     /// </summary>
-    public bool CheckLineOfSight(float3 shooterPos, float3 targetPos, float eyeHeight = 0.2f, float targetHeight = 0.2f, int sampleCount = 4)
+    public bool CheckLineOfSight(float3 shooterPos, float3 targetPos, float eyeHeight = 1.4f, float targetHeight = 1.0f, int sampleCount = 4)
     {
         if (isValid == 0 || !heights.IsCreated || resolution <= 1) return true;
 
@@ -111,9 +111,10 @@ public struct TerrainHeightData
             float rayY = math.lerp(start.y, end.y, t);
 
             float terrainY = SampleHeight(checkX, checkZ);
-            if (terrainY > rayY)
+            // 🌿 [미세 요철 허용 마진]: 지표면 잔디나 15cm 이내의 미세한 흙둔덕에 총알/화살 사선이 막히지 않도록 마진 부여
+            if (terrainY > rayY + 0.15f)
             {
-                return false; // 지형이 직선 사선을 가로막음!
+                return false; // 큰 언덕이나 능선이 직선 사선을 가로막음!
             }
         }
 
@@ -151,7 +152,8 @@ public class TerrainHeightManager : MonoBehaviour
 
     public static bool HasInstance => _instance != null && !isApplicationQuitting;
 
-    [Header("터레인 참조")]
+    [Header("터레인 참조 설정")]
+    [KoreanLabel("대상 터레인 (Target Terrain)", "높이맵 데이터를 추출하여 메모리에 캐싱할 목표 터레인 컴포넌트입니다. (미지정 시 활성 터레인 자동 탐색)")]
     [SerializeField] private Terrain targetTerrain;
 
     private NativeArray<float> cachedHeights;
@@ -297,7 +299,7 @@ public class TerrainHeightManager : MonoBehaviour
     /// <summary>
     /// 메인 스레드나 일반 컴포넌트(Squad 등)에서 사수와 목표 사이의 사선 차폐 여부를 검사하는 정적 함수입니다.
     /// </summary>
-    public static bool CheckLineOfSightFast(Vector3 shooterPos, Vector3 targetPos, float eyeHeight = 0.2f, float targetHeight = 0.2f, int sampleCount = 4)
+    public static bool CheckLineOfSightFast(Vector3 shooterPos, Vector3 targetPos, float eyeHeight = 1.4f, float targetHeight = 1.0f, int sampleCount = 4)
     {
         if (Instance != null && Instance.isDataReady)
         {

@@ -28,6 +28,7 @@
     - `CalculateOrganicDefensiveSlot()`: 피포위 수비 시 방어선 슬롯 계산
 - 📁 **3. 이동 및 지휘 명령 (Movement & Command Dispatch)**
   - `CommandMoveWithFormation()`: 지정 목적지로 부대 대형 이동 명령 및 실효 스탯 최신화
+  - `TeleportSquadToFormation()`: 🏛️ 토탈워식 배치 단계 순간이동(Warp/Snap) - 걸어가지 않고 부대원 및 ECS 엔티티들을 즉각 지정 슬롯으로 순간이동 배치 및 완전 정지
   - `CommandAttackSquad()`: 지정 적 부대 타겟팅 (보병은 포위 돌격, 궁병은 사거리 유지 일제사격 분기)
   - `CommandRangedAttackSquad()`: 🏹 궁병 부대전술 - 150m 사거리 밖이면 전술 전진(Move), 사거리 안이면 제자리 정지 후 정면 일제사격 유지
   - `CommandRangedHaltAndFire()`: 🏹 궁병 제자리 사격 태세 - 대형 슬롯을 온전히 유지한 채 적 방향 정렬 및 정지 사격
@@ -35,6 +36,7 @@
   - `CommandStop()`: 전 부대원 즉시 정지 및 진형 사수
   - `CommandCurvedFormation()`: 곡선 대형 전개 명령
   - `AddWaypoint()`, `ClearWaypoints()`: 다중 경유지(Waypoint) 대기열 관리
+  - `CheckAndExecuteArrival()`: 🌟 [토탈워식 연속 웨이포인트 순항 (Continuous Waypoint Traversal)] - 경유지가 대기열에 남아있는 경우 95% 정지 대기를 배제하고 부대 중심이 경유지 반경(3.0m~4.5m) 진입 시 감속 없이 즉시 다음 경유지로 목표 승계, 최종 목적지에서만 95% 정규 안착 판정 수행
   - `UpdatePathLine()`, `AddTerrainConformingSegment()`: 📈 이동 목적지 경로선을 1m 단위로 분할하여 지형 굴곡을 따라 완벽히 밀착 렌더링 (언덕 가림 방지)
 - 📁 **4. 순차 기동 및 공간 정렬 루틴 (Staggered Dispatch & Spatial Sort)**
   - `AssignFormationPositionsRoutine()`: O(N^2) 공간 정렬 및 슬롯 배정 코루틴
@@ -98,6 +100,11 @@
 | `UpdateECSEntitiesTargetInPlace` | `void (Vector3 anchorCenter)` | Pure ECS 모드에서 이동 상태 전환 없이 현재 대기/교전 상태를 보존하며 제자리 슬롯 좌표만 동기화 | `Squad.AdjustSpacing` | [Squad.cs#L1385-L1460](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L1385-L1460) |
 | `SetStaggeredFormation` | `void (bool enabled)` | 엇갈린 대형 설정 및 제자리 슬롯/시뮬레이션 버퍼 즉시 동기화 | `Squad.ToggleStaggeredFormation`, `UI` | [Squad.cs#L3435-L3488](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3435-L3488) |
 | `ToggleStaggeredFormation` | `void ()` | 엇갈린 대형 권한(canUseStaggeredFormation) 보유 부대의 대형 토글 | `PlayerController.cs`, `T키` | [Squad.cs#L3490-L3500](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L3490-L3500) |
+| `ToggleMeleeMode` | `void ()` | ⚔️ 근접전 모드 지속 토글 - 활을 집어넣고 단검/칼을 뽑아 지속 백병전 태세 전환 | `PlayerController`, `Y키` | [Squad.cs#L2507](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2507) |
+| `SetMeleeMode` | `void (bool enableMelee)` | 근접전 지속 모드 설정 및 Job/ECS 시뮬레이션 일괄 브로드캐스트 | `Squad.ToggleMeleeMode`, `UI` | [Squad.cs#L2512](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2512) |
+| `CommandMeleeChargeSquad` | `void (Squad enemySquad)` | ⚔️ 적 부대를 향해 활을 접고 전속력(4.8m/s) 강제 백병전 돌격 감행 | `CommandAttackSquad`, `Alt+우클릭` | [Squad.cs#L2461](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2461) |
+| `CheckAndExecuteArrival` | `void ()` | 🌟 [토탈워식 연속 웨이포인트 순항] 경유지 큐 잔여 시 감속 없이 경유지 반경(3.0~4.5m) 도달 즉시 다음 웨이포인트 승계, 최종 목적지에서만 95% 안착 검사 및 정규 정렬 | `Update` | [Squad.cs#L4125-L4170](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L4125-L4170) |
+| `CommandMeleeChargePosition` | `void (Vector3 targetPos)` | ⚔️ 특정 지점을 향해 사격을 중단하고 강제 백병전 어택땅 돌격 | `BattleCommandQueue`, `Alt+지면` | [Squad.cs#L2485](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs#L2485) |
 
 ---
 
@@ -153,6 +160,8 @@ flowchart TD
 | `currentFormationType` | `SquadFormationType` | Normal | 현재 선택된 부대 진형 (`Normal`, `Loose`, `Wedge`, `Diamond`, `Square`, `Circle`) |
 | `autoAttackEnabled` | `bool` | true | 자동 요격 허용 여부 (`false` 시 접촉 방어 태세 - Bracing 발동) |
 | `IsRangedSquad` | `bool` | - | 원거리(궁병) 병과 여부 |
+| `isMeleeMode` | `bool` | false | ⚔️ 상시 근접전 모드 지속 토글 (이동, 정지, 전투 후 재정비에도 풀리지 않고 유지) |
+| `isForcedMeleeCharge` | `bool` | false | 현재 백병전 돌격 진행 여부 (사격 중단 및 단검/칼 전속력 돌격) |
 | `HasAmmo` | `bool` | - | 잔여 탄약 존재 여부 (0발 소진 시 false가 되어 근접 보병으로 자동 전환) |
 | `AmmoRatio` | `float` | - | 부대 실시간 잔여 탄약 비율 (0.0f ~ 1.0f) |
 | `hasChargedAfterEmptyAmmo` | `bool` | false | 사격 종료 후 단 1회 돌격 하달 완료 여부 플래그 (중복 돌격 명령 및 제자리 멈춤 차단) |

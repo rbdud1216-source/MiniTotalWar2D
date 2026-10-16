@@ -60,6 +60,9 @@ namespace MiniTotalWar.ECS
             };
             JobHandle detectHandle = detectJob.ScheduleParallel(state.Dependency);
 
+            bool isInDeployment = BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment;
+            int inDeploymentFlag = isInDeployment ? 1 : 0;
+
             // 1단계: 이동, 회전, 돌격 가속, 척력 및 공격 쿨다운/타격 이벤트 수집 (병렬 스케줄링)
             var movementJob = new UnitMovementCombatJob
             {
@@ -76,7 +79,8 @@ namespace MiniTotalWar.ECS
                     : default,
                 DeltaTime = deltaTime,
                 CurrentTime = currentTime,
-                InvCellSize = SpatialHashGridSystem.INV_CELL_SIZE
+                InvCellSize = SpatialHashGridSystem.INV_CELL_SIZE,
+                IsInDeployment = inDeploymentFlag
             };
 
             JobHandle moveHandle = movementJob.ScheduleParallel(detectHandle);
@@ -168,10 +172,26 @@ namespace MiniTotalWar.ECS
         public float DeltaTime;
         public float CurrentTime;
         public float InvCellSize;
+        public int IsInDeployment;
 
         private void Execute(Entity entity, in UnitEntityTag tag, ref UnitMovementData movement, ref UnitCombatData combat, in UnitSeparationData separation)
         {
             if (tag.IsAlive == 0) return;
+
+            // 🏛️ [토탈워식 배치 단계 (Deployment Phase)]:
+            // 전투 시작 전 배치 단계 중에는 모든 유닛이 대형 위치(TargetPosition) 및 회전(TargetRotation)에 즉시 스냅 고정되며,
+            // 모든 이동, 가속, 넉백, 사격, 근접 공격이 100% 동결됩니다!
+            if (IsInDeployment == 1)
+            {
+                combat.CurrentState = 0; // Idle
+                combat.TargetEntity = Entity.Null;
+                movement.CurrentSpeed = 0f;
+                movement.Velocity = float3.zero;
+                combat.KnockbackVelocity = float3.zero;
+                movement.Position = movement.TargetPosition;
+                movement.Rotation = movement.TargetRotation;
+                return;
+            }
 
             float3 currentPos = movement.Position;
             float3 targetDest = movement.TargetPosition;
@@ -266,19 +286,40 @@ namespace MiniTotalWar.ECS
                                 float3 lateralVec = diff - (myFwd * fwdDist);
                                 float lateralSqr = math.lengthsq(lateralVec);
 
-                                float cost = sqrDist + (lateralSqr * 2.5f);
+                                float cost;
+
+                                // 🎯 [고지대 직사 화망 분산 (Plunging Volley Dispersion)]:
+                                // 사수가 직사 원거리 유닛이고 적보다 고도가 1.5m 이상 높거나 사격 부각이 약 3.5도 이상일 때
+                                float dy = currentPos.y - other.Position.y;
+                                float horizDist = math.sqrt(sqrDist);
+                                bool isPlunging = (combat.IsRangedUnit == 1 && combat.TrajectoryMode == 1) &&
+                                                  ((dy >= 1.5f) || (horizDist > 1.0f && (dy / horizDist) >= 0.06f));
+
+                                if (isPlunging)
+                                {
+                                    // 🦅 고지대 사격: 거리 제곱(sqrDist)에 의한 1열 쏠림을 상쇄하고,
+                                    // 엔티티별 고유 난수 시드를 결합하여 적 방진의 1열부터 후열까지 전 종심에 균등하게 분산 조준!
+                                    uint seed = (uint)(entity.Index * 7919 + other.Entity.Index * 31);
+                                    float depthJitter = ((seed % 100) / 100f) * 6.0f; // 0~6m 무작위 종심 분산
+                                    cost = (fwdDist * 0.05f) + (lateralSqr * 3.0f) + depthJitter;
+                                }
+                                else
+                                {
+                                    // 🛡️ 평지 사격 및 근접전: 가장 가까운 1열 적 우선 락온
+                                    cost = sqrDist + (lateralSqr * 2.5f);
+                                }
+
                                 if (fwdDist < 0f) cost += 1000f; // 등 뒤의 적은 큰 페널티
 
-                                // 🏔️ [언덕 지형 차폐 검사 및 노출된 적(사선 트인 앞열 적) 최우선 락온 (눈높이 1.2m)]:
-                                // 직사(총)와 곡사(활) 모두 언덕 뒤에 은폐된 중심부 적보다 능선에 노출된 적을 최우선 타겟으로 선택!
+                                // 🏔️ [언덕 지형 차폐 검사 및 노출된 적 최우선 락온 (사수 눈높이 1.4m, 목표 가슴높이 1.0m)]:
                                 if (combat.IsRangedUnit == 1 && TerrainData.isValid == 1)
                                 {
-                                    float3 eyeA = currentPos + new float3(0f, 1.2f, 0f);
-                                    float3 eyeB = other.Position + new float3(0f, 1.2f, 0f);
+                                    float3 eyeA = currentPos + new float3(0f, 1.4f, 0f);
+                                    float3 eyeB = other.Position + new float3(0f, 1.0f, 0f);
                                     bool isLoSClear = TerrainData.CheckLineOfSight(eyeA, eyeB, 0.2f, 0.2f, 4);
                                     if (!isLoSClear)
                                     {
-                                        // 언덕에 가려진 적은 200,000점 페널티를 부여하여 시야가 확보된 적(앞열)을 무조건 1순위로 조준!
+                                        // 언덕에 가려진 적은 200,000점 페널티를 부여하여 시야가 확보된 적을 1순위로 조준
                                         cost += 200000f;
                                     }
                                 }
@@ -412,8 +453,8 @@ namespace MiniTotalWar.ECS
                         float3 toEnemy = (math.lengthsq(diffToEnemy) > 0.001f) ? math.normalize(diffToEnemy) : new float3(0, 0, 1);
 
                         // 🏹 [원거리 자유 유닛 행동 원칙 (Stand & Fire & Tactical Advance)]
-                        // 탄약이 남아있고 적이 백병전 거리 밖이면 사거리 유지 및 제자리 사격
-                        if (combat.IsRangedUnit == 1 && combat.CurrentAmmo > 0 && distToEnemy > combat.MeleeSwitchDistance)
+                        // 탄약이 남아있고 적이 백병전 거리 밖이며 강제 백병전 모드가 아닐 때만 사거리 유지 및 제자리 사격
+                        if (combat.IsRangedUnit == 1 && combat.IsForcedMelee == 0 && combat.CurrentAmmo > 0 && distToEnemy > combat.MeleeSwitchDistance)
                         {
                             float maxRangedDist = combat.RangedAttackRange * 0.85f;
                             if (distToEnemy > maxRangedDist)
@@ -477,8 +518,9 @@ namespace MiniTotalWar.ECS
                             squadHasAmmo = (agg1.CurrentAmmoSum > 0);
                         }
 
-                        // 🏹 원거리 궁병(IsRangedUnit == 1)은 적이 백병전 거리 밖이고 탄약(개인 또는 부대 탄약)이 있으면 대형 슬롯 위치를 지키며 사격!
-                        if (combat.IsRangedUnit == 1 && distToEnemy > combat.MeleeSwitchDistance && (combat.CurrentAmmo > 0 || squadHasAmmo))
+                        // 🏹 원거리 부대(IsRangedUnit == 1)는 탄약(개인 또는 부대 탄약)이 남아있고 강제 백병전(IsForcedMelee == 1)이 아닌 한 무단 돌격하지 않고 부대 대형 슬롯을 100% 사수!
+                        // (앞열 몇 명이 적과 닿아도 부대가 갈라지며 칼질 돌격하지 않고 제자리 대형 사수 및 반격)
+                        if (combat.IsRangedUnit == 1 && combat.IsForcedMelee == 0 && (combat.CurrentAmmo > 0 || squadHasAmmo))
                         {
                             targetDest = movement.TargetPosition;
                             isCharging = false;
@@ -577,7 +619,7 @@ namespace MiniTotalWar.ECS
 
                 // 🏹 [ECS 원거리 궁병 활 사격 판정]
                 isRangedShooting = false;
-                if (combat.IsRangedUnit == 1)
+                if (combat.IsRangedUnit == 1 && combat.IsForcedMelee == 0)
                 {
                     // 🚨 백병전 교전 중(CurrentState == 3)이거나 5m 이내에 적이 들어왔으면 사격 100% 절대 금지!
                     bool isEngagedInMelee = (combat.CurrentState == 3);
@@ -650,9 +692,9 @@ namespace MiniTotalWar.ECS
                     // 🏹 자유 유닛은 방진 대형이 없는 독립 산개 상태이므로 3축 대형 클리어런스 검사 자동 통과 (지형 LoS만 판정)
                     bool isClearanceSatisfied = isFreeUnit ? true : (rearClear && lateralClear && frontClear);
 
-                    // 🏔️ [지형 사선(Line of Sight, LoS) 차폐 검사 (사수/타겟 눈높이 1.1m)]
+                    // 🏔️ [지형 사선(Line of Sight, LoS) 차폐 검사 (사수 눈높이 1.4m, 타겟 가슴높이 1.0m)]
                     bool isLosClear = (TerrainData.isValid == 1)
-                        ? TerrainData.CheckLineOfSight(currentPos, enemyPos, 1.1f, 1.1f, 4)
+                        ? TerrainData.CheckLineOfSight(currentPos, enemyPos, 1.4f, 1.0f, 4)
                         : true;
 
                     bool canShootTerrainLoS;
@@ -680,11 +722,9 @@ namespace MiniTotalWar.ECS
                         }
                         else
                         {
-                            // 🏹 [산 너머 곡사 사격 & 반격 허용]:
-                            // 1) 플레이어가 특정 적 부대를 우클릭 지정했거나(TargetSquadId != -1),
-                            // 2) 자유 유닛 간 교전이거나, 적 부대 AI가 자유 유닛을 공격/반격할 때 산 너머 고각 곡사 허용!
-                            canShootTerrainLoS = true;
-                            forceHighArc = 1; // 언덕을 넘길 수 있도록 고각(HighArc) 탄도 발사 유도
+                            // 👁️ [삼국지 토탈워식 사선 차폐]: 언덕 능선 너머로 차폐되어 보이지 않는 적은 곡사(HighArc)로도 사격 불가! (No Sight, No Fire)
+                            canShootTerrainLoS = false;
+                            forceHighArc = 0;
                         }
                     }
 
@@ -731,7 +771,8 @@ namespace MiniTotalWar.ECS
                                     float checkZ = currentPos.z + fwdDir.z * checkD;
                                     float groundH = TerrainData.SampleHeight(checkX, checkZ);
                                     float expectedH = finalLaunchY + (upwardRatio * checkD);
-                                    if (expectedH <= groundH + 0.05f)
+                                    // 🌿 [미세 요철 허용 마진 0.15m]: 잔디나 작은 흙둔덕에 탄도가 차단되어 사격을 거부하지 않도록 마진 부여
+                                    if (expectedH <= groundH - 0.15f)
                                     {
                                         isTerrainClearAhead = false;
                                         break;
@@ -790,14 +831,19 @@ namespace MiniTotalWar.ECS
                 float effectiveMeleeRange = isSidearmActive ? combat.SidearmAttackRange : effectiveAttackRange;
 
                 bool isInMelee = (meleeTargetDist <= effectiveMeleeRange);
-                if (isInMelee && !isRangedShooting)
+                // 🏃 [강제 이동 탈출 보장 (Melee Disengage)]:
+                // 플레이어가 이동 명령(CurrentState == 1)을 내렸다면, 백병전 상태(3)로 덮어쓰지 않고 즉각 탈출 보장!
+                if (combat.CurrentState != 1)
                 {
-                    combat.CurrentState = 3; // MeleeEngaged
-                }
-                else if (combat.CurrentState == 3 && meleeTargetDist > combat.MeleeSwitchDistance)
-                {
-                    // 🛡️ 적이 백병전 거리(5m) 밖으로 완전히 달아났을 때만 백병전 해제
-                    combat.CurrentState = (combat.AutoAttackEnabled == 0) ? 0 : 2;
+                    if (isInMelee && !isRangedShooting)
+                    {
+                        combat.CurrentState = 3; // MeleeEngaged
+                    }
+                    else if (combat.CurrentState == 3 && meleeTargetDist > combat.MeleeSwitchDistance)
+                    {
+                        // 🛡️ 적이 백병전 거리(5m) 밖으로 완전히 달아났을 때만 백병전 해제
+                        combat.CurrentState = (combat.AutoAttackEnabled == 0) ? 0 : 2;
+                    }
                 }
 
                 // ⚔️ [백병전 타격 판정]: 원거리 사격 중이 아니고, 무력화 상태가 아니며 근접 교전 중일 때 타격!
@@ -925,25 +971,24 @@ namespace MiniTotalWar.ECS
             }
 
             // 🗡️ 백병전 정지 거리(effectiveStoppingDist 이내)에서는 발을 딛고 교전 (미끄러짐 및 스루 어택 방지)
-            // 🚨 [옆 부대 적 접촉 시 정지 트랩 방지]:
-            // 주 목표 부대가 지정되어 있다면(TargetSquadId != -1), 해당 목표 부대와의 거리(distToEnemy)가 유효할 때에만 제자리에 섭니다.
-            // 옆 부대원과 우연히 몸이 스치더라도(meleeTargetDist), 자신의 목표를 향해 멈추지 않고 계속 전진합니다!
+            // 🚨 [옆 부대 적 접촉 시 정지 트랩 방지 및 강제 이동(CurrentState == 1) 탈출 보장]:
+            // 이동 명령(CurrentState == 1) 중에는 교전 정지 조건을 무시하고 무조건 질주!
             bool isMeleeStopped = (distToEnemy <= effectiveStoppingDist) || (meleeTargetDist <= effectiveStoppingDist * 1.25f && (combat.TargetSquadId == -1 || distToEnemy <= effectiveStoppingDist * 1.8f));
-            if (isMeleeStopped && combat.CurrentState == 3)
+            if (combat.CurrentState != 1 && isMeleeStopped && combat.CurrentState == 3)
             {
                 maxDesiredSpeed = 0f;
             }
 
             // 🏹 [ECS 궁병 제자리 사격 태세]: 사격 자격을 갖추었거나 활을 쏘는 동안(shouldHaltForRangedFire || isRangedShooting) 즉시 발 멈춤
-            if ((shouldHaltForRangedFire || isRangedShooting) && combat.CanFireWhileMoving == 0)
+            if (combat.CurrentState != 1 && (shouldHaltForRangedFire || isRangedShooting) && combat.CanFireWhileMoving == 0)
             {
                 maxDesiredSpeed = 0f;
             }
 
             // 🛡️ [원거리 부대 사격 대형 슬롯 정지 보장]:
             // 원거리 부대원이 교전 사거리 내에 있고 적이 백병전 거리(5m) 밖이라면,
-            // 사선 차폐나 쿨타임으로 지금 당장 사격을 못 하더라도 무단으로 앞열을 뚫고 적진으로 돌격하지 않고 제자리 대형 사수!
-            if (combat.IsRangedUnit == 1 && tag.SquadId != -1 && distToEnemy > combat.MeleeSwitchDistance && distToEnemy <= combat.RangedAttackRange * 0.95f)
+            // 사선 차폐나 쿨타임으로 지금 당장 사격을 못 하더라도 무단으로 앞열을 뚫고 적진으로 돌격하지 않고 제자리 대형 사수! (단, 강제 백병전 모드 제외)
+            if (combat.CurrentState != 1 && combat.IsRangedUnit == 1 && combat.IsForcedMelee == 0 && tag.SquadId != -1 && distToEnemy > combat.MeleeSwitchDistance && distToEnemy <= combat.RangedAttackRange * 0.95f)
             {
                 if (combat.CanFireWhileMoving == 0 && (distToDest < 1.5f || shouldHaltForRangedFire || isRangedShooting))
                 {
@@ -1051,7 +1096,7 @@ namespace MiniTotalWar.ECS
             float3 lookDir = float3.zero;
 
             // 🏹 원거리 유닛 사격 또는 사거리 내 적 조준 시 적 방향 정렬
-            if (isRangedShooting || shouldHaltForRangedFire || (combat.IsRangedUnit == 1 && foundEnemy && distToEnemy <= combat.RangedAttackRange))
+            if (isRangedShooting || shouldHaltForRangedFire || (combat.IsRangedUnit == 1 && combat.IsForcedMelee == 0 && foundEnemy && distToEnemy <= combat.RangedAttackRange))
             {
                 lookDir = enemyPos - movement.Position;
                 lookDir.y = 0f;

@@ -1,0 +1,14 @@
+# Total War Material Library for Scholar_Bush_K
+newmtl Trunk_Mat
+Ka 0.8 0.8 0.8
+Kd 0.45 0.35 0.25
+Ks 0.05 0.05 0.05
+d 1.0
+illum 2
+
+newmtl Leaves_Mat
+Ka 0.8 0.8 0.8
+Kd 0.22 0.45 0.18
+Ks 0.1 0.1 0.1
+d 1.0
+illum 2

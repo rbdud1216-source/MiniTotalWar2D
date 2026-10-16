@@ -17,8 +17,10 @@
   - `SelectSingleUnitOrSquad()`: 단일 유닛/부대 클릭 선택
   - `SelectUnitsInScreenRect()`: 화면 드래그 박스 영역 내 일괄 선택
   - `SelectAllPlayerSquads()`: `Ctrl+A` 전장의 모든 아군 부대 일괄 선택
-- 📁 **2. 부대 편제 그룹 및 속도 잠금 (Control Groups & Locked Speed)**
-  - `HandleControlGroups()`: 숫자키(1~9) 편제 등록(`Ctrl+1~9`) 및 선택(`1~9`)
+- 📁 **2. 2단계 계층형 제대 지휘 통제 및 편제 그룹 (Hierarchical Echelon C2 & Control Groups)**
+  - `HandleControlGroups()`: `F1~F5` 상위 제대(`Ctrl+F1~F5` 등록, `F1~F5` 일괄 선택/포커스) 및 제대 내 `Shift+1~9` 하위 부대 지정/선택
+  - `RegisterEchelon()`, `SelectEchelon()`: 상위 제대 묶기 및 일괄 선택/카메라 포커스
+  - `RegisterSubGroupInEchelon()`, `SelectSubGroupInEchelon()`: 활성 제대 내 세부 슬롯(1~9) 등록/선택
   - `ToggleLockCurrentGroup()`: `G`키 그룹 잠금(Locked Group) 토글
   - `SyncLockedGroupSpeeds()`: 잠긴 그룹 내 부대 간 최저 속도 동기화
 - 📁 **3. 마우스 드래그 대형 조작 (Formation Drag Manipulation)**
@@ -26,20 +28,28 @@
     - `Alt + 좌클릭 드래그`: 2차 포물선 곡선 대형(초승달호), 쐐기 길이, 방진 겹수 실시간 변형
     - `Ctrl + 좌클릭 드래그`: 대형 유지 상태 이동
   - `HandleCommandInput()`: 우클릭 및 Alt/Ctrl 드래그 이동/회전
-    - `우클릭 드래그`: 가로 폭 및 방향 지정 대형 이동
-    - `Ctrl + 우클릭 드래그`: 제자리 회전 조작
-    - `Alt + 우클릭 드래그`: 대형 가로폭 / 방진 층간 거리 조절
+    - `우클릭 드래그/단순 클릭`: 가로 폭 및 방향 지정 대형 이동 (배치 단계 중에는 걸어가지 않고 `TeleportSquadToFormation`으로 즉각 순간이동 스냅, 다중 부대 선택 시 진형 중심 오프셋 유지)
+    - `Shift + 우클릭 드래그`: 자유 곡선 이동 경로 그리기 및 순차 웨이포인트 이동 예약 (`ExecuteSquadCurveWaypoints`, 단일/다중 부대 대형 유지 순항)
+    - `Ctrl + 우클릭 드래그`: 제자리 회전 조작 (배치 단계 중에는 즉각 슬롯 순간이동 회전)
+    - `Alt + 우클릭 드래그`: 대형 가로폭 / 방진 층간 거리 조절 (배치 단계 중에는 즉각 슬롯 순간이동 리사이즈)
 - 📁 **4. 공격 및 타겟팅 명령 (Attack & Targeting Commands)**
   - `CommandAttackTargetSquad()`: 지정 적 부대 타겟팅 쇄도 공격
   - `CommandAttackTargetPosition()`: 어택땅(AttackMove) 좌표 공격
   - `TryGetEnemyUnderMouse()`: 마우스 아래 적 부대/엔티티 정밀 픽킹
-- 📁 **5. 단축키 시스템 (`HandleHotkeyInput`) - 소스 코드 100% 팩트 매핑**
+- 📁 **5. 단축키 시스템 (`HandleHotkeyInput` / `HandleControlGroups`) - 소스 코드 100% 팩트 매핑**
+  - `[Ctrl + F1~F5]`: 현재 선택 부대들을 상위 제대(`F1~F5`)로 등록/해제
+  - `[F1~F5]`: 상위 제대 전체 일괄 선택 및 제대 활성화 (더블 클릭 시 제대 중심 카메라 이동)
+  - `[F1 활성 시 Shift + 1~9]`: 활성 제대 내 하위 부대 슬롯 등록/해제
+  - `[F1 활성 시 1~9]`: 활성 제대 내 하위 부대 단독 선택
   - `[Z]`: 어택땅(AttackMove) 타겟팅 모드 활성화
   - `[X]`: 선택 부대 즉시 정지 (`StopSelected()`)
   - `[C]`: 제자리 사수 태세 토글 (`ToggleStance(UnitStance.HoldPosition)`)
   - `[V]`: 자동 선제 요격 토글 (`ToggleAutoAttack()`)
   - `[B]`: 산개진(Loose Formation) 토글 (`ToggleLooseFormation()`)
   - `[R]`: 달리기/걷기 모드 토글 (`ToggleRunMode()`)
+  - `[Y]`: 원거리 부대 및 자유 유닛 근접전(칼질) 모드 지속 토글 (`ToggleMeleeModeSelected()`)
+  - `[T]`: 엇갈린 체커보드 대형 토글 (`ToggleStaggeredFormation()`)
+  - `[I]`: 원거리 사거리 호(Firing Arc) 시각화 표시/숨김 토글
   - `[G]`: 선택 부대 그룹 잠금 토글 (`ToggleLockCurrentGroup()`)
   - `[` / `]`: 부대 간격 축소(-0.04m) / 확대(+0.04m) (`AdjustSpacing`)
   - `[/]`: 기본 일자진 대형 (`SetFormation(SquadFormationType.Normal)`)
@@ -77,6 +87,7 @@
 | `CommandAttackTargetSquad` | `void (Squad enemySquad, bool isAlt)` | 적 부대 우클릭 시 선택 부대 및 자유 유닛(GameObject/Pure ECS) 공격 지휘 (원거리 부대/유닛은 일반 우클릭 시 사거리 85% 내이면 제자리 정지 사격 자세, 사거리 밖이면 70% 지점으로 전술 전진, Alt 우클릭 시 강제 백병전 돌격) | `HandleCommandInput`, `UI` | [PlayerController.cs#L3230-L3335](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/PlayerController.cs#L3230-L3335) |
 | `CommandAttackTargetPosition` | `void (Vector3 targetWorldPos, bool isAlt)` | 특정 좌표/적 위치를 향해 부대 및 자유 유닛(GameObject/ECS)에게 어택땅 명령 하달 (원거리 유닛은 일반 우클릭 시 사거리 내이면 제자리 정지 사격 자세, 사거리 밖이면 사거리 내 접근 지점으로 전술 전진) | `HandleCommandInput` | [PlayerController.cs#L3490-L3586](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/PlayerController.cs#L3490-L3586) |
 | `TryGetEnemyUnderMouse` | `bool (out Squad, out pos)` | 마우스 커서 아래 적 부대/엔티티 정밀 픽킹 | `HandleCommandInput` | [PlayerController.cs#L3229-L3375](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/PlayerController.cs#L3229-L3375) |
+| `ExecuteSquadCurveWaypoints` | `void (List<Vector3> path)` | Shift 우클릭 드래그로 그린 자유 곡선 경로를 3.5m 간격으로 샘플링하여 단일/다중 부대에 웨이포인트 경로 주입 및 즉각 순항 | `HandleCommandInput` | [PlayerController.cs#L1970-L2055](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/PlayerController.cs#L1970-L2055) |
 
 ---
 
@@ -119,6 +130,8 @@ flowchart TD
 | `우클릭` | 단순 이동 / 공격 | 땅 클릭 시 이동, 적 부대 클릭 시 지정 공격 (`HandleCommandInput`) |
 | `우클릭 드래그` | 대형 전개 이동 | 마우스 드래그 방향으로 대형 정면 각도 및 가로폭 설정 (`CalculateFormationParams`) |
 | `Ctrl + 우클릭 드래그` | 제자리 회전 | 현재 위치를 유지하며 부대 정면 방향만 회전 |
+| `Shift + 우클릭 드래그` | 자유 곡선 이동 예약 | 마우스로 지면에 자유 곡선 경로를 그려 순차 웨이포인트 예약 이동 (`ExecuteSquadCurveWaypoints`, 다중 부대 시 상대 대형 유지) |
+| `Shift + 우클릭 클릭` | 순차 이동 예약 (단일점) | 기존 이동 큐 뒤에 새로운 목적지 순차 추가 (`AddWaypoint`) |
 | `Alt + 좌클릭 드래그` | 대형 기하학 변형 | 2차 곡선 대형(초승달호), 쐐기 길이, 방진 겹수 실시간 변형 (`HandleSelectionInput`) |
 | `Alt + 우클릭 드래그` | 진형 간격 조절 | 유닛 간 횡간격/종간격 실시간 확대/축소 |
 | `Ctrl + 1 ~ 9` | 부대 편제 지정 | 선택된 부대들을 번호 그룹에 저장 (`HandleControlGroups`) |

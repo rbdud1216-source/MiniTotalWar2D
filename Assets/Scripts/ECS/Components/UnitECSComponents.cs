@@ -124,6 +124,7 @@ namespace MiniTotalWar.ECS
         public float SquadSpacingZ;                // 소속 부대 세로 실효 간격 (m)
         public int TotalRows;                      // 소속 부대 총 행(Row) 수
         public int IsStaggeredFormation;           // 1 = 체커보드 대형, 0 = 완전 직렬
+        public int IsForcedMelee;                  // 1 = Alt+우클릭 강제 백병전 돌격 모드(사격 중단 및 단검/칼 돌격), 0 = 일반 사격
     }
 
     /// <summary>

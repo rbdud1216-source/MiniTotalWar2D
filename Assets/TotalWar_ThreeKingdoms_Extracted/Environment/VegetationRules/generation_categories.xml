@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<categories>
+	<category>default</category>
+	<category>arid</category>
+	<category>arid_fertile</category>
+	<category>cold</category>
+	<category>subtropical</category>
+	<category>temperate</category>
+	<category>tropical</category>	
+	<category>dyn_temperate</category>
+	<category>dyn_subtropical</category>
+	<category>nanman</category>
+</categories>

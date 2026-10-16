@@ -6,10 +6,14 @@ using UnityEngine.EventSystems;
 public class PlayerController : MonoBehaviour
 {
     [Header("레이어 설정")]
+    [KoreanLabel("지면 레이어 (Ground)", "마우스 지면 클릭 및 위치 지정을 감지할 레이어마스크입니다.")]
     [SerializeField] private LayerMask groundLayer;
+
+    [KoreanLabel("유닛 레이어 (Unit)", "마우스 유닛 클릭 및 드래그 박스 선택을 감지할 레이어마스크입니다.")]
     [SerializeField] private LayerMask unitLayer;
 
     [Header("프리뷰어 연결")]
+    [KoreanLabel("진형 프리뷰어 (Previewer)", "마우스 우클릭 드래그 시 배치 진형과 유닛 슬롯을 시각화하는 프리뷰어 컴포넌트입니다.")]
     [SerializeField] private FormationPreviewer previewer;
 
     [Header("선택된 부대 및 유닛")]
@@ -19,9 +23,28 @@ public class PlayerController : MonoBehaviour
     public IReadOnlyList<Squad> SelectedSquads => selectedSquads;
 
     private Vector3 formationStartWorldPos;
+    private Vector2 formationStartScreenPos;
     public List<Unit> selectedUnits = new List<Unit>();
     public List<Unity.Entities.Entity> selectedECSEntities = new List<Unity.Entities.Entity>();
     public IReadOnlyList<Unity.Entities.Entity> SelectedECSEntities => selectedECSEntities;
+
+    [Header("적군 정보 검사 (Inspect & Hover)")]
+    // 🎯 플레이어가 클릭하여 검사 중인 적 부대/유닛
+    public Squad inspectedEnemySquad { get; private set; }
+    public Unit inspectedEnemyUnit { get; private set; }
+    public Unity.Entities.Entity inspectedEnemyEntity { get; private set; } = Unity.Entities.Entity.Null;
+
+    // 🎯 마우스 커서 아래에 실시간 위치한 적 부대/유닛 (호버 프리뷰)
+    public Squad hoveredEnemySquad { get; private set; }
+    public Unit hoveredEnemyUnit { get; private set; }
+    public Unity.Entities.Entity hoveredEnemyEntity { get; private set; } = Unity.Entities.Entity.Null;
+
+    public void ClearInspectedEnemy()
+    {
+        inspectedEnemySquad = null;
+        inspectedEnemyUnit = null;
+        inspectedEnemyEntity = Unity.Entities.Entity.Null;
+    }
 
     // 라인 렌더러
     private LineRenderer activeDragLine;
@@ -29,6 +52,20 @@ public class PlayerController : MonoBehaviour
     // 부대 지정 (Ctrl / Shift + 1~0 저장 / 1~0 선택)
     private readonly Dictionary<int, (List<Squad> squads, List<Unit> units, List<Unity.Entities.Entity> ecsEntities)> controlGroups
         = new Dictionary<int, (List<Squad>, List<Unit>, List<Unity.Entities.Entity>)>();
+
+    // 🎖️ 2단계 계층형 제대 지휘 통제 (Hierarchical Echelon C2: F1~F5 & Shift+1~9)
+    // 1계층: 상위 제대 (Key: 1~5 for F1~F5)
+    private readonly Dictionary<int, (List<Squad> squads, List<Unit> units, List<Unity.Entities.Entity> ecsEntities)> echelonGroups
+        = new Dictionary<int, (List<Squad>, List<Unit>, List<Unity.Entities.Entity>)>();
+    // 2계층: 상위 제대 내 세부 부대 지정 (Key: echelonIdx (1~5) -> Value: (subIdx (0~9) -> GroupData))
+    private readonly Dictionary<int, Dictionary<int, (List<Squad> squads, List<Unit> units, List<Unity.Entities.Entity> ecsEntities)>> echelonSubGroups
+        = new Dictionary<int, Dictionary<int, (List<Squad>, List<Unit>, List<Unity.Entities.Entity>)>>();
+    private int activeEchelon = 0; // 0: 미선택/전역 모드, 1~5: F1~F5 활성 제대
+    private int lastPressedEchelonSlot = -1;
+    private float lastEchelonClickTime = 0f;
+
+    public int ActiveEchelon => activeEchelon;
+    public void SetActiveEchelon(int echelon) => activeEchelon = Mathf.Clamp(echelon, 0, 5);
 
     // 전술 그룹화 (Locked Group / 진형 고정 군단)
     private readonly HashSet<int> lockedControlGroups = new HashSet<int>();
@@ -140,6 +177,8 @@ public class PlayerController : MonoBehaviour
         if (Instance == null) Instance = this;
         mainCamera = Camera.main;
         EnsureLineRenderer();
+        // 📜 삼국지 토탈워 스타일 좌하단 상세 정보 UI 패널 인스턴스 초기화 보장
+        _ = UnitDetailInfoPanel.Instance;
     }
 
     private void EnsureLineRenderer()
@@ -194,6 +233,34 @@ public class PlayerController : MonoBehaviour
         HandleCommandInput();
         HandleHotkeyInput();
         HandleAttackTargetingInput();
+        HandleRangeVisualization();
+        UpdateEnemyHover();
+    }
+
+    private void UpdateEnemyHover()
+    {
+        // UI 조작 중이거나 드래그 중일 때는 호버 검출 생략
+        if ((EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) ||
+            isSelecting || isDraggingFormation || isCtrlLeftDragMove || isAltLeftDragBend)
+        {
+            hoveredEnemySquad = null;
+            hoveredEnemyUnit = null;
+            hoveredEnemyEntity = Unity.Entities.Entity.Null;
+            return;
+        }
+
+        if (TryGetEnemyUnderMouse(out Squad hSquad, out _, out Unit hUnit, out Unity.Entities.Entity hEntity))
+        {
+            hoveredEnemySquad = hSquad;
+            hoveredEnemyUnit = hUnit;
+            hoveredEnemyEntity = hEntity;
+        }
+        else
+        {
+            hoveredEnemySquad = null;
+            hoveredEnemyUnit = null;
+            hoveredEnemyEntity = Unity.Entities.Entity.Null;
+        }
     }
 
     private void SyncLockedGroupSpeeds()
@@ -348,6 +415,17 @@ public class PlayerController : MonoBehaviour
                         Squad newSquad = battleManager.SpawnSquad(true, 0, centerPos);
                         List<Unit> unitsToAdd = new List<Unit>(selectedUnits);
 
+                        // 🎯 첫 번째 유닛의 병종 및 원거리 사격 속성을 신설 부대에 동기화
+                        if (unitsToAdd.Count > 0 && unitsToAdd[0] != null)
+                        {
+                            newSquad.unitType = unitsToAdd[0].unitType;
+                            newSquad.trajectoryMode = unitsToAdd[0].trajectoryMode;
+                            if (unitsToAdd[0].rangedAttackRange > 10f) newSquad.rangedAttackRange = unitsToAdd[0].rangedAttackRange;
+                            if (unitsToAdd[0].firingArcAngle > 0f) newSquad.firingArcAngle = unitsToAdd[0].firingArcAngle;
+                            newSquad.ApplyFormationSettingsFromUnitPrefab(unitsToAdd[0]);
+                            newSquad.canUseStaggeredFormation = unitsToAdd[0].recommendedStaggeredFormation || newSquad.IsRangedSquad;
+                        }
+
                         foreach (Unit u in unitsToAdd)
                         {
                             if (u != null)
@@ -361,7 +439,7 @@ public class PlayerController : MonoBehaviour
                         newSquad.RebuildGridStructure();
                         DeselectAll();
                         SelectSquad(newSquad);
-                        Debug.Log($"[PlayerController] 🛡️ GameObject 자유 유닛 {unitsToAdd.Count}명으로 새 부대가 창설되었습니다.");
+                        Debug.Log($"[PlayerController] 🛡️ GameObject 자유 유닛 {unitsToAdd.Count}명으로 새 부대가 창설되었습니다. (병과: {newSquad.unitType}, 원거리: {newSquad.IsRangedSquad}, 엇갈린대형: {newSquad.canUseStaggeredFormation})");
                     }
                     else if (selectedECSEntities.Count > 0)
                     {
@@ -390,6 +468,30 @@ public class PlayerController : MonoBehaviour
                                 int newSquadId = newSquad.GetInstanceID();
                                 newSquad.initialUnitCount = validCount;
                                 newSquad.currentAliveCount = validCount;
+                                newSquad.isPureECS = true;
+                                newSquad.hasEcsInitialized = true;
+
+                                // 🎯 첫 번째 엔티티의 병종 및 원거리 사격 속성을 부대에 1:1 주입!
+                                var firstEnt = selectedECSEntities[0];
+                                if (em.Exists(firstEnt))
+                                {
+                                    var firstTag = em.GetComponentData<MiniTotalWar.ECS.UnitEntityTag>(firstEnt);
+                                    var firstCombat = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(firstEnt);
+                                    newSquad.unitType = (UnitType)firstTag.UnitType;
+                                    if (firstCombat.IsRangedUnit == 1 || firstTag.UnitType == 2 || firstTag.UnitType == 3)
+                                    {
+                                        newSquad.unitType = (firstTag.UnitType == 3) ? UnitType.Gunner : UnitType.Archer;
+                                        newSquad.trajectoryMode = (firstCombat.TrajectoryMode == 1) ? TrajectoryMode.Flat : TrajectoryMode.HighArc;
+                                        newSquad.rangedAttackRange = firstCombat.RangedAttackRange > 10f ? firstCombat.RangedAttackRange : 140f;
+                                        newSquad.firingArcAngle = (firstCombat.TrajectoryMode == 1) ? 60f : 120f;
+                                        newSquad.canUseStaggeredFormation = true;
+                                    }
+                                }
+
+                                // 🎯 ECS 부대 진형 슬롯 및 격자 구조 생성
+                                int calculatedCols = Mathf.Clamp(Mathf.CeilToInt(Mathf.Sqrt(validCount) * 1.5f), 4, 25);
+                                newSquad.currentColumns = calculatedCols;
+                                newSquad.GenerateFormationSlots(validCount, calculatedCols, out newSquad.totalGridRows, newSquad.currentFormationType);
 
                                 for (int i = 0; i < selectedECSEntities.Count; i++)
                                 {
@@ -406,7 +508,7 @@ public class PlayerController : MonoBehaviour
 
                                 DeselectAll();
                                 SelectSquad(newSquad);
-                                Debug.Log($"[PlayerController] ⚡ 순수 ECS 자유 유닛 {validCount}명으로 새 부대가 창설되었습니다.");
+                                Debug.Log($"[PlayerController] ⚡ 순수 ECS 자유 유닛 {validCount}명으로 새 부대가 창설되었습니다. (병과: {newSquad.unitType}, 원거리: {newSquad.IsRangedSquad})");
                             }
                         }
                     }
@@ -421,6 +523,31 @@ public class PlayerController : MonoBehaviour
 
     private void HandleControlGroups()
     {
+        // =========================================================================
+        // 1. 🎖️ 1계층: 상위 제대 단축키 처리 (F1 ~ F5)
+        // =========================================================================
+        for (int f = 1; f <= 5; f++)
+        {
+            KeyCode fKey = KeyCode.F1 + (f - 1);
+            if (Input.GetKeyDown(fKey))
+            {
+                bool isCtrlPressed = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
+                if (isCtrlPressed)
+                {
+                    // Ctrl + F1~F5: 현재 선택을 해당 상위 제대로 저장/해제
+                    RegisterEchelon(f);
+                }
+                else
+                {
+                    // 단독 F1~F5: 해당 상위 제대 전체 일괄 선택 및 포커스
+                    SelectEchelon(f);
+                }
+            }
+        }
+
+        // =========================================================================
+        // 2. 🎯 2계층 및 전역: 숫자키 부대 지정 처리 (0 ~ 9)
+        // =========================================================================
         for (int i = 0; i <= 9; i++)
         {
             KeyCode alphaKey = (i == 0) ? KeyCode.Alpha0 : (KeyCode.Alpha0 + i);
@@ -431,70 +558,202 @@ public class PlayerController : MonoBehaviour
                 bool isCtrlPressed = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
                 bool isShiftPressed = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
-                // Ctrl + 숫자키 또는 Shift + 숫자키: 현재 선택을 해당 부대 번호에 저장/해제
-                if (isCtrlPressed || isShiftPressed)
+                // 상위 제대(F1~F5)가 활성화되어 있는 상태: 제대 내 하위 부대 슬롯으로 분기
+                if (activeEchelon > 0)
                 {
-                    if (selectedSquads.Count == 0 && selectedUnits.Count == 0 && selectedECSEntities.Count == 0)
+                    if (isCtrlPressed || isShiftPressed)
                     {
-                        controlGroups.Remove(i);
-                        Debug.Log($"[PlayerController] 🗑️ 부대 지정 {i}번 슬롯이 해제되었습니다.");
-                    }
-                    else if (isShiftPressed && IsSelectionIdenticalToGroup(i))
-                    {
-                        controlGroups.Remove(i);
-                        Debug.Log($"[PlayerController] 🗑️ 부대 지정 {i}번 슬롯이 해제되었습니다.");
+                        RegisterSubGroupInEchelon(activeEchelon, i);
                     }
                     else
                     {
-                        List<Squad> sqs = new List<Squad>(selectedSquads);
-                        List<Unit> uns = new List<Unit>(selectedUnits);
-                        List<Unity.Entities.Entity> ecsEnts = new List<Unity.Entities.Entity>(selectedECSEntities);
-                        controlGroups[i] = (sqs, uns, ecsEnts);
-                        Debug.Log($"[PlayerController] 🎯 부대 지정 {i}번 슬롯 저장 완료! (부대: {sqs.Count}개, 개별 유닛: {uns.Count}명, 자유 ECS 유닛: {ecsEnts.Count}명)");
+                        SelectSubGroupInEchelon(activeEchelon, i);
                     }
                 }
-                // 단독 숫자키: 부대 번호 선택
+                // 상위 제대가 선택되지 않은 전역 상태: 기존 레거시 전역 부대지정 (0~9)
                 else
                 {
-                    if (controlGroups.TryGetValue(i, out var group))
+                    if (isCtrlPressed || isShiftPressed)
                     {
-                        DeselectAll();
-                        foreach (var s in group.squads) { if (s != null && s.MemberCount > 0) SelectSquad(s); }
-                        foreach (var u in group.units) { if (u != null) SelectUnit(u); }
-
-                        // ⚡ 순수 ECS 자유 유닛 선택 복원
-                        var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
-                        if (world != null && world.IsCreated && group.ecsEntities != null)
+                        if (selectedSquads.Count == 0 && selectedUnits.Count == 0 && selectedECSEntities.Count == 0)
                         {
-                            var em = world.EntityManager;
-                            foreach (var ent in group.ecsEntities)
+                            controlGroups.Remove(i);
+                            Debug.Log($"[PlayerController] 🗑️ 전역 부대 지정 {i}번 슬롯이 해제되었습니다.");
+                        }
+                        else if (isShiftPressed && IsSelectionIdenticalToGroup(i))
+                        {
+                            controlGroups.Remove(i);
+                            Debug.Log($"[PlayerController] 🗑️ 전역 부대 지정 {i}번 슬롯이 해제되었습니다.");
+                        }
+                        else
+                        {
+                            List<Squad> sqs = new List<Squad>(selectedSquads);
+                            List<Unit> uns = new List<Unit>(selectedUnits);
+                            List<Unity.Entities.Entity> ecsEnts = new List<Unity.Entities.Entity>(selectedECSEntities);
+                            controlGroups[i] = (sqs, uns, ecsEnts);
+                            Debug.Log($"[PlayerController] 🎯 전역 부대 지정 {i}번 슬롯 저장 완료! (부대: {sqs.Count}개, 개별 유닛: {uns.Count}명, 자유 ECS 유닛: {ecsEnts.Count}명)");
+                        }
+                    }
+                    else
+                    {
+                        if (controlGroups.TryGetValue(i, out var group))
+                        {
+                            ApplyGroupSelection(group.squads, group.units, group.ecsEntities);
+
+                            if (lastPressedGroupSlot == i && (Time.time - lastGroupClickTime) <= DOUBLE_CLICK_TIME)
                             {
-                                if (em.Exists(ent) && em.HasComponent<MiniTotalWar.ECS.UnitEntityTag>(ent))
-                                {
-                                    var tag = em.GetComponentData<MiniTotalWar.ECS.UnitEntityTag>(ent);
-                                    if (tag.IsAlive == 1 && !selectedECSEntities.Contains(ent))
-                                    {
-                                        selectedECSEntities.Add(ent);
-                                    }
-                                }
+                                FocusCameraOnSelection();
                             }
+
+                            lastPressedGroupSlot = i;
+                            lastGroupClickTime = Time.time;
+                            Debug.Log($"[PlayerController] 🎯 전역 {i}번 부대 선택 완료! (부대: {selectedSquads.Count}개, 자유 유닛: {selectedUnits.Count + selectedECSEntities.Count}명)");
                         }
-
-                        UpdateCommandUI();
-
-                        if (lastPressedGroupSlot == i && (Time.time - lastGroupClickTime) <= DOUBLE_CLICK_TIME)
-                        {
-                            FocusCameraOnSelection();
-                        }
-
-                        lastPressedGroupSlot = i;
-                        lastGroupClickTime = Time.time;
-                        Debug.Log($"[PlayerController] 🎯 {i}번 부대 선택 완료! (부대: {selectedSquads.Count}개, 자유 유닛: {selectedUnits.Count + selectedECSEntities.Count}명)");
                     }
                 }
             }
         }
     }
+
+    #region Hierarchical Echelon C2 Methods
+
+    /// <summary>
+    /// 현재 선택된 부대들을 지정된 상위 제대(F1~F5)로 등록하거나 해제합니다.
+    /// </summary>
+    public void RegisterEchelon(int echelonIdx)
+    {
+        if (selectedSquads.Count == 0 && selectedUnits.Count == 0 && selectedECSEntities.Count == 0)
+        {
+            echelonGroups.Remove(echelonIdx);
+            echelonSubGroups.Remove(echelonIdx);
+            if (activeEchelon == echelonIdx) activeEchelon = 0;
+            Debug.Log($"[PlayerController] 🗑️ [F{echelonIdx}] 상위 제대 슬롯이 해제되었습니다.");
+            return;
+        }
+
+        List<Squad> sqs = new List<Squad>(selectedSquads);
+        List<Unit> uns = new List<Unit>(selectedUnits);
+        List<Unity.Entities.Entity> ecsEnts = new List<Unity.Entities.Entity>(selectedECSEntities);
+
+        echelonGroups[echelonIdx] = (sqs, uns, ecsEnts);
+        activeEchelon = echelonIdx;
+
+        Debug.Log($"<color=#FFD700><b>[PlayerController] 🎖️ [F{echelonIdx}] 상위 제대 등록 완료! (소속 부대: {sqs.Count}개, 유닛: {uns.Count + ecsEnts.Count}명)</b></color>");
+    }
+
+    /// <summary>
+    /// 지정된 상위 제대(F1~F5)에 속한 모든 예하 부대를 일괄 선택하고 포커스합니다.
+    /// </summary>
+    public void SelectEchelon(int echelonIdx)
+    {
+        activeEchelon = echelonIdx;
+
+        if (echelonGroups.TryGetValue(echelonIdx, out var group) && (group.squads.Count > 0 || group.units.Count > 0 || (group.ecsEntities != null && group.ecsEntities.Count > 0)))
+        {
+            ApplyGroupSelection(group.squads, group.units, group.ecsEntities);
+
+            if (lastPressedEchelonSlot == echelonIdx && (Time.time - lastEchelonClickTime) <= DOUBLE_CLICK_TIME)
+            {
+                FocusCameraOnSelection();
+            }
+
+            lastPressedEchelonSlot = echelonIdx;
+            lastEchelonClickTime = Time.time;
+            Debug.Log($"<color=#00FF88><b>[PlayerController] 🎖️ [F{echelonIdx}] 상위 제대 일괄 선택 완료! (부대: {selectedSquads.Count}개, 활성 제대: F{echelonIdx})</b></color>");
+        }
+        else
+        {
+            Debug.Log($"[PlayerController] ℹ️ [F{echelonIdx}] 상위 제대에 등록된 부대가 없습니다. (Ctrl + F{echelonIdx}로 현재 선택 부대 등록 가능)");
+        }
+    }
+
+    /// <summary>
+    /// 활성 상위 제대 내에서 하위 부대 슬롯(1~9번)을 저장하거나 해제합니다.
+    /// </summary>
+    private void RegisterSubGroupInEchelon(int echelonIdx, int subIdx)
+    {
+        if (!echelonSubGroups.TryGetValue(echelonIdx, out var subMap))
+        {
+            subMap = new Dictionary<int, (List<Squad>, List<Unit>, List<Unity.Entities.Entity>)>();
+            echelonSubGroups[echelonIdx] = subMap;
+        }
+
+        if (selectedSquads.Count == 0 && selectedUnits.Count == 0 && selectedECSEntities.Count == 0)
+        {
+            subMap.Remove(subIdx);
+            Debug.Log($"[PlayerController] 🗑️ [F{echelonIdx} - {subIdx}번] 하위 부대 슬롯이 해제되었습니다.");
+            return;
+        }
+
+        List<Squad> sqs = new List<Squad>(selectedSquads);
+        List<Unit> uns = new List<Unit>(selectedUnits);
+        List<Unity.Entities.Entity> ecsEnts = new List<Unity.Entities.Entity>(selectedECSEntities);
+
+        subMap[subIdx] = (sqs, uns, ecsEnts);
+        Debug.Log($"[PlayerController] 🎯 [F{echelonIdx} 제대 - {subIdx}번] 하위 부대 슬롯 저장 완료! (부대: {sqs.Count}개)");
+    }
+
+    /// <summary>
+    /// 활성 상위 제대 내에서 하위 부대 슬롯(1~9번)을 단독 선택합니다.
+    /// </summary>
+    private void SelectSubGroupInEchelon(int echelonIdx, int subIdx)
+    {
+        if (echelonSubGroups.TryGetValue(echelonIdx, out var subMap) && subMap.TryGetValue(subIdx, out var group))
+        {
+            ApplyGroupSelection(group.squads, group.units, group.ecsEntities);
+
+            if (lastPressedGroupSlot == subIdx && (Time.time - lastGroupClickTime) <= DOUBLE_CLICK_TIME)
+            {
+                FocusCameraOnSelection();
+            }
+
+            lastPressedGroupSlot = subIdx;
+            lastGroupClickTime = Time.time;
+            Debug.Log($"[PlayerController] 🎯 [F{echelonIdx} 제대 - {subIdx}번] 하위 부대 선택 완료! (부대: {selectedSquads.Count}개)");
+        }
+        else
+        {
+            Debug.Log($"[PlayerController] ℹ️ [F{echelonIdx} 제대 - {subIdx}번] 슬롯이 비어 있습니다. (F{echelonIdx} 상태에서 Shift+{subIdx}로 등록)");
+        }
+    }
+
+    /// <summary>
+    /// 부대 및 유닛 그룹 데이터를 받아 공통으로 선택을 적용하는 헬퍼 메서드입니다.
+    /// </summary>
+    private void ApplyGroupSelection(List<Squad> squads, List<Unit> units, List<Unity.Entities.Entity> ecsEntities)
+    {
+        DeselectAll();
+        if (squads != null)
+        {
+            foreach (var s in squads) { if (s != null && s.MemberCount > 0) SelectSquad(s); }
+        }
+        if (units != null)
+        {
+            foreach (var u in units) { if (u != null) SelectUnit(u); }
+        }
+
+        // 순수 ECS 자유 유닛 선택 복원
+        var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
+        if (world != null && world.IsCreated && ecsEntities != null)
+        {
+            var em = world.EntityManager;
+            foreach (var ent in ecsEntities)
+            {
+                if (em.Exists(ent) && em.HasComponent<MiniTotalWar.ECS.UnitEntityTag>(ent))
+                {
+                    var tag = em.GetComponentData<MiniTotalWar.ECS.UnitEntityTag>(ent);
+                    if (tag.IsAlive == 1 && !selectedECSEntities.Contains(ent))
+                    {
+                        selectedECSEntities.Add(ent);
+                    }
+                }
+            }
+        }
+
+        UpdateCommandUI();
+    }
+
+    #endregion
 
     private bool IsSelectionIdenticalToGroup(int i)
     {
@@ -961,7 +1220,7 @@ public class PlayerController : MonoBehaviour
 
         bool isShiftPressed = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
         bool isCtrlPressed = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl);
-        bool isAltPressed = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt);
+        bool isAltPressed = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt) || Input.GetKey(KeyCode.AltGr);
 
         // 1. 마우스 우클릭 시작
         if (Input.GetMouseButtonDown(1))
@@ -985,6 +1244,7 @@ public class PlayerController : MonoBehaviour
             if (GetMouseWorldPosition(out Vector3 hitPoint))
             {
                 formationStartWorldPos = hitPoint;
+                formationStartScreenPos = Input.mousePosition;
                 freeDrawPath.Clear();
                 freeDrawPath.Add(hitPoint);
 
@@ -1141,6 +1401,10 @@ public class PlayerController : MonoBehaviour
                             {
                                 CalculateFormationParams(formationStartWorldPos, currentWorldPos, out Vector3 centerPos, out Quaternion targetRot, out int cols);
                                 if (previewer != null && primarySquad != null) previewer.ShowPreview(primarySquad, centerPos, targetRot, cols);
+                                if (RangeVisualizationManager.Instance != null && primarySquad != null)
+                                {
+                                    RangeVisualizationManager.Instance.ShowDragPlacementPreview(primarySquad, centerPos, targetRot);
+                                }
                             }
                             else if (selectedSquads.Count > 1)
                             {
@@ -1149,6 +1413,15 @@ public class PlayerController : MonoBehaviour
                                 {
                                     var lineConfigs = CalculateMultiSquadLineDeployment(formationStartWorldPos, currentWorldPos);
                                     if (previewer != null) previewer.ShowMultiSquadPreview(lineConfigs);
+                                    if (RangeVisualizationManager.Instance != null && lineConfigs != null)
+                                    {
+                                        List<(Squad squad, Vector3 dest, Quaternion rot)> previews = new List<(Squad, Vector3, Quaternion)>();
+                                        for (int i = 0; i < lineConfigs.Count; i++)
+                                        {
+                                            previews.Add((lineConfigs[i].squad, lineConfigs[i].destination, lineConfigs[i].rotation));
+                                        }
+                                        RangeVisualizationManager.Instance.ShowDragPlacementPreviews(previews);
+                                    }
                                 }
                                 else
                                 {
@@ -1156,11 +1429,21 @@ public class PlayerController : MonoBehaviour
                                     Vector3 centroid = GetSquadsCentroid(selectedSquads);
                                     Vector3 moveVec = currentWorldPos - centroid;
                                     List<(Squad squad, Vector3 destination, Quaternion rotation, int columns)> moveConfigs = new List<(Squad, Vector3, Quaternion, int)>();
+                                    List<(Squad squad, Vector3 dest, Quaternion rot)> previews = new List<(Squad, Vector3, Quaternion)>();
                                     foreach (var s in selectedSquads)
                                     {
-                                        if (s != null) moveConfigs.Add((s, s.transform.position + moveVec, s.transform.rotation, s.currentColumns));
+                                        if (s != null)
+                                        {
+                                            Vector3 dest = s.transform.position + moveVec;
+                                            moveConfigs.Add((s, dest, s.transform.rotation, s.currentColumns));
+                                            previews.Add((s, dest, s.transform.rotation));
+                                        }
                                     }
                                     if (previewer != null) previewer.ShowMultiSquadPreview(moveConfigs);
+                                    if (RangeVisualizationManager.Instance != null)
+                                    {
+                                        RangeVisualizationManager.Instance.ShowDragPlacementPreviews(previews);
+                                    }
                                 }
                             }
 
@@ -1220,6 +1503,7 @@ public class PlayerController : MonoBehaviour
 
             activeDragLine.enabled = false;
             if (previewer != null) previewer.HidePreview();
+            if (RangeVisualizationManager.Instance != null) RangeVisualizationManager.Instance.ClearDragPlacementPreview();
 
             if (GetMouseWorldPosition(out Vector3 endWorldPos))
             {
@@ -1234,7 +1518,14 @@ public class PlayerController : MonoBehaviour
                             Vector3 dir = endWorldPos - primarySquad.transform.position;
                             dir.y = 0f;
                             Quaternion targetRot = (dir.sqrMagnitude > 0.01f) ? Quaternion.LookRotation(dir) : primarySquad.transform.rotation;
-                            primarySquad.CommandRotateInPlace(targetRot);
+                            if (BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment)
+                            {
+                                primarySquad.TeleportSquadToFormation(primarySquad.transform.position, targetRot, primarySquad.currentColumns);
+                            }
+                            else
+                            {
+                                primarySquad.CommandRotateInPlace(targetRot);
+                            }
                         }
                         else if (selectedSquads.Count > 1)
                         {
@@ -1243,8 +1534,15 @@ public class PlayerController : MonoBehaviour
                             {
                                 if (c.squad != null)
                                 {
-                                    c.squad.ClearWaypoints();
-                                    c.squad.CommandMoveWithFormation(c.destination, c.rotation, c.columns, forceSort: false);
+                                    if (BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment)
+                                    {
+                                        c.squad.TeleportSquadToFormation(c.destination, c.rotation, c.columns);
+                                    }
+                                    else
+                                    {
+                                        c.squad.ClearWaypoints();
+                                        c.squad.CommandMoveWithFormation(c.destination, c.rotation, c.columns, forceSort: false);
+                                    }
                                 }
                             }
                             Debug.Log($"[PlayerController] 🔄 [Ctrl+우클릭] 군단 중심 회전 완료! ({selectedSquads.Count}개 부대 대형 유지 회전)");
@@ -1252,10 +1550,21 @@ public class PlayerController : MonoBehaviour
                     }
                     else if (wasAltRightDragResize && primarySquad != null)
                     {
-                        Vector3 delta = endWorldPos - formationStartWorldPos;
-                        float lateralDot = Vector3.Dot(delta, primarySquad.transform.rotation * Vector3.right);
-                        bool isSquareOrCircle = (primarySquad.currentFormationType == SquadFormationType.Square || primarySquad.currentFormationType == SquadFormationType.Circle);
-                        bool isWedgeOrDiamond = (primarySquad.currentFormationType == SquadFormationType.Wedge || primarySquad.currentFormationType == SquadFormationType.Diamond);
+                        float dragDist = Vector3.Distance(formationStartWorldPos, endWorldPos);
+                        float screenDist = Vector2.Distance(formationStartScreenPos, (Vector2)Input.mousePosition);
+                        // ⚔️ [Alt+우클릭 지면 단순 클릭]: 드래그하지 않고 단순 클릭(월드 3.5m 미만 또는 화면 50px 미만)한 경우 대형 리사이즈가 아니라 해당 지점으로 강제 백병전 어택땅 실행!
+                        if (dragDist < 3.5f || screenDist < 50f)
+                        {
+                            CommandAttackTargetPosition(endWorldPos, isAltPressed: true);
+                        }
+                        else
+                        {
+                            Vector3 delta = endWorldPos - formationStartWorldPos;
+                            float lateralDot = Vector3.Dot(delta, primarySquad.transform.rotation * Vector3.right);
+                            bool isSquareOrCircle = (primarySquad.currentFormationType == SquadFormationType.Square || primarySquad.currentFormationType == SquadFormationType.Circle);
+                            bool isWedgeOrDiamond = (primarySquad.currentFormationType == SquadFormationType.Wedge || primarySquad.currentFormationType == SquadFormationType.Diamond);
+
+                        bool isInDeployment = BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment;
 
                         if (isSquareOrCircle)
                         {
@@ -1265,7 +1574,14 @@ public class PlayerController : MonoBehaviour
                                 if (s != null)
                                 {
                                     s.formationLayersSpacingMultiplier = targetSpacing;
-                                    s.CommandMoveWithFormation(s.transform.position, s.transform.rotation, s.currentColumns, forceSort: false);
+                                    if (isInDeployment)
+                                    {
+                                        s.TeleportSquadToFormation(s.transform.position, s.transform.rotation, s.currentColumns);
+                                    }
+                                    else
+                                    {
+                                        s.CommandMoveWithFormation(s.transform.position, s.transform.rotation, s.currentColumns, forceSort: false);
+                                    }
                                 }
                             }
                             string formName = (primarySquad.currentFormationType == SquadFormationType.Square) ? "사각방진" : "원형진";
@@ -1279,7 +1595,14 @@ public class PlayerController : MonoBehaviour
                                 if (s != null)
                                 {
                                     s.formationWidthMultiplier = targetWidth;
-                                    s.CommandMoveWithFormation(s.transform.position, s.transform.rotation, s.currentColumns, forceSort: false);
+                                    if (isInDeployment)
+                                    {
+                                        s.TeleportSquadToFormation(s.transform.position, s.transform.rotation, s.currentColumns);
+                                    }
+                                    else
+                                    {
+                                        s.CommandMoveWithFormation(s.transform.position, s.transform.rotation, s.currentColumns, forceSort: false);
+                                    }
                                 }
                             }
                             string formName = (primarySquad.currentFormationType == SquadFormationType.Wedge) ? "쐐기진" : "마름모";
@@ -1297,10 +1620,18 @@ public class PlayerController : MonoBehaviour
                             {
                                 if (s != null)
                                 {
-                                    s.CommandMoveWithFormation(s.transform.position, s.transform.rotation, targetCols, forceSort: false);
+                                    if (isInDeployment)
+                                    {
+                                        s.TeleportSquadToFormation(s.transform.position, s.transform.rotation, targetCols);
+                                    }
+                                    else
+                                    {
+                                        s.CommandMoveWithFormation(s.transform.position, s.transform.rotation, targetCols, forceSort: false);
+                                    }
                                 }
                             }
                             Debug.Log($"[PlayerController] 🏹 부대 중심 유지 제자리 행/열 크기 변경 완료! (열: {targetCols}, 곡률: {primarySquad.customCurvature:F2}m)");
+                        }
                         }
                     }
                     else if (wasDraggingFormation)
@@ -1333,11 +1664,31 @@ public class PlayerController : MonoBehaviour
                                 {
                                     if (c.squad != null)
                                     {
-                                        c.squad.ClearWaypoints();
-                                        c.squad.CommandMoveWithFormation(c.destination, c.rotation, c.columns, forceSort: false);
+                                        Vector3 dest = c.destination;
+                                        // 🏛️ [토탈워식 배치 단계 클램핑]: 배치 단계 중에는 부대 위치를 아군 배치 구역 내부로 클램핑
+                                        if (BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment && DeploymentZoneManager.Instance != null)
+                                        {
+                                            dest = DeploymentZoneManager.Instance.ClampToPlayerZone(dest);
+                                        }
+
+                                        // 🏛️ [토탈워식 배치 단계 순간이동]: 걸어가지 않고 그 자리로 즉각 순간이동 배치!
+                                        if (BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment)
+                                        {
+                                            c.squad.TeleportSquadToFormation(dest, c.rotation, c.columns);
+                                        }
+                                        else
+                                        {
+                                            c.squad.ClearWaypoints();
+                                            c.squad.CommandMoveWithFormation(dest, c.rotation, c.columns, forceSort: false);
+                                        }
                                     }
                                 }
                                 Debug.Log($"[PlayerController] ⚔️ 다중 부대 횡대 전열 분할 배치 완료! ({lineConfigs.Count}개 부대 일렬 배치)");
+                            }
+                            else if (isShiftPressed && dragDist >= 0.5f)
+                            {
+                                // 🌟 [다중 부대 Shift 자유 곡선 드래그 이동예약]: 다중 부대도 대열을 유지하며 곡선 웨이포인트 경로로 일괄 행진!
+                                ExecuteSquadCurveWaypoints(freeDrawPath);
                             }
                             else
                             {
@@ -1349,70 +1700,84 @@ public class PlayerController : MonoBehaviour
                 }
                 else if (selectedUnits.Count > 0)
                 {
-                    float dragDist = Vector3.Distance(formationStartWorldPos, endWorldPos);
-
-                    if (dragDist < 0.5f)
+                    if (isAltPressed)
                     {
-                        ExecuteFreeUnitsRelativeMove(endWorldPos, isShiftPressed);
-                    }
-                    else if (isShiftPressed)
-                    {
-                        var (straightSlots, straightRots) = CalculateStraightSlotPositions(formationStartWorldPos, endWorldPos, selectedUnits.Count);
-                        AssignUnitsToSlotsClosest(straightSlots, straightRots, isShiftPressed);
+                        CommandAttackTargetPosition(endWorldPos, isAltPressed: true);
                     }
                     else
                     {
-                        var (curveSlots, curveRots) = CalculateCurveSlotPositions(freeDrawPath, selectedUnits.Count);
-                        AssignUnitsToSlotsClosest(curveSlots, curveRots, isShiftPressed);
+                        float dragDist = Vector3.Distance(formationStartWorldPos, endWorldPos);
+
+                        if (dragDist < 0.5f)
+                        {
+                            ExecuteFreeUnitsRelativeMove(endWorldPos, isShiftPressed);
+                        }
+                        else if (isShiftPressed)
+                        {
+                            var (straightSlots, straightRots) = CalculateStraightSlotPositions(formationStartWorldPos, endWorldPos, selectedUnits.Count);
+                            AssignUnitsToSlotsClosest(straightSlots, straightRots, isShiftPressed);
+                        }
+                        else
+                        {
+                            var (curveSlots, curveRots) = CalculateCurveSlotPositions(freeDrawPath, selectedUnits.Count);
+                            AssignUnitsToSlotsClosest(curveSlots, curveRots, isShiftPressed);
+                        }
                     }
                 }
                 else if (selectedECSEntities.Count > 0)
                 {
-                    float dragDist = Vector3.Distance(formationStartWorldPos, endWorldPos);
-                    List<Vector3> slots;
-                    List<Quaternion> rots;
-
-                    if (dragDist < 0.5f)
+                    if (isAltPressed)
                     {
-                        var (clSlots, clRots) = CalculateClusterSlotPositions(endWorldPos, Quaternion.identity, selectedECSEntities.Count);
-                        slots = clSlots;
-                        rots = clRots;
+                        CommandAttackTargetPosition(endWorldPos, isAltPressed: true);
                     }
                     else
                     {
-                        var (stSlots, stRots) = CalculateStraightSlotPositions(formationStartWorldPos, endWorldPos, selectedECSEntities.Count);
-                        slots = stSlots;
-                        rots = stRots;
-                    }
+                        float dragDist = Vector3.Distance(formationStartWorldPos, endWorldPos);
+                        List<Vector3> slots;
+                        List<Quaternion> rots;
 
-                    var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
-                    if (world != null && world.IsCreated)
-                    {
-                        var em = world.EntityManager;
-                        for (int i = 0; i < selectedECSEntities.Count; i++)
+                        if (dragDist < 0.5f)
                         {
-                            var ent = selectedECSEntities[i];
-                            if (em.Exists(ent))
+                            var (clSlots, clRots) = CalculateClusterSlotPositions(endWorldPos, Quaternion.identity, selectedECSEntities.Count);
+                            slots = clSlots;
+                            rots = clRots;
+                        }
+                        else
+                        {
+                            var (stSlots, stRots) = CalculateStraightSlotPositions(formationStartWorldPos, endWorldPos, selectedECSEntities.Count);
+                            slots = stSlots;
+                            rots = stRots;
+                        }
+
+                        var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
+                        if (world != null && world.IsCreated)
+                        {
+                            var em = world.EntityManager;
+                            for (int i = 0; i < selectedECSEntities.Count; i++)
                             {
-                                var mov = em.GetComponentData<MiniTotalWar.ECS.UnitMovementData>(ent);
-                                var combat = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(ent);
+                                var ent = selectedECSEntities[i];
+                                if (em.Exists(ent))
+                                {
+                                    var mov = em.GetComponentData<MiniTotalWar.ECS.UnitMovementData>(ent);
+                                    var combat = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(ent);
 
-                                Vector3 targetSlot = (i < slots.Count) ? slots[i] : endWorldPos;
-                                Quaternion targetRot = (i < rots.Count) ? rots[i] : Quaternion.identity;
+                                    Vector3 targetSlot = (i < slots.Count) ? slots[i] : endWorldPos;
+                                    Quaternion targetRot = (i < rots.Count) ? rots[i] : Quaternion.identity;
 
-                                mov.TargetPosition = targetSlot;
-                                mov.TargetRotation = targetRot;
-                                float spd = (mov.MoveSpeed >= 2.0f) ? 2.8f : 1.2f;
-                                mov.MoveSpeed = spd;
-                                mov.Acceleration = (spd >= 2.0f) ? 8.0f : 4.5f;
-                                combat.CurrentState = (int)UnitCommandState.Move;
+                                    mov.TargetPosition = targetSlot;
+                                    mov.TargetRotation = targetRot;
+                                    float spd = (mov.MoveSpeed >= 2.0f) ? 2.8f : 1.2f;
+                                    mov.MoveSpeed = spd;
+                                    mov.Acceleration = (spd >= 2.0f) ? 8.0f : 4.5f;
+                                    combat.CurrentState = (int)UnitCommandState.Move;
 
-                                em.SetComponentData(ent, mov);
-                                em.SetComponentData(ent, combat);
+                                    em.SetComponentData(ent, mov);
+                                    em.SetComponentData(ent, combat);
+                                }
                             }
                         }
+                        Debug.Log($"[PlayerController] ⚡ 자유 ECS 유닛 {selectedECSEntities.Count}명에게 이동 명령 하달 완료!");
                     }
-                    Debug.Log($"[PlayerController] ⚡ 자유 ECS 유닛 {selectedECSEntities.Count}명에게 이동 명령 하달 완료!");
                 }
             }
 
@@ -1651,12 +2016,28 @@ public class PlayerController : MonoBehaviour
 
     private void ExecuteSquadCurveWaypoints(List<Vector3> path)
     {
-        if (path == null || path.Count < 2) return;
-        
+        if (path == null || path.Count < 2 || selectedSquads.Count == 0) return;
+
+        // 🏛️ [배치 단계 예외 방어]: 배치 단계 중에는 곡선 이동이 아닌 순간이동 배치로 안전 처리
+        if (BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment)
+        {
+            Vector3 finalDest = path[path.Count - 1];
+            if (DeploymentZoneManager.Instance != null)
+            {
+                finalDest = DeploymentZoneManager.Instance.ClampToPlayerZone(finalDest);
+            }
+            Vector3 dir = (path.Count > 1) ? (finalDest - path[0]).normalized : Vector3.forward;
+            Quaternion rot = (dir.sqrMagnitude > 0.01f) ? Quaternion.LookRotation(dir) : Quaternion.identity;
+            ExecuteSquadCommand(finalDest, rot, 0, false);
+            return;
+        }
+
+        // 1. 부대 폭 및 유려한 곡선 보간을 위한 적정 샘플링 간격(3.5m) 기반 웨이포인트 추출
         List<Vector3> sampledWaypoints = new List<Vector3>();
-        float sampleDist = 1.0f;
+        float sampleDist = 3.5f;
         Vector3 lastAdded = path[0];
-        
+        sampledWaypoints.Add(lastAdded);
+
         for (int i = 1; i < path.Count; i++)
         {
             if (Vector3.Distance(lastAdded, path[i]) >= sampleDist)
@@ -1665,29 +2046,71 @@ public class PlayerController : MonoBehaviour
                 lastAdded = path[i];
             }
         }
-        
-        if (sampledWaypoints.Count == 0 || Vector3.Distance(lastAdded, path[path.Count - 1]) > 0.2f)
+
+        Vector3 endPt = path[path.Count - 1];
+        if (Vector3.Distance(lastAdded, endPt) > 1.0f)
         {
-            sampledWaypoints.Add(path[path.Count - 1]);
+            sampledWaypoints.Add(endPt);
         }
-        
+        else if (sampledWaypoints.Count > 1)
+        {
+            // 마지막 정점을 사용자가 그린 최종 끝점 위치로 정밀 갱신
+            sampledWaypoints[sampledWaypoints.Count - 1] = endPt;
+        }
+
+        if (sampledWaypoints.Count < 2) return;
+
+        // 2. 각 웨이포인트에서의 진행 방향(회전) 사전 계산
+        List<Quaternion> sampledRotations = new List<Quaternion>();
+        for (int i = 0; i < sampledWaypoints.Count; i++)
+        {
+            Vector3 dir;
+            if (i < sampledWaypoints.Count - 1)
+            {
+                dir = sampledWaypoints[i + 1] - sampledWaypoints[i];
+            }
+            else
+            {
+                dir = sampledWaypoints[i] - sampledWaypoints[i - 1];
+            }
+            dir.y = 0f;
+            Quaternion rot = (dir.sqrMagnitude > 0.001f) ? Quaternion.LookRotation(dir.normalized) : Quaternion.identity;
+            sampledRotations.Add(rot);
+        }
+
+        // 3. 다중 부대 지원: 선택된 부대 그룹의 무게중심 산출
+        Vector3 groupCenter = GetSquadsCentroid(selectedSquads);
+
+        // 4. 각 부대별 곡선 웨이포인트 주입 및 즉각 출발
         foreach (Squad squad in selectedSquads)
         {
             if (squad == null) continue;
-            
+
+            // 다중 부대 선택 시 각 부대의 상대적 오프셋 유지 (대형 유지)
+            Vector3 relOffset = (selectedSquads.Count > 1) ? (squad.transform.position - groupCenter) : Vector3.zero;
+
+            squad.ClearWaypoints();
+
             for (int i = 0; i < sampledWaypoints.Count; i++)
             {
-                Vector3 wp = sampledWaypoints[i];
-                Vector3 dir = (i < sampledWaypoints.Count - 1) ? (sampledWaypoints[i+1] - wp).normalized : Vector3.forward;
-                if (i == sampledWaypoints.Count - 1 && sampledWaypoints.Count > 1) 
+                Vector3 wp = sampledWaypoints[i] + relOffset;
+                wp.y = TerrainHeightManager.SampleHeightFast(wp.x, wp.z);
+                Quaternion rot = (sampledRotations[i] != Quaternion.identity) ? sampledRotations[i] : squad.transform.rotation;
+
+                if (i == 0)
                 {
-                    dir = (wp - sampledWaypoints[i-1]).normalized;
+                    // 첫 번째 경유지를 향해 즉시 출발
+                    squad.CommandMoveWithFormation(wp, rot, squad.currentColumns, forceSort: false);
                 }
-                Quaternion rot = (dir.sqrMagnitude > 0.01f) ? Quaternion.LookRotation(dir) : squad.transform.rotation;
-                
-                squad.AddWaypoint(wp, rot, squad.currentColumns);
+                else
+                {
+                    // 이후 경유지들은 순차적으로 웨이포인트 큐에 적재
+                    squad.AddWaypoint(wp, rot, squad.currentColumns);
+                }
             }
         }
+
+        Debug.Log($"[PlayerController] 🚩 {selectedSquads.Count}개 부대 곡선 웨이포인트 이동 예약 완료! ({sampledWaypoints.Count}개 경유점)");
     }
 
     public Vector3 GetSquadsCentroid(List<Squad> squads)
@@ -1859,52 +2282,63 @@ public class PlayerController : MonoBehaviour
 
     private void ExecuteSquadCommand(Vector3 centerPos, Quaternion targetRot, int cols, bool isShift)
     {
-        if (selectedSquads.Count == 1)
+        // 🏛️ [토탈워식 배치 단계 클램핑 및 순간이동]:
+        // 배치 단계 중에는 아군 배치 구역(Deployment Zone) 내부로 클램핑하고, 부대원들이 걸어가지 않고 즉각 순간이동 배치됩니다!
+        if (BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment)
         {
-            Squad squad = selectedSquads[0];
-            if (squad != null)
+            if (selectedSquads.Count == 1)
             {
-                if (isShift)
+                if (DeploymentZoneManager.Instance != null)
                 {
-                    squad.AddWaypoint(centerPos, targetRot, cols);
+                    centerPos = DeploymentZoneManager.Instance.ClampToPlayerZone(centerPos);
                 }
-                else
+
+                Squad s = selectedSquads[0];
+                if (s != null)
                 {
-                    squad.ClearWaypoints();
-                    squad.CommandMoveWithFormation(centerPos, targetRot, cols, forceSort: false);
+                    Quaternion rot = (targetRot != Quaternion.identity) ? targetRot : s.transform.rotation;
+                    int finalCols = (cols > 0) ? cols : s.currentColumns;
+                    s.TeleportSquadToFormation(centerPos, rot, finalCols);
                 }
             }
+            else if (selectedSquads.Count > 1)
+            {
+                // 🛡️ 다중 부대 선택 시: 부대들의 중심점(GroupCenter)을 기준으로 상대 오프셋을 유지하여 진형 붕괴 없이 일괄 순간이동!
+                Vector3 groupCenter = Vector3.zero;
+                int validCount = 0;
+                for (int i = 0; i < selectedSquads.Count; i++)
+                {
+                    Squad s = selectedSquads[i];
+                    if (s != null)
+                    {
+                        groupCenter += s.transform.position;
+                        validCount++;
+                    }
+                }
+                if (validCount > 0) groupCenter /= validCount;
+
+                for (int i = 0; i < selectedSquads.Count; i++)
+                {
+                    Squad s = selectedSquads[i];
+                    if (s == null) continue;
+
+                    Vector3 offset = s.transform.position - groupCenter;
+                    Vector3 dest = centerPos + offset;
+                    if (DeploymentZoneManager.Instance != null)
+                    {
+                        dest = DeploymentZoneManager.Instance.ClampToPlayerZone(dest);
+                    }
+                    Quaternion rot = (targetRot != Quaternion.identity) ? targetRot : s.transform.rotation;
+                    s.TeleportSquadToFormation(dest, rot, s.currentColumns);
+                }
+            }
+            return;
         }
-        else if (selectedSquads.Count > 1)
+
+        // 전술 명령 큐(BattleCommandQueue)를 통해 부대 이동 명령 발행
+        if (selectedSquads.Count > 0)
         {
-            Vector3 centroid = GetSquadsCentroid(selectedSquads);
-            bool isLocked = IsCurrentSelectionLocked();
-
-            Quaternion deltaRot = Quaternion.identity;
-            if (targetRot != Quaternion.identity && selectedSquads.Count > 0 && selectedSquads[0] != null)
-            {
-                deltaRot = targetRot * Quaternion.Inverse(selectedSquads[0].transform.rotation);
-            }
-
-            foreach (Squad squad in selectedSquads)
-            {
-                if (squad == null) continue;
-
-                Vector3 relOffset = squad.transform.position - centroid;
-                Vector3 finalOffset = (isLocked && targetRot != Quaternion.identity) ? (deltaRot * relOffset) : relOffset;
-                Vector3 targetSquadPos = centerPos + finalOffset;
-                Quaternion finalSquadRot = (isLocked && targetRot != Quaternion.identity) ? (deltaRot * squad.transform.rotation) : squad.transform.rotation;
-
-                if (isShift)
-                {
-                    squad.AddWaypoint(targetSquadPos, finalSquadRot, squad.currentColumns);
-                }
-                else
-                {
-                    squad.ClearWaypoints();
-                    squad.CommandMoveWithFormation(targetSquadPos, finalSquadRot, squad.currentColumns, forceSort: false);
-                }
-            }
+            BattleCommandQueue.Instance.IssueMoveCommand(selectedSquads, centerPos, targetRot, cols, isShift, IsCurrentSelectionLocked());
         }
 
         foreach (Unit unit in selectedUnits)
@@ -1922,20 +2356,16 @@ public class PlayerController : MonoBehaviour
     public void ExecuteMinimapCommand(Vector3 targetWorldPos, bool isAttackMove = false)
     {
         bool isShift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-        UnitCommandState cmdState = isAttackMove ? UnitCommandState.AttackMove : UnitCommandState.Move;
 
-        foreach (Squad squad in selectedSquads)
+        if (selectedSquads.Count > 0)
         {
-            if (squad == null) continue;
-
-            if (isShift)
+            if (isAttackMove)
             {
-                squad.AddWaypoint(targetWorldPos, squad.transform.rotation, squad.currentColumns);
+                BattleCommandQueue.Instance.IssueAttackPositionCommand(selectedSquads, targetWorldPos, isAltPressed: false);
             }
             else
             {
-                squad.ClearWaypoints();
-                squad.CommandMoveWithFormation(targetWorldPos, squad.transform.rotation, squad.currentColumns, forceSort: false, cmdState: cmdState);
+                BattleCommandQueue.Instance.IssueMoveCommand(selectedSquads, targetWorldPos, Quaternion.identity, -1, isShift, IsCurrentSelectionLocked());
             }
         }
 
@@ -1994,6 +2424,25 @@ public class PlayerController : MonoBehaviour
     {
         bool isShiftPressed = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
+        // ⚡ 0순위: 마우스 아래에 발각된 적 부대/유닛 클릭 검사 (적 부대 정보창 고정 표출 및 조사 모드)
+        if (TryGetEnemyUnderMouse(out Squad clickedEnemySquad, out _, out Unit clickedEnemyUnit, out Unity.Entities.Entity clickedEnemyEntity))
+        {
+            ClearInspectedEnemy();
+            inspectedEnemySquad = clickedEnemySquad;
+            inspectedEnemyUnit = clickedEnemyUnit;
+            inspectedEnemyEntity = clickedEnemyEntity;
+
+            // 적 조사 시 기존 아군 선택은 해제하여 적 부대 상세 정보에 집중
+            DeselectAll();
+            string enemyName = (clickedEnemySquad != null) ? clickedEnemySquad.squadName :
+                               (clickedEnemyUnit != null) ? clickedEnemyUnit.gameObject.name : "ECS 적 유닛";
+            Debug.Log($"[PlayerController] 👁️ [적군 정보창] '{enemyName}' 정밀 조사 활성화!");
+            return;
+        }
+
+        // 적군이 아니라면 기존 조사 대상 해제
+        ClearInspectedEnemy();
+
         Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
 
         // ⚡ 1순위: 기존 GameObject Unit 콜라이더 검사 (RaycastAll로 바닥에 가려진 유닛도 관통 검출)
@@ -2022,8 +2471,16 @@ public class PlayerController : MonoBehaviour
             }
             else
             {
-                if (isShiftPressed && selectedUnits.Contains(clickedUnit)) DeselectUnit(clickedUnit);
-                else SelectUnit(clickedUnit);
+                if (isShiftPressed)
+                {
+                    if (selectedUnits.Contains(clickedUnit)) DeselectUnit(clickedUnit);
+                    else SelectUnit(clickedUnit);
+                }
+                else
+                {
+                    DeselectAll();
+                    SelectUnit(clickedUnit);
+                }
                 return;
             }
         }
@@ -2155,6 +2612,7 @@ public class PlayerController : MonoBehaviour
 
     private void SelectUnitsInScreenRect(Vector3 start, Vector3 end)
     {
+        ClearInspectedEnemy();
         Rect selectionRect = GetScreenRect(start, end);
         HashSet<Squad> squadsToAdd = new HashSet<Squad>();
 
@@ -2444,6 +2902,10 @@ public class PlayerController : MonoBehaviour
         {
             ToggleFireAtWill();
         }
+        if (Input.GetKeyDown(KeyCode.Y))
+        {
+            ToggleMeleeModeSelected();
+        }
         if (Input.GetKeyDown(KeyCode.B)) 
         { 
             ToggleLooseFormation(); 
@@ -2494,6 +2956,14 @@ public class PlayerController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.R)) 
         { 
             ToggleRunMode(); 
+        }
+        if (Input.GetKeyDown(KeyCode.I))
+        {
+            if (RangeVisualizationManager.Instance != null)
+            {
+                RangeVisualizationManager.Instance.ToggleVisualization();
+                UpdateCommandUI();
+            }
         }
         if (Input.GetKeyDown(KeyCode.T))
         {
@@ -2701,6 +3171,67 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 원거리 부대 및 유닛의 사격 호(Firing Arc)와 마우스 적 호버링 탄도 궤적을 실시간으로 중계합니다.
+    /// </summary>
+    private void HandleRangeVisualization()
+    {
+        if (RangeVisualizationManager.Instance == null) return;
+
+        // 원거리 부대가 없거나 자유 유닛이 1마리가 아니면 호버링 해제
+        bool hasRangedSquad = selectedSquads.Exists(s => s != null && s.IsRangedSquad);
+        bool hasSingleRangedUnit = false;
+        if (selectedSquads.Count == 0)
+        {
+            if (selectedUnits.Count == 1 && selectedUnits[0] != null && selectedUnits[0].isRangedUnit)
+            {
+                hasSingleRangedUnit = true;
+            }
+            else if (selectedUnits.Count == 0 && selectedECSEntities.Count == 1)
+            {
+                var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
+                if (world != null && world.IsCreated && world.EntityManager.Exists(selectedECSEntities[0]))
+                {
+                    var em = world.EntityManager;
+                    var tag = em.GetComponentData<MiniTotalWar.ECS.UnitEntityTag>(selectedECSEntities[0]);
+                    var combat = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(selectedECSEntities[0]);
+                    if (tag.Faction == 1 && tag.IsAlive == 1 && combat.IsRangedUnit == 1)
+                    {
+                        hasSingleRangedUnit = true;
+                    }
+                }
+            }
+        }
+
+        if (!hasRangedSquad && !hasSingleRangedUnit)
+        {
+            RangeVisualizationManager.Instance.SetHoveredEnemy(null);
+            RangeVisualizationManager.Instance.ClearGroundTarget();
+            return;
+        }
+
+        // 1. 마우스 아래 적 부대 호버링 검사
+        if (TryGetEnemyUnderMouse(out Squad enemySquad, out _))
+        {
+            RangeVisualizationManager.Instance.SetHoveredEnemy(enemySquad);
+            RangeVisualizationManager.Instance.ClearGroundTarget();
+        }
+        else
+        {
+            RangeVisualizationManager.Instance.SetHoveredEnemy(null);
+
+            // 2. 어택땅(Z키) 공격 지정 모드일 때 빈 지면을 가리키고 있다면 가상 탄도 표시
+            if (isAttackTargetingMode && GetMouseWorldPosition(out Vector3 groundPos))
+            {
+                RangeVisualizationManager.Instance.SetGroundTarget(groundPos);
+            }
+            else
+            {
+                RangeVisualizationManager.Instance.ClearGroundTarget();
+            }
+        }
+    }
+
     private void StopSelected()
     {
         isAttackTargetingMode = false;
@@ -2762,13 +3293,10 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        foreach (Squad s in selectedSquads)
+        if (selectedSquads.Count > 0)
         {
-            if (s != null)
-            {
-                s.CommandStop();
-                stoppedSquads++;
-            }
+            BattleCommandQueue.Instance.IssueStopCommand(selectedSquads);
+            stoppedSquads = selectedSquads.Count;
         }
 
         Debug.Log($"[PlayerController] 🛑 [X] 정지(Stop) 명령 완료! (부대 {stoppedSquads}개, 유닛 {stoppedUnits}명 제자리 정지)");
@@ -2977,6 +3505,101 @@ public class PlayerController : MonoBehaviour
         UpdateCommandUI();
     }
 
+    /// <summary>
+    /// ⚔️ [Y] 키 - 선택된 원거리 부대 및 자유 유닛들의 근접전 모드를 일괄 토글합니다.
+    /// 활을 접고 단검/칼을 뽑아 백병전을 수행하도록 하거나, 다시 원거리 사격 모드로 복귀합니다.
+    /// </summary>
+    public void ToggleMeleeModeSelected()
+    {
+        bool hasAnyMelee = false;
+
+        // 1. 선택된 부대 검사
+        if (selectedSquads.Exists(s => s != null && (s.isMeleeMode || s.isForcedMeleeCharge)))
+        {
+            hasAnyMelee = true;
+        }
+        // 2. 선택된 GameObject 자유 유닛 검사
+        else if (selectedUnits.Exists(u => u != null && u.mySquad == null && u.isForcedMelee))
+        {
+            hasAnyMelee = true;
+        }
+        // 3. 선택된 Pure ECS 자유 유닛 검사
+        else if (selectedECSEntities.Count > 0)
+        {
+            var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
+            if (world != null && world.IsCreated)
+            {
+                var em = world.EntityManager;
+                for (int i = 0; i < selectedECSEntities.Count; i++)
+                {
+                    var ent = selectedECSEntities[i];
+                    if (em.Exists(ent) && em.HasComponent<MiniTotalWar.ECS.UnitCombatData>(ent))
+                    {
+                        if (em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(ent).IsForcedMelee == 1)
+                        {
+                            hasAnyMelee = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        bool newMelee = !hasAnyMelee;
+
+        int affectedSquads = 0;
+        int affectedUnits = 0;
+
+        foreach (Squad s in selectedSquads)
+        {
+            if (s != null && s.IsRangedSquad)
+            {
+                s.SetMeleeMode(newMelee);
+                affectedSquads++;
+            }
+        }
+
+        foreach (Unit u in selectedUnits)
+        {
+            if (u != null && u.mySquad == null && u.isRangedUnit)
+            {
+                u.isForcedMelee = newMelee;
+                if (UnitJobSimulationManager.Instance != null)
+                {
+                    UnitJobSimulationManager.Instance.UpdateUnitForcedMelee(u, newMelee);
+                }
+                affectedUnits++;
+            }
+        }
+
+        if (selectedECSEntities.Count > 0)
+        {
+            var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
+            if (world != null && world.IsCreated)
+            {
+                var em = world.EntityManager;
+                for (int i = 0; i < selectedECSEntities.Count; i++)
+                {
+                    var ent = selectedECSEntities[i];
+                    if (em.Exists(ent) && em.HasComponent<MiniTotalWar.ECS.UnitCombatData>(ent))
+                    {
+                        var combat = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(ent);
+                        if (combat.IsRangedUnit == 1)
+                        {
+                            combat.IsForcedMelee = newMelee ? 1 : 0;
+                            em.SetComponentData(ent, combat);
+                            affectedUnits++;
+                        }
+                    }
+                }
+            }
+        }
+
+        string statusText = newMelee ? "⚔️ [근접전(칼질) 모드 활성화 - 활 접고 백병전 돌격 준비]" : "🏹 [원거리 사격 모드 복귀]";
+        Debug.Log($"[PlayerController] ⚔️ [Y] {statusText}! (적용 부대: {affectedSquads}, 자유 유닛: {affectedUnits})");
+        UpdateCommandUI();
+    }
+
     private void ToggleLooseFormation()
     {
         bool newState = false;
@@ -3126,6 +3749,12 @@ public class PlayerController : MonoBehaviour
 
     private void UpdateCommandUI()
     {
+        // 🎯 원거리 사거리 시각화 매니저 선택 목록 즉시 동기화 (조기 return 방지)
+        if (RangeVisualizationManager.Instance != null)
+        {
+            RangeVisualizationManager.Instance.UpdateSelection(selectedSquads, selectedUnits, selectedECSEntities);
+        }
+
         if (SquadCardUIManager.Instance != null)
         {
             SquadCardUIManager.Instance.UpdateSelectionUI(selectedSquads);
@@ -3235,7 +3864,7 @@ public class PlayerController : MonoBehaviour
         cmds.Add(new CommandButtonData { commandId = "RunToggle", buttonName = isAnyRunning ? "걷기" : "달리기", hotkeyText = "R", onClickAction = () => { ToggleRunMode(); } });
         cmds.Add(new CommandButtonData { commandId = "AutoAttack", buttonName = isAnyAutoAttack ? "돌격 요격" : "접촉 방어", hotkeyText = "V", onClickAction = () => { ToggleAutoAttack(); } });
 
-        // 🏹 [원거리 전용 명령] 원거리 유닛(자유 유닛 포함) 또는 부대 선택 시 자유 사격(F) 버튼 표시
+        // 🏹 [원거리 전용 명령] 원거리 유닛(자유 유닛 포함) 또는 부대 선택 시 자유 사격(F) 및 사거리 토글(I) 버튼 표시
         if (hasAnyRanged)
         {
             cmds.Add(new CommandButtonData
@@ -3244,6 +3873,53 @@ public class PlayerController : MonoBehaviour
                 buttonName = isAnyFireAtWill ? "자동 사격" : "사격 금지",
                 hotkeyText = "F",
                 onClickAction = () => { ToggleFireAtWill(); }
+            });
+
+            bool isAnyMeleeMode = selectedSquads.Exists(s => s != null && (s.isMeleeMode || s.isForcedMeleeCharge)) ||
+                                  selectedUnits.Exists(u => u != null && u.mySquad == null && u.isForcedMelee);
+            if (!isAnyMeleeMode && selectedECSEntities.Count > 0)
+            {
+                var world = Unity.Entities.World.DefaultGameObjectInjectionWorld;
+                if (world != null && world.IsCreated)
+                {
+                    var em = world.EntityManager;
+                    for (int i = 0; i < selectedECSEntities.Count; i++)
+                    {
+                        var ent = selectedECSEntities[i];
+                        if (em.Exists(ent) && em.HasComponent<MiniTotalWar.ECS.UnitCombatData>(ent))
+                        {
+                            if (em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(ent).IsForcedMelee == 1)
+                            {
+                                isAnyMeleeMode = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            cmds.Add(new CommandButtonData
+            {
+                commandId = "MeleeMode",
+                buttonName = isAnyMeleeMode ? "사격 모드" : "근접전 모드",
+                hotkeyText = "Y",
+                onClickAction = () => { ToggleMeleeModeSelected(); }
+            });
+
+            bool isRangeVisOn = RangeVisualizationManager.Instance != null && RangeVisualizationManager.Instance.isVisualizationEnabled;
+            cmds.Add(new CommandButtonData
+            {
+                commandId = "ToggleRangeVis",
+                buttonName = isRangeVisOn ? "사거리 숨김" : "사거리 표시",
+                hotkeyText = "I",
+                onClickAction = () =>
+                {
+                    if (RangeVisualizationManager.Instance != null)
+                    {
+                        RangeVisualizationManager.Instance.ToggleVisualization();
+                        UpdateCommandUI();
+                    }
+                }
             });
         }
 
@@ -3273,6 +3949,12 @@ public class PlayerController : MonoBehaviour
         }
 
         CommandUIManager.Instance.ShowCommands(cmds);
+
+        // 🎯 원거리 사거리 시각화 매니저 선택 목록 실시간 동기화
+        if (RangeVisualizationManager.Instance != null)
+        {
+            RangeVisualizationManager.Instance.UpdateSelection(selectedSquads, selectedUnits, selectedECSEntities);
+        }
     }
 
     /// <summary>
@@ -3282,6 +3964,13 @@ public class PlayerController : MonoBehaviour
     /// </summary>
     public void CommandAttackTargetSquad(Squad enemySquad, bool isAltPressed = false)
     {
+        // 🏛️ [배치 단계 조기 공격 차단]: 시작 전에는 적을 직접 공격할 수 없음
+        if (BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment)
+        {
+            Debug.LogWarning("<color=#FFA500><b>[PlayerController] 🛡️ [배치 단계]: 전투가 시작되기 전에는 적군을 공격할 수 없습니다. 상단의 [전투 시작]을 누르세요.</b></color>");
+            return;
+        }
+
         if (enemySquad == null || (enemySquad.members.Count == 0 && enemySquad.initialUnitCount == 0)) return;
 
         Vector3 enemyFrontPos = enemySquad.GetFrontLineCenter();
@@ -3292,30 +3981,11 @@ public class PlayerController : MonoBehaviour
         int rangedSquadCount = 0;
         int meleeSquadCount = 0;
 
-        foreach (Squad mySquad in selectedSquads)
+        // 전술 명령 큐(BattleCommandQueue)를 통해 부대 타겟 공격 명령 발행
+        if (selectedSquads.Count > 0)
         {
-            if (mySquad == null || (mySquad.members.Count == 0 && mySquad.initialUnitCount == 0)) continue;
-
-            if (isAltPressed)
-            {
-                // ⚔️ [Alt + 우클릭]: 강제 백병전 돌격 (궁병도 활을 접고 백병전 돌격)
-                mySquad.CommandMeleeChargeSquad(enemySquad);
-                meleeSquadCount++;
-            }
-            else
-            {
-                // 🏹 [일반 우클릭/Z키]: 원거리 부대는 사거리 유지 일제사격, 근접 부대는 포위 돌격
-                mySquad.CommandAttackSquad(enemySquad);
-                if (mySquad.IsRangedSquad)
-                {
-                    rangedSquadCount++;
-                }
-                else
-                {
-                    meleeSquadCount++;
-                }
-            }
-            attackedSquads++;
+            BattleCommandQueue.Instance.IssueAttackSquadCommand(selectedSquads, enemySquad, isAltPressed);
+            attackedSquads = selectedSquads.Count;
         }
 
         int targetEnemySquadId = enemySquad.GetInstanceID();
@@ -3325,12 +3995,14 @@ public class PlayerController : MonoBehaviour
         {
             if (u != null && u.mySquad == null)
             {
+                bool isMelee = isAltPressed || u.isForcedMelee;
                 if (UnitJobSimulationManager.Instance != null)
                 {
                     UnitJobSimulationManager.Instance.UpdateUnitTargetSquadId(u, targetEnemySquadId);
+                    UnitJobSimulationManager.Instance.UpdateUnitForcedMelee(u, isMelee);
                 }
 
-                if (!isAltPressed && u.isRangedUnit && u.currentAmmo > 0)
+                if (!isMelee && u.isRangedUnit && u.currentAmmo > 0)
                 {
                     float dist = Vector3.Distance(u.transform.position, enemyVisualCenter);
                     if (dist <= u.rangedAttackRange * 0.85f)
@@ -3365,10 +4037,12 @@ public class PlayerController : MonoBehaviour
                         var mov = em.GetComponentData<MiniTotalWar.ECS.UnitMovementData>(ent);
                         var combat = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(ent);
 
+                        bool isMelee = isAltPressed || (combat.IsForcedMelee == 1);
                         combat.TargetSquadId = targetEnemySquadId;
                         combat.AutoAttackEnabled = 1;
+                        combat.IsForcedMelee = isMelee ? 1 : 0;
 
-                        if (!isAltPressed && combat.IsRangedUnit == 1 && combat.CurrentAmmo > 0)
+                        if (!isMelee && combat.IsRangedUnit == 1 && combat.CurrentAmmo > 0)
                         {
                             Unity.Mathematics.float3 myPos = mov.Position;
                             Unity.Mathematics.float3 diff = (Unity.Mathematics.float3)enemyVisualCenter - myPos;
@@ -3434,8 +4108,15 @@ public class PlayerController : MonoBehaviour
     /// </summary>
     private bool TryGetEnemyUnderMouse(out Squad targetSquad, out Vector3 targetPos)
     {
+        return TryGetEnemyUnderMouse(out targetSquad, out targetPos, out _, out _);
+    }
+
+    public bool TryGetEnemyUnderMouse(out Squad targetSquad, out Vector3 targetPos, out Unit targetUnit, out Unity.Entities.Entity targetEntity)
+    {
         targetSquad = null;
         targetPos = Vector3.zero;
+        targetUnit = null;
+        targetEntity = Unity.Entities.Entity.Null;
 
         Vector2 mouseScreenPos = Input.mousePosition;
 
@@ -3454,7 +4135,7 @@ public class PlayerController : MonoBehaviour
                 if (iconUI != null)
                 {
                     Squad s = iconUI.GetSquad();
-                    if (s != null && !s.isPlayer && s.MemberCount > 0)
+                    if (s != null && !s.isPlayer && s.MemberCount > 0 && s.isSpotted)
                     {
                         targetSquad = s;
                         targetPos = s.GetVisualCenter();
@@ -3471,13 +4152,16 @@ public class PlayerController : MonoBehaviour
         foreach (var h in hits)
         {
             Unit u = h.collider.GetComponent<Unit>();
-            if (u != null && !u.isPlayer)
+            if (u != null && !u.isPlayer && u.isSpotted)
             {
                 if (u.mySquad != null)
                 {
-                    targetSquad = u.mySquad;
-                    targetPos = targetSquad.GetVisualCenter();
-                    return true;
+                    if (u.mySquad.isSpotted)
+                    {
+                        targetSquad = u.mySquad;
+                        targetPos = targetSquad.GetVisualCenter();
+                        return true;
+                    }
                 }
                 else
                 {
@@ -3493,7 +4177,7 @@ public class PlayerController : MonoBehaviour
             var squads = BattleManager.Instance.GetAllSquads();
             foreach (Squad s in squads)
             {
-                if (s == null || s.isPlayer || s.MemberCount <= 0) continue;
+                if (s == null || s.isPlayer || s.MemberCount <= 0 || !s.isSpotted) continue;
 
                 Vector3 center = s.GetVisualCenter();
                 Vector3 relPos = worldHit - center;
@@ -3507,8 +4191,8 @@ public class PlayerController : MonoBehaviour
 
                 int cols = Mathf.Max(1, s.currentColumns);
                 int rows = Mathf.Max(1, Mathf.CeilToInt((float)s.MemberCount / cols));
-                float halfWidth = (cols * s.spacing * 0.5f) + 0.5f; // 0.5m 정밀 반경
-                float halfDepth = (rows * s.spacing * 0.5f) + 0.5f;
+                float halfWidth = (cols * s.spacing * 0.5f) + 1.8f; // 1.8m 정밀 여유 반경으로 클릭 편의성 대폭 확장
+                float halfDepth = (rows * s.spacing * 0.5f) + 1.8f;
 
                 if (Mathf.Abs(localX) <= halfWidth && Mathf.Abs(localZ) <= halfDepth)
                 {
@@ -3529,16 +4213,26 @@ public class PlayerController : MonoBehaviour
                 typeof(MiniTotalWar.ECS.UnitMovementData)
             );
 
+            using (var entities = query.ToEntityArray(Unity.Collections.Allocator.Temp))
             using (var tags = query.ToComponentDataArray<MiniTotalWar.ECS.UnitEntityTag>(Unity.Collections.Allocator.Temp))
             using (var movs = query.ToComponentDataArray<MiniTotalWar.ECS.UnitMovementData>(Unity.Collections.Allocator.Temp))
             {
-                float minScreenDist = 25f; // 25px 정밀 피킹
+                float minScreenDist = 40f; // 40px 정밀 피킹 (피킹 반경 넉넉히 확대)
                 int bestIdx = -1;
 
                 for (int i = 0; i < tags.Length; i++)
                 {
                     if (tags[i].Faction == 0 && tags[i].IsAlive == 1) // 적군 유닛
                     {
+                        // 👁️ [삼국지 토탈워식 시야 필터]: 미발각 적 엔티티는 마우스 피킹 대상에서 제외
+                        if (tags[i].SquadId != -1 && VisionDetectionManager.Instance != null)
+                        {
+                            if (!VisionDetectionManager.Instance.IsSquadSpotted(tags[i].SquadId))
+                            {
+                                continue;
+                            }
+                        }
+
                         Vector3 screenPt = mainCamera.WorldToScreenPoint((Vector3)movs[i].Position);
                         if (screenPt.z > 0f)
                         {
@@ -3560,7 +4254,7 @@ public class PlayerController : MonoBehaviour
                         var squads = BattleManager.Instance.GetAllSquads();
                         foreach (var s in squads)
                         {
-                            if (s != null && s.GetInstanceID() == squadId && !s.isPlayer)
+                            if (s != null && s.GetInstanceID() == squadId && !s.isPlayer && s.isSpotted)
                             {
                                 targetSquad = s;
                                 targetPos = s.GetVisualCenter();
@@ -3568,9 +4262,43 @@ public class PlayerController : MonoBehaviour
                             }
                         }
                     }
-                    targetPos = movs[bestIdx].Position;
-                    return true;
+                    else if (squadId == -1)
+                    {
+                        targetEntity = entities[bestIdx];
+                        targetPos = movs[bestIdx].Position;
+                        return true;
+                    }
                 }
+            }
+        }
+
+        // 4. [근처 적 부대 스마트 자석 검출 (Near Enemy Magnet Snap)]:
+        // 적 부대 외곽선 3.5m 이내를 클릭한 경우에도 해당 적 부대를 타겟으로 자동 스냅
+        if (BattleManager.Instance != null && GetMouseWorldPosition(out Vector3 hitPos))
+        {
+            var squads = BattleManager.Instance.GetAllSquads();
+            Squad nearestEnemy = null;
+            float nearestDistSqr = 3.5f * 3.5f;
+
+            foreach (var s in squads)
+            {
+                if (s == null || s.isPlayer || s.MemberCount <= 0 || !s.isSpotted) continue;
+                Vector3 center = s.GetVisualCenter();
+                float distSqr = (hitPos - center).sqrMagnitude;
+                float squadRadius = Mathf.Max(2f, s.currentColumns * s.spacing * 0.5f);
+                float distToEdge = Mathf.Max(0f, Mathf.Sqrt(distSqr) - squadRadius);
+                if (distToEdge * distToEdge < nearestDistSqr)
+                {
+                    nearestDistSqr = distToEdge * distToEdge;
+                    nearestEnemy = s;
+                }
+            }
+
+            if (nearestEnemy != null)
+            {
+                targetSquad = nearestEnemy;
+                targetPos = nearestEnemy.GetVisualCenter();
+                return true;
             }
         }
 
@@ -3584,51 +4312,29 @@ public class PlayerController : MonoBehaviour
     /// </summary>
     public void CommandAttackTargetPosition(Vector3 targetWorldPos, bool isAltPressed = false)
     {
-        foreach (Squad mySquad in selectedSquads)
+        // 🏛️ [배치 단계 조기 공격 차단]: 시작 전에는 어택땅을 내릴 수 없음
+        if (BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment)
         {
-            if (mySquad != null && mySquad.MemberCount > 0)
-            {
-                if (!isAltPressed && mySquad.IsRangedSquad)
-                {
-                    // 🏹 원거리 부대는 사거리 내이면 정지하여 사격 자세, 사거리 밖이면 사거리 내로 전술 전진
-                    Vector3 myPos = mySquad.GetVisualCenter();
-                    Vector3 dir = targetWorldPos - myPos;
-                    dir.y = 0f;
-                    float dist = dir.magnitude;
-                    float maxRange = 150f;
-                    if (mySquad.members.Count > 0 && mySquad.members[0] != null && mySquad.members[0].rangedAttackRange > 10f)
-                    {
-                        maxRange = mySquad.members[0].rangedAttackRange;
-                    }
+            Debug.LogWarning("<color=#FFA500><b>[PlayerController] 🛡️ [배치 단계]: 전투가 시작되기 전에는 공격 이동을 내릴 수 없습니다. 상단의 [전투 시작]을 누르세요.</b></color>");
+            return;
+        }
 
-                    Quaternion faceRot = (dir.sqrMagnitude > 0.001f) ? Quaternion.LookRotation(dir.normalized) : mySquad.transform.rotation;
-
-                    if (dist <= maxRange * 0.90f)
-                    {
-                        // 사거리 안: 제자리 정지 후 목표 지점 방향 조준 사격
-                        mySquad.CommandRangedHaltAndFire(faceRot, null);
-                    }
-                    else
-                    {
-                        // 사거리 밖: 사거리 안(0.70f 지점)으로 정규 전술 전진
-                        Vector3 standPos = targetWorldPos - (dir.normalized * (maxRange * 0.70f));
-                        mySquad.ClearWaypoints();
-                        mySquad.CommandMoveWithFormation(standPos, faceRot, mySquad.currentColumns, false, UnitCommandState.Move);
-                    }
-                }
-                else
-                {
-                    mySquad.ClearWaypoints();
-                    mySquad.CommandMoveWithFormation(targetWorldPos, mySquad.transform.rotation, mySquad.currentColumns, false, UnitCommandState.AttackMove);
-                }
-            }
+        // 전술 명령 큐(BattleCommandQueue)를 통해 부대 좌표 공격(어택땅) 명령 발행
+        if (selectedSquads.Count > 0)
+        {
+            BattleCommandQueue.Instance.IssueAttackPositionCommand(selectedSquads, targetWorldPos, isAltPressed);
         }
 
         foreach (Unit u in selectedUnits)
         {
             if (u != null && u.mySquad == null)
             {
-                if (!isAltPressed && u.isRangedUnit && u.currentAmmo > 0)
+                bool isMelee = isAltPressed || u.isForcedMelee;
+                if (UnitJobSimulationManager.Instance != null)
+                {
+                    UnitJobSimulationManager.Instance.UpdateUnitForcedMelee(u, isMelee);
+                }
+                if (!isMelee && u.isRangedUnit && u.currentAmmo > 0)
                 {
                     float dist = Vector3.Distance(u.transform.position, targetWorldPos);
                     if (dist <= u.rangedAttackRange * 0.85f)
@@ -3661,9 +4367,11 @@ public class PlayerController : MonoBehaviour
                     {
                         var mov = em.GetComponentData<MiniTotalWar.ECS.UnitMovementData>(ent);
                         var combat = em.GetComponentData<MiniTotalWar.ECS.UnitCombatData>(ent);
+                        bool isMelee = isAltPressed || (combat.IsForcedMelee == 1);
+                        combat.IsForcedMelee = isMelee ? 1 : 0;
 
                         // 🏹 자유 ECS 유닛 중 원거리 유닛(탄약 보유)은 일반 우클릭 시 사거리 유지 전술 사격 하달
-                        if (!isAltPressed && combat.IsRangedUnit == 1 && combat.CurrentAmmo > 0)
+                        if (!isMelee && combat.IsRangedUnit == 1 && combat.CurrentAmmo > 0)
                         {
                             Vector3 myPos = (Vector3)mov.Position;
                             Vector3 dir = targetWorldPos - myPos;

@@ -31,6 +31,7 @@ namespace MiniTotalWar.ECS
             public int CmdState;
             public float Speed;
             public float Acceleration;
+            public int IsForcedMelee;
         }
 
         private readonly Dictionary<int, SquadSyncInfo> squadSyncMap = new Dictionary<int, SquadSyncInfo>(64);
@@ -74,6 +75,9 @@ namespace MiniTotalWar.ECS
             // 2. ⚡ 순수 ECS 모드 매 프레임 부대 상태(TargetSquadId, MoveSpeed, CommandState) 실시간 동기화
             if (BattleManager.Instance != null && BattleManager.Instance.usePureECS)
             {
+                // 🏛️ [배치 단계]: 전투 시작 전에는 ECS 교전 연동(돌격) 발동 차단
+                if (BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment) return;
+
                 var squads = BattleManager.Instance.GetAllSquads();
                 if (squads != null && squads.Count > 0)
                 {
@@ -95,7 +99,14 @@ namespace MiniTotalWar.ECS
                                     // 🚨 핵심: 부대에 이미 유효한 지정 목표 적 부대가 있다면 끝까지 고수!
                                     if (squad.currentTargetSquad != null && squad.currentTargetSquad.MemberCount > 0)
                                     {
-                                        squad.CommandAttackSquad(squad.currentTargetSquad);
+                                        if (squad.isForcedMeleeCharge)
+                                        {
+                                            squad.CommandMeleeChargeSquad(squad.currentTargetSquad);
+                                        }
+                                        else
+                                        {
+                                            squad.CommandAttackSquad(squad.currentTargetSquad);
+                                        }
                                     }
                                     else
                                     {
@@ -120,7 +131,14 @@ namespace MiniTotalWar.ECS
 
                                         if (closestEnemy != null)
                                         {
-                                            squad.CommandAttackSquad(closestEnemy);
+                                            if (squad.isForcedMeleeCharge)
+                                            {
+                                                squad.CommandMeleeChargeSquad(closestEnemy);
+                                            }
+                                            else
+                                            {
+                                                squad.CommandAttackSquad(closestEnemy);
+                                            }
                                         }
                                     }
                                 }
@@ -147,7 +165,8 @@ namespace MiniTotalWar.ECS
                             TargetSquadId = targetSquadId,
                             CmdState = cmdState,
                             Speed = spd,
-                            Acceleration = accel
+                            Acceleration = accel,
+                            IsForcedMelee = squad.isForcedMeleeCharge ? 1 : 0
                         };
                     }
 
@@ -164,10 +183,15 @@ namespace MiniTotalWar.ECS
                             var combat = entityManager.GetComponentData<UnitCombatData>(e);
                             bool needUpdateCombat = false;
 
-                            // 1. TargetSquadId 불일치 시 갱신
+                            // 1. TargetSquadId 및 IsForcedMelee 불일치 시 갱신
                             if (combat.TargetSquadId != syncInfo.TargetSquadId)
                             {
                                 combat.TargetSquadId = syncInfo.TargetSquadId;
+                                needUpdateCombat = true;
+                            }
+                            if (combat.IsForcedMelee != syncInfo.IsForcedMelee)
+                            {
+                                combat.IsForcedMelee = syncInfo.IsForcedMelee;
                                 needUpdateCombat = true;
                             }
 
@@ -495,6 +519,70 @@ namespace MiniTotalWar.ECS
                         entityManager.SetComponentData(entities[i], combat);
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// ⚔️ [Alt+우클릭 강제 백병전]: 소속 ECS 부대원 전원에게 강제 백병전(사격 금지 및 단검/칼 돌격) 모드를 즉시 일괄 동기화합니다.
+        /// </summary>
+        public void UpdateSquadForcedMelee(Squad squad, bool forcedMelee)
+        {
+            if (squad == null) return;
+            if (!isInitialized) InitializeECS();
+
+            int mySquadId = squad.GetInstanceID();
+            int forcedVal = forcedMelee ? 1 : 0;
+
+            // 1. 하이브리드 모드 유닛 갱신
+            if (squad.members != null && squad.members.Count > 0)
+            {
+                for (int i = 0; i < squad.members.Count; i++)
+                {
+                    Unit u = squad.members[i];
+                    if (u != null && unitToEntityMap.TryGetValue(u, out Entity entity))
+                    {
+                        if (entityManager.Exists(entity))
+                        {
+                            var combat = entityManager.GetComponentData<UnitCombatData>(entity);
+                            combat.IsForcedMelee = forcedVal;
+                            entityManager.SetComponentData(entity, combat);
+                        }
+                    }
+                }
+            }
+
+            // 2. 순수 ECS 모드 Entity 일괄 갱신
+            var query = entityManager.CreateEntityQuery(
+                ComponentType.ReadOnly<UnitEntityTag>(),
+                ComponentType.ReadWrite<UnitCombatData>()
+            );
+
+            using (var entities = query.ToEntityArray(Allocator.Temp))
+            {
+                for (int i = 0; i < entities.Length; i++)
+                {
+                    var tag = entityManager.GetComponentData<UnitEntityTag>(entities[i]);
+                    if (tag.SquadId == mySquadId && tag.IsAlive == 1)
+                    {
+                        var combat = entityManager.GetComponentData<UnitCombatData>(entities[i]);
+                        combat.IsForcedMelee = forcedVal;
+                        entityManager.SetComponentData(entities[i], combat);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// ⚔️ 단일 ECS 엔티티(자유 유닛)의 강제 백병전 모드를 갱신합니다.
+        /// </summary>
+        public void UpdateEntityForcedMelee(Entity entity, bool forcedMelee)
+        {
+            if (!isInitialized) InitializeECS();
+            if (entityManager.Exists(entity) && entityManager.HasComponent<UnitCombatData>(entity))
+            {
+                var combat = entityManager.GetComponentData<UnitCombatData>(entity);
+                combat.IsForcedMelee = forcedMelee ? 1 : 0;
+                entityManager.SetComponentData(entity, combat);
             }
         }
 

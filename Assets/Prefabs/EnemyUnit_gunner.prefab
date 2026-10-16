@@ -63,9 +63,9 @@ MonoBehaviour:
   rangedAttackRange: 90
   optimalRange: 45
   rangedMinRange: 5
-  rangedBaseDamage: 22
-  minDamageRatioAtMax: 0.7
-  rangedAttackCooldown: 3.5
+  rangedBaseDamage: 75
+  minDamageRatioAtMax: 0.65
+  rangedAttackCooldown: 15
   minSpreadRadius: 0.15
   maxSpreadRadius: 1.8
   trajectoryMode: 1
@@ -74,10 +74,10 @@ MonoBehaviour:
   gravityScale: 1
   launchPoint: {fileID: 2956549097863766872}
   launchOffset: {x: 0.25, y: 0.15, z: 0.45}
-  rangedKnockbackPower: 0.5
+  rangedKnockbackPower: 0.8
   ignoreArmor: 0
-  armorPiercingRatio: 0.45
-  armorShredAmount: 20
+  armorPiercingRatio: 0.7
+  armorShredAmount: 35
   meleeSwitchDistance: 5
   minRearSpacing: 0
   minLateralSpacing: 0.75
@@ -88,7 +88,7 @@ MonoBehaviour:
   recommendedSquadSpacingZ: 1
   recommendedStaggeredFormation: 1
   recommendedSequentialFire: 1
-  recommendedSequentialRowDelay: 0.5
+  recommendedSequentialRowDelay: 1.2
   damage: 10
   attackCooldown: 2
   attackRange: 1.45

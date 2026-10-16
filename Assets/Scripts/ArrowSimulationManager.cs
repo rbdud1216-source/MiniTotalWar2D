@@ -56,17 +56,17 @@ public class ArrowSimulationManager : MonoBehaviour
     }
 
     [Header("화살 외형 및 렌더링 설정")]
-    [Tooltip("화살 3D 메쉬 (미지정 시 내장 실린더 메쉬로 자동 생성)")]
+    [KoreanLabel("화살 3D 메쉬", "화살 투사체에 적용할 3D 메쉬입니다. (미지정 시 내장 가느다란 실린더 메쉬로 자동 생성)")]
     [SerializeField] private Mesh arrowMesh;
 
-    [Tooltip("아군 화살 머티리얼")]
+    [KoreanLabel("아군 화살 머티리얼", "플레이어(아군) 화살 렌더링에 사용할 머티리얼입니다. (GPU 인스턴싱 지원 필요)")]
     [SerializeField] private Material playerArrowMaterial;
 
-    [Tooltip("적군 화살 머티리얼")]
+    [KoreanLabel("적군 화살 머티리얼", "적군 화살 렌더링에 사용할 머티리얼입니다. (GPU 인스턴싱 지원 필요)")]
     [SerializeField] private Material enemyArrowMaterial;
 
     [Header("외부 시뮬레이션 주도 여부")]
-    [Tooltip("UnitJobSimulationManager에서 잡 완료 후 수동 틱을 수행하면 Update는 자동 스킵")]
+    [KoreanLabel("외부 시뮬레이션 주도", "체크 시 C# Job System 및 ECS 잡 완료 후 수동 틱으로 시뮬레이션하며, Update는 자동 스킵됩니다.")]
     public bool drivenExternally = false;
 
     // 최대 동시 비행 화살 풀 크기

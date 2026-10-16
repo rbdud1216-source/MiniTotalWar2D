@@ -60,12 +60,12 @@ MonoBehaviour:
   fireAtWill: 1
   maxAmmo: 25
   currentAmmo: 25
-  rangedAttackRange: 150
+  rangedAttackRange: 140
   optimalRange: 50
   rangedMinRange: 5
-  rangedBaseDamage: 15
+  rangedBaseDamage: 22
   minDamageRatioAtMax: 0.55
-  rangedAttackCooldown: 2.2
+  rangedAttackCooldown: 7
   minSpreadRadius: 0.3
   maxSpreadRadius: 3.5
   trajectoryMode: 0

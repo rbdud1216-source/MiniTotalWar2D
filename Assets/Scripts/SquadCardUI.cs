@@ -11,14 +11,23 @@ public class SquadCardUI : MonoBehaviour, IPointerClickHandler
     private Squad targetSquad;
     private PlayerController playerController;
 
-    [Header("UI References")]
+    [Header("UI 계층 참조")]
+    [KoreanLabel("부대 명칭 텍스트 (TMP)", "부대 이름을 표시하는 TextMeshProUGUI 컴포넌트입니다.")]
     public TMPro.TextMeshProUGUI squadNameText;
+
+    [KoreanLabel("부대원 수 텍스트 (TMP)", "현재 생존 병력 수를 표시하는 TextMeshProUGUI 컴포넌트입니다.")]
     public TMPro.TextMeshProUGUI unitCountText;
-    public Image highlightImage; // 활성화 시 테두리나 배경색 변경용
-    [Header("🏹 원거리 탄약(화살) 잔량 게이지")]
+
+    [KoreanLabel("선택 하이라이트 이미지", "부대 선택 시 활성화될 테두리/배경 Image 컴포넌트입니다.")]
+    public Image highlightImage;
+
+    [Header("원거리 탄약(화살) 잔량 게이지")]
+    [KoreanLabel("탄약 바 이미지 (Fill)", "잔여 탄약 비율을 표시할 Fill 방식의 Image 컴포넌트입니다.")]
     public Image ammoBarImage;
+
+    [KoreanLabel("탄약 바 루트 오브젝트", "탄약 바 전체를 활성화/비활성화할 부모 게임오브젝트입니다.")]
     public GameObject ammoBarRoot;
-    private bool hasFiredAmmo = false; // 🏹 토탈워 삼국: 첫 사격을 시작할 때부터 게이지 표시
+    private bool hasFiredAmmo = false;
     private Button button;
 
     private void Awake()

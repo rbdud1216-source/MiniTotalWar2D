@@ -107,6 +107,7 @@ public struct UnitJobData
     // ⛰️ 지형 및 경사면 설정
     public int alignToSlope;                   // 1 = 옵션 B (경사면 기울기 반영), 0 = 옵션 A (수직 유지)
     public float groundYOffset;                // 지면 밀착 높이 오프셋
+    public int isForcedMelee;                  // 1 = Alt+우클릭 강제 백병전 돌격 모드(사격 중단 및 단검/칼 돌격), 0 = 일반 사격
 }
 
 /// <summary>
@@ -360,6 +361,7 @@ public class UnitJobSimulationManager : MonoBehaviour
                 oldData.row = u.Row;
                 oldData.col = u.Col;
                 oldData.fireAtWill = ((u.mySquad != null) ? u.mySquad.fireAtWill : u.fireAtWill) ? 1 : 0;
+                oldData.isForcedMelee = (u.mySquad != null && u.mySquad.isForcedMeleeCharge) ? 1 : 0;
 
                 // 📐 원거리 3축 공간 및 사선 클리어런스 데이터 동기화
                 oldData.minRearSpacing = u.minRearSpacing;
@@ -474,6 +476,7 @@ public class UnitJobSimulationManager : MonoBehaviour
                     row = u.Row,
                     col = u.Col,
                     fireAtWill = ((u.mySquad != null) ? u.mySquad.fireAtWill : u.fireAtWill) ? 1 : 0,
+                    isForcedMelee = (u.mySquad != null && u.mySquad.isForcedMeleeCharge) ? 1 : 0,
 
                     // 📐 원거리 3축 공간 및 사선 클리어런스 초기화
                     minRearSpacing = u.minRearSpacing,
@@ -582,6 +585,47 @@ public class UnitJobSimulationManager : MonoBehaviour
     }
 
     /// <summary>
+    /// ⚔️ [Alt+우클릭 강제 백병전]: 소속 부대원 전원에게 강제 백병전(사격 금지 및 단검/칼 돌격) 모드를 일괄 동기화합니다.
+    /// </summary>
+    public void UpdateSquadForcedMelee(Squad squad, bool forcedMelee)
+    {
+        if (squad == null || !isNativeArraysAllocated || !unitDataArray.IsCreated) return;
+
+        simulationJobHandle.Complete();
+
+        int targetVal = forcedMelee ? 1 : 0;
+        int count = registeredUnits.Count;
+        for (int i = 0; i < count; i++)
+        {
+            Unit u = registeredUnits[i];
+            if (u != null && u.mySquad == squad)
+            {
+                UnitJobData data = unitDataArray[i];
+                data.isForcedMelee = targetVal;
+                unitDataArray[i] = data;
+            }
+        }
+    }
+
+    /// <summary>
+    /// ⚔️ 단일 유닛(자유 유닛)의 강제 백병전 모드를 갱신합니다.
+    /// </summary>
+    public void UpdateUnitForcedMelee(Unit unit, bool forcedMelee)
+    {
+        if (unit == null || !isNativeArraysAllocated || !unitDataArray.IsCreated) return;
+
+        simulationJobHandle.Complete();
+
+        int idx = unit.simulationIndex;
+        if (idx >= 0 && idx < registeredUnits.Count)
+        {
+            UnitJobData data = unitDataArray[idx];
+            data.isForcedMelee = forcedMelee ? 1 : 0;
+            unitDataArray[idx] = data;
+        }
+    }
+
+    /// <summary>
     /// 진형/태세/밀집도에 따라 계산된 부대 소속 유닛들의 방어력, 무게(질량), 공격 쿨다운 및 원거리 클리어런스 파라미터를 일괄 갱신합니다.
     /// </summary>
     public void UpdateSquadCombatModifiers(
@@ -639,6 +683,7 @@ public class UnitJobSimulationManager : MonoBehaviour
             UnitJobData data = unitDataArray[i];
             data.autoAttackEnabled = u.autoAttackEnabled ? 1 : 0;
             data.fireAtWill = ((u.mySquad != null) ? u.mySquad.fireAtWill : u.fireAtWill) ? 1 : 0;
+            data.isForcedMelee = (u.mySquad != null) ? (u.mySquad.isForcedMeleeCharge ? 1 : 0) : (u.isForcedMelee ? 1 : 0);
             data.mass = (u.mass > 0f) ? u.mass : 100f;
             data.chargeSpeed = (u.chargeSpeed > 0f) ? u.chargeSpeed : 4.8f;
             data.chargeBonus = (u.chargeBonus > 0f) ? u.chargeBonus : 15f;
@@ -714,6 +759,9 @@ public class UnitJobSimulationManager : MonoBehaviour
 
         JobHandle searchDeps = JobHandle.CombineDependencies(separationHandle, buildMapHandle);
 
+        bool isInDeployment = BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment;
+        int inDeploymentFlag = isInDeployment ? 1 : 0;
+
         // 4. [Job 2] 최근접 적 탐색(Enemy Targeting) 병렬 계산
         EnemySearchJob searchJob = new EnemySearchJob
         {
@@ -724,7 +772,8 @@ public class UnitJobSimulationManager : MonoBehaviour
             terrainData = (TerrainHeightManager.Instance != null && TerrainHeightManager.Instance.IsDataReady)
                 ? TerrainHeightManager.Instance.HeightData
                 : default,
-            totalCount = unitCount
+            totalCount = unitCount,
+            isInDeployment = inDeploymentFlag
         };
         JobHandle searchHandle = searchJob.Schedule(unitCount, 64, searchDeps);
 
@@ -741,7 +790,8 @@ public class UnitJobSimulationManager : MonoBehaviour
                 : default,
             deltaTime = deltaTime,
             currentTime = currentTime,
-            totalCount = unitCount
+            totalCount = unitCount,
+            isInDeployment = inDeploymentFlag
         };
         simulationJobHandle = moveAndCombatJob.Schedule(transformAccessArray, searchHandle);
     }
@@ -952,9 +1002,17 @@ public struct EnemySearchJob : IJobParallelFor
     [WriteOnly] public NativeArray<int> targetIndices;
     public TerrainHeightData terrainData;
     public int totalCount;
+    public int isInDeployment;
 
     public void Execute(int index)
     {
+        // 🏛️ [배치 단계]: 전투 시작 전에는 적을 일절 탐색하지 않고 타겟 인덱스를 -1로 고정
+        if (isInDeployment == 1)
+        {
+            targetIndices[index] = -1;
+            return;
+        }
+
         UnitJobData me = unitData[index];
         if (me.isAlive == 0)
         {
@@ -1005,13 +1063,15 @@ public struct EnemySearchJob : IJobParallelFor
         // 🎯 [1단계] 부대 지휘관이 지정한 목표 적 부대(targetSquadId) 소속 병사 집중 탐색! (SquadMap O(K) 최적화)
         if (!isFreeUnit && me.targetSquadId != -1)
         {
-            // 🏹 [원거리 전용: 가시선(LoS) 확보 적 우선 타겟팅 및 대형 분산]
+            // 🏹 [원거리 전용: 가시선(LoS) 확보 적 우선 타겟팅 및 고지대 종심 분산 사격]
             if (me.isRangedUnit == 1)
             {
                 int visibleCandidateCount = 0;
                 int allCandidateCount = 0;
                 int bestVisibleIdx = -1;
                 int bestFallbackIdx = -1;
+                int closestFrontIdx = -1;
+                float minVisibleSqrDist = float.MaxValue;
                 int seed = (index * 7919 + me.col * 31 + me.row * 97) & 0x7FFFFFFF;
 
                 if (squadMap.TryGetFirstValue(me.targetSquadId, out int i, out var it))
@@ -1023,33 +1083,62 @@ public struct EnemySearchJob : IJobParallelFor
                         if (other.isAlive == 1 && other.isPlayer != me.isPlayer)
                         {
                             Vector3 otherPos = positions[i];
+                            Vector3 diff = otherPos - myPos;
+                            float horizD = Mathf.Sqrt(diff.x * diff.x + diff.z * diff.z);
+                            float diffY = myPos.y - otherPos.y; // 사수가 적보다 얼마나 높은가?
+                            float sqrDist = diff.x * diff.x + diff.z * diff.z;
+
                             allCandidateCount++;
                             if (bestFallbackIdx == -1 || (seed % allCandidateCount == 0))
                             {
                                 bestFallbackIdx = i;
                             }
 
-                            // 지형 사선(LoS, 0.2m 눈높이) 검사
+                            // 🏔️ 지형 사선(LoS) 정밀 검사: 사수 눈높이(1.4m) -> 목표 가슴높이(1.0m)
                             bool isClear = (terrainData.isValid == 1)
-                                ? terrainData.CheckLineOfSight(myPos, otherPos, 0.2f, 0.2f, 4)
+                                ? terrainData.CheckLineOfSight(myPos, otherPos, 1.4f, 1.0f, 4)
                                 : true;
 
                             if (isClear)
                             {
                                 visibleCandidateCount++;
-                                if (bestVisibleIdx == -1 || (seed % visibleCandidateCount == 0))
+
+                                // 🎯 [고지대 직사 화망 분산 판정 (Plunging Volley Dispersion)]:
+                                // 수직 고저차가 1.5m 이상이거나 사격 부각이 약 3.5도 이상인 고지대 사격 시
+                                bool isHighGround = (diffY >= 1.5f) || (horizD > 1.0f && (diffY / horizD) >= 0.06f);
+
+                                if (isHighGround)
                                 {
-                                    bestVisibleIdx = i;
+                                    // 🦅 고지대 사격: 1열부터 후열까지 전 방진에 걸쳐 고유 시드로 골고루 균등 분산 조준!
+                                    if (bestVisibleIdx == -1 || (seed % visibleCandidateCount == 0))
+                                    {
+                                        bestVisibleIdx = i;
+                                    }
+                                }
+                                else
+                                {
+                                    // 🛡️ 평지 사격: 최전열(최단거리) 적을 우선 추적하여 앞열부터 집중 파쇄
+                                    if (sqrDist < minVisibleSqrDist)
+                                    {
+                                        minVisibleSqrDist = sqrDist;
+                                        closestFrontIdx = i;
+                                    }
+                                    if (bestVisibleIdx == -1 || (seed % visibleCandidateCount == 0))
+                                    {
+                                        bestVisibleIdx = i;
+                                    }
                                 }
                             }
                         }
                     } while (squadMap.TryGetNextValue(out i, ref it));
                 }
 
-                // 🔫 직사 유닛(Flat): 반드시 사선이 트인 보이는 적만 조준! 안 보이면 땅을 쏘지 않고 조준 대기
+                // 🔫 직사 유닛(Flat):
+                // 고지대에서는 방진 전체에 골고루 분산된 타겟(bestVisibleIdx) 선택!
+                // 평지에서는 가장 가까운 전열 적(closestFrontIdx)을 최우선 집중 타격!
                 if (me.trajectoryMode == 1)
                 {
-                    targetIndices[index] = bestVisibleIdx;
+                    targetIndices[index] = closestFrontIdx != -1 ? (bestVisibleIdx != -1 ? bestVisibleIdx : closestFrontIdx) : bestVisibleIdx;
                     return;
                 }
                 else
@@ -1245,11 +1334,32 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
     public float deltaTime;
     public float currentTime;
     public int totalCount;
+    public int isInDeployment;
 
     public void Execute(int index, TransformAccess transform)
     {
         UnitJobData data = unitData[index];
         if (data.isAlive == 0) return;
+
+        // 🏛️ [토탈워식 배치 단계 (Deployment Phase)]:
+        // 전투 시작 전 배치 단계 중에는 모든 유닛이 대형 위치(targetPosition) 및 회전(targetRotation)에 즉시 스냅 고정되며,
+        // 모든 이동, 가속, 넉백, 사격, 근접 공격이 100% 동결됩니다!
+        if (isInDeployment == 1)
+        {
+            data.targetIndex = -1;
+            data.currentState = 0; // Idle
+            data.currentSpeed = 0f;
+            data.knockbackVelocity = Vector3.zero;
+            data.knockdownTimer = 0f;
+            unitData[index] = data;
+
+            if (data.targetPosition.sqrMagnitude > 0.001f)
+            {
+                transform.position = data.targetPosition;
+                transform.rotation = data.targetRotation;
+            }
+            return;
+        }
 
         // 💫 넘어짐(무력화) 상태 타이머 업데이트 (타겟 유무와 무관하게 유닛 전체 적용)
         bool isKnockedDown = (data.knockdownTimer > 0f);
@@ -1339,8 +1449,8 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                         if (toEnemy.sqrMagnitude < 0.001f) toEnemy = Vector3.forward;
 
                         // 🏹 [원거리 자유 유닛 행동 원칙 (Stand & Fire & Tactical Advance)]
-                        // 탄약이 남아있고 적이 백병전 거리 밖이면 사거리 유지 및 제자리 사격
-                        if (data.isRangedUnit == 1 && data.currentAmmo > 0 && distToEnemy > data.meleeSwitchDistance)
+                        // 탄약이 남아있고 적이 백병전 거리 밖이며 강제 백병전 모드가 아닐 때만 사거리 유지 및 제자리 사격
+                        if (data.isRangedUnit == 1 && data.isForcedMelee == 0 && data.currentAmmo > 0 && distToEnemy > data.meleeSwitchDistance)
                         {
                             float maxRangedDist = data.rangedAttackRange * 0.85f;
                             if (distToEnemy > maxRangedDist)
@@ -1395,8 +1505,9 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                     // 2. 부대 소속 유닛: 공격 상태 시 목표 적 부대원들을 기억하여 자유롭게 끝까지 추격 섬멸!
                     else
                     {
-                        // 🏹 원거리 유닛(isRangedUnit == 1)은 적이 백병전 거리(5m) 밖이고 탄약이 남아있으면 무모하게 돌격하지 않고 대형 위치 유지!
-                        if (data.isRangedUnit == 1 && distToEnemy > data.meleeSwitchDistance && (data.currentAmmo > 0 || data.squadHasAmmo == 1))
+                        // 🏹 원거리 유닛(isRangedUnit == 1)은 탄약이 남아있고 강제 백병전(isForcedMelee == 1)이 아닌 한 무단 돌격하지 않고 부대 대형 위치를 100% 사수!
+                        // (앞열 몇 명이 적과 닿아도 부대가 갈라지며 칼질 돌격하지 않고 제자리 대형 사수 및 반격)
+                        if (data.isRangedUnit == 1 && data.isForcedMelee == 0 && (data.currentAmmo > 0 || data.squadHasAmmo == 1))
                         {
                             targetDest = data.targetPosition;
                             isCharging = false;
@@ -1441,7 +1552,7 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
 
                 // 🏹 [1단계: 원거리 무기 - 활 사격 판정]
                 isRangedShooting = false;
-                if (data.isRangedUnit == 1)
+                if (data.isRangedUnit == 1 && data.isForcedMelee == 0)
                 {
                     // 🚨 백병전 교전 중(currentState == 3)이거나 5m 이내에 적이 들어왔으면 사격 100% 절대 금지!
                     bool isEngagedInMelee = (data.currentState == 3);
@@ -1512,9 +1623,9 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                     // 🏹 자유 유닛은 방진 대형이 없는 독립 산개 상태이므로 3축 대형 클리어런스 검사 자동 통과 (지형 LoS만 판정)
                     bool isClearanceSatisfied = (data.isFreeUnit == 1) ? true : (rearClear && lateralClear && frontClear);
 
-                    // 🏔️ [지형 사선(Line of Sight, LoS) 차폐 검사 (사수/타겟 눈높이 1.1m)]
+                    // 🏔️ [지형 사선(Line of Sight, LoS) 차폐 검사 (사수 눈높이 1.4m, 타겟 가슴높이 1.0m)]
                     bool isLosClear = (terrainData.isValid == 1)
-                        ? terrainData.CheckLineOfSight(currentPos, enemyPos, 1.1f, 1.1f, 4)
+                        ? terrainData.CheckLineOfSight(currentPos, enemyPos, 1.4f, 1.0f, 4)
                         : true;
 
                     bool canShootTerrainLoS;
@@ -1542,11 +1653,9 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                         }
                         else
                         {
-                            // 🏹 [산 너머 곡사 사격 & 반격 허용]:
-                            // 1) 플레이어가 특정 적 부대를 우클릭 지정했거나(targetSquadId != -1),
-                            // 2) 자유 유닛 간 교전이거나, 적 부대 AI가 자유 유닛을 공격/반격할 때 산 너머 고각 곡사 허용!
-                            canShootTerrainLoS = true;
-                            forceHighArc = 1;
+                            // 👁️ [삼국지 토탈워식 사선 차폐]: 언덕 능선 너머로 차폐되어 보이지 않는 적은 곡사(HighArc)로도 사격 불가! (No Sight, No Fire)
+                            canShootTerrainLoS = false;
+                            forceHighArc = 0;
                         }
                     }
 
@@ -1594,7 +1703,8 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                                     float checkZ = currentPos.z + fwdDir.z * checkD;
                                     float groundH = terrainData.SampleHeight(checkX, checkZ);
                                     float expectedH = finalLaunchY + (upwardRatio * checkD);
-                                    if (expectedH <= groundH + 0.05f)
+                                    // 🌿 [미세 요철 허용 마진 0.15m]: 잔디나 작은 흙둔덕에 탄도가 차단되어 사격을 거부하지 않도록 마진 부여
+                                    if (expectedH <= groundH - 0.15f)
                                     {
                                         isTerrainClearAhead = false;
                                         break;
@@ -1653,14 +1763,19 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
                 float effectiveMeleeRange = isSidearmActive ? data.sidearmAttackRange : data.attackRange;
 
                 bool isInMelee = (distToEnemy <= effectiveMeleeRange);
-                if (isInMelee && !isRangedShooting)
+                // 🏃 [강제 이동 탈출 보장 (Melee Disengage)]:
+                // 플레이어가 이동 명령(currentState == 1)을 내렸다면, 백병전 상태(3)로 덮어쓰지 않고 즉각 탈출 보장!
+                if (data.currentState != 1)
                 {
-                    data.currentState = 3; // MeleeEngaged
-                }
-                else if (data.currentState == 3 && distToEnemy > data.meleeSwitchDistance)
-                {
-                    // 🛡️ 적이 백병전 거리(5m) 밖으로 완전히 달아났을 때만 백병전 해제
-                    data.currentState = (data.autoAttackEnabled == 0) ? 0 : 2; // Hold(Idle) vs AttackMove
+                    if (isInMelee && !isRangedShooting)
+                    {
+                        data.currentState = 3; // MeleeEngaged
+                    }
+                    else if (data.currentState == 3 && distToEnemy > data.meleeSwitchDistance)
+                    {
+                        // 🛡️ 적이 백병전 거리(5m) 밖으로 완전히 달아났을 때만 백병전 해제
+                        data.currentState = (data.autoAttackEnabled == 0) ? 0 : 2; // Hold(Idle) vs AttackMove
+                    }
                 }
 
                 // ⚔️ [2단계 & 3단계: 백병전 타격 판정]: 원거리 사격 중이 아니고, 무력화 상태가 아니며 근접 교전 중일 때 칼/단검 공격!
@@ -1793,10 +1908,10 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
             {
                 data.currentState = 2;
             }
-            // AttackMove 중에 타겟이 없으면 보병은 계속 전진, 궁병은 맹목적 돌격 방지(대형 슬롯 유지)
+            // AttackMove 중에 타겟이 없으면 보병은 계속 전진, 궁병은 맹목적 돌격 방지(대형 슬롯 유지, 단 강제 백병전 모드 제외)
             if (data.currentState == 2)
             {
-                if (data.isRangedUnit == 1)
+                if (data.isRangedUnit == 1 && data.isForcedMelee == 0)
                 {
                     targetDest = data.targetPosition;
                     isCombatRunning = false;
@@ -1856,21 +1971,22 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
             }
 
             // 🗡️ 백병전 중(정지 거리 combatStoppingDistance 이내)에는 발을 딛고 칼싸움 (미끄러짐 및 관통 방지)
-            if (distToEnemy <= data.combatStoppingDistance && data.currentState == 3)
+            // 🚨 [강제 이동(currentState == 1) 탈출 보장]: 이동 명령 중에는 교전 정지 조건을 무시하고 무조건 질주!
+            if (data.currentState != 1 && distToEnemy <= data.combatStoppingDistance && data.currentState == 3)
             {
                 maxDesiredSpeed = 0f;
             }
 
             // 🏹 [궁병 제자리 사격 태세]: 사격 자격을 갖추었거나 활을 쏘는 동안(shouldHaltForRangedFire || isRangedShooting) 즉시 발 멈춤
-            if ((shouldHaltForRangedFire || isRangedShooting) && data.canFireWhileMoving == 0)
+            if (data.currentState != 1 && (shouldHaltForRangedFire || isRangedShooting) && data.canFireWhileMoving == 0)
             {
                 maxDesiredSpeed = 0f;
             }
 
             // 🛡️ [원거리 부대 사격 대형 슬롯 정지 보장]:
             // 원거리 부대원이 교전 사거리 내에 있고 적이 백병전 거리(5m) 밖이라면,
-            // 사선 차폐나 쿨타임으로 지금 당장 사격을 못 하더라도 무단으로 앞열을 뚫고 적진으로 돌격하지 않고 제자리 대형 사수!
-            if (data.isRangedUnit == 1 && data.squadId != -1 && distToEnemy > data.meleeSwitchDistance && distToEnemy <= data.rangedAttackRange * 0.95f)
+            // 사선 차폐나 쿨타임으로 지금 당장 사격을 못 하더라도 무단으로 앞열을 뚫고 적진으로 돌격하지 않고 제자리 대형 사수! (단, 강제 백병전 모드 제외)
+            if (data.currentState != 1 && data.isRangedUnit == 1 && data.isForcedMelee == 0 && data.squadId != -1 && distToEnemy > data.meleeSwitchDistance && distToEnemy <= data.rangedAttackRange * 0.95f)
             {
                 if (data.canFireWhileMoving == 0 && (remainingDist < 1.5f || shouldHaltForRangedFire || isRangedShooting))
                 {
@@ -1963,7 +2079,7 @@ public struct UnitMovementAndCombatJob : IJobParallelForTransform
 
         // 4. 회전 갱신: 기본 수평 주시 방향(Flat Yaw) 결정
         Vector3 flatLookDir = Vector3.zero;
-        if ((isRangedShooting || shouldHaltForRangedFire || (data.isRangedUnit == 1 && distToEnemy <= data.rangedAttackRange)) && targetIdx >= 0 && targetIdx < totalCount && unitData[targetIdx].isAlive == 1)
+        if ((isRangedShooting || shouldHaltForRangedFire || (data.isRangedUnit == 1 && data.isForcedMelee == 0 && distToEnemy <= data.rangedAttackRange)) && targetIdx >= 0 && targetIdx < totalCount && unitData[targetIdx].isAlive == 1)
         {
             Vector3 toEnemy = positions[targetIdx] - currentPos;
             toEnemy.y = 0f;

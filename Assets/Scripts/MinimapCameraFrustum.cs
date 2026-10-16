@@ -8,8 +8,13 @@ using UnityEngine.UI;
 public class MinimapCameraFrustum : MaskableGraphic
 {
     [Header("시야각 비주얼 설정")]
+    [KoreanLabel("시야각 내부 채우기 색상", "미니맵 상에 카메라 시야각 내부를 채울 반투명 색상입니다.")]
     [SerializeField] private Color frustumFillColor = new Color(1f, 1f, 1f, 0.12f);
+
+    [KoreanLabel("시야각 외곽선 색상", "미니맵 상의 카메라 시야각 사다리꼴 외곽선 색상입니다.")]
     [SerializeField] private Color frustumOutlineColor = new Color(1f, 1f, 1f, 0.65f);
+
+    [KoreanLabel("외곽선 두께", "시야각 외곽선의 선 두께입니다. (단위: 픽셀, 기본: 1.5)")]
     [SerializeField] private float outlineThickness = 1.5f;
 
     private Camera targetCamera;

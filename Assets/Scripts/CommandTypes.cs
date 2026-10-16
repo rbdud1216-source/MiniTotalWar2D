@@ -56,3 +56,41 @@ public class CommandButtonData
     public Sprite icon;
     public Action onClickAction;
 }
+
+/// <summary>
+/// 토탈워식 전투 수명주기 상태를 정의하는 열거형입니다.
+/// </summary>
+public enum BattlePhase
+{
+    NotStarted = 0,     // 씬 초기화 중
+    Deployment = 1,     // 부대 배치 단계 (시뮬레이션 동결, 구역 내 자유 이동/회전)
+    BattleStarting = 2, // 전투 개시 카운트다운 및 나팔/팡파레 연출 (1초)
+    CombatRunning = 3,  // 정규 실시간 교전 진행 중
+    ArmyRouting = 4,    // 한쪽 군대가 완전히 붕괴되어 승패가 확정된 상태
+    PostBattle = 5      // 결과 화면 (사살수/손실수 통계 표시, 재시작/메뉴 버튼)
+}
+
+/// <summary>
+/// 토탈워식 사기(Morale / Leadership) 상태를 정의하는 열거형입니다.
+/// </summary>
+public enum MoraleState
+{
+    Firm = 0,       // 안정 (60~100): 정상 지휘 및 안정적인 전선 유지
+    Shaken = 1,     // 동요 (35~59): 심리적 압박 상태, 추가 충격 시 붕괴 위험
+    Wavering = 2,   // 붕괴 위기 (15~34): 사기 게이지 깜빡임, 1회 충돌로 즉각 패주 위험
+    Broken = 3,     // 패주 (0~14): 제어 불능 상태로 후방 도주 (재집결 가능)
+    Shattered = 4   // 영구 궤멸: 도주 중 지속 피격 등으로 재집결 불가 완전 이탈
+}
+
+/// <summary>
+/// 토탈워식 체력 및 피로도(Fatigue / Stamina) 6단계 활력 단계를 정의하는 열거형입니다.
+/// </summary>
+public enum FatigueStage
+{
+    Fresh = 0,      // 신선함 (85~100%): 페널티 일절 없음 (최대 전투력)
+    Active = 1,     // 활기참 (70~84%): 페널티 없음 (가벼운 보행 및 대기)
+    Winded = 2,     // 약간 지침 (50~69%): 이속 -5%, 돌격 -10%, 장전시간 +5%
+    Tired = 3,      // 지침 (30~49%): 이속 -15%, 돌격 -20%, 근접공격/방어 -10%, 사기 -4
+    VeryTired = 4,  // 매우 지침 (15~29%): 이속 -25%, 근접공격/방어 -20%, 돌격 -35%, 사기 -8
+    Exhausted = 5   // 탈진 (0~14%): 이속 -35%, 근접공격/방어 -30%, 돌격 -50%, 장전 +35%, 사기 -15
+}

@@ -31,15 +31,27 @@ public class MinimapManager : MonoBehaviour, IPointerDownHandler, IDragHandler, 
         }
     }
 
-    [Header("전장 월드 경계 (World Bounds X-Z, 중심 = 0,0)")]
+    [Header("전장 월드 경계 설정")]
+    [KoreanLabel("월드 최소 좌표 (서쪽 X / 남쪽 Z)", "미니맵에 투영할 전장 월드의 최소 경계 좌표입니다. (단위: m, X: 서쪽, Y: 남쪽)")]
     [SerializeField] private Vector2 worldMinXZ = new Vector2(-500f, -500f);
+
+    [KoreanLabel("월드 최대 좌표 (동쪽 X / 북쪽 Z)", "미니맵에 투영할 전장 월드의 최대 경계 좌표입니다. (단위: m, X: 동쪽, Y: 북쪽)")]
     [SerializeField] private Vector2 worldMaxXZ = new Vector2(500f, 500f);
 
     [Header("UI 계층 참조")]
+    [KoreanLabel("미니맵 루트 RectTransform", "미니맵 UI의 루트 RectTransform 컴포넌트입니다.")]
     [SerializeField] private RectTransform minimapRect;
+
+    [KoreanLabel("부대 마커 컨테이너", "부대 아이콘 마커들이 동적으로 배치되는 부모 컨테이너 RectTransform입니다.")]
     [SerializeField] private RectTransform markerContainer;
+
+    [KoreanLabel("카메라 시야각 절두체", "현재 카메라의 3D 시야각과 방향을 미니맵에 부채꼴로 투영하는 컴포넌트입니다.")]
     [SerializeField] private MinimapCameraFrustum cameraFrustum;
+
+    [KoreanLabel("배경 이미지", "미니맵의 배경을 표시하는 UI Image 컴포넌트입니다.")]
     [SerializeField] private Image backgroundImage;
+
+    [KoreanLabel("외곽 테두리 프레임 이미지", "미니맵의 외곽 테두리를 장식하는 UI Image 컴포넌트입니다.")]
     [SerializeField] private Image borderFrameImage;
 
     private readonly Dictionary<Squad, MinimapSquadMarker> activeSquadMarkers = new Dictionary<Squad, MinimapSquadMarker>();

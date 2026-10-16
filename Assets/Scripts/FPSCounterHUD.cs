@@ -10,14 +10,14 @@ public class FPSCounterHUD : MonoBehaviour
 {
     public static FPSCounterHUD Instance { get; private set; }
 
-    [Header("설정")]
-    [Tooltip("기본으로 HUD를 표시할지 여부")]
-    public bool showHUD = true;
+    [Header("성능 모니터링 HUD 설정")]
+    [KoreanLabel("HUD 표시 활성화", "게임 화면 상단에 FPS, 프레임타임, 유닛 수를 표시할지 여부입니다.")]
+    public bool showHUD = false;
 
-    [Tooltip("HUD 토글 단축키")]
-    public KeyCode toggleKey = KeyCode.F3;
+    [KoreanLabel("HUD 표시 토글 단축키", "HUD를 켜거나 끌 수 있는 단축키입니다. (기본: F12)")]
+    public KeyCode toggleKey = KeyCode.F12;
 
-    [Tooltip("FPS 갱신 주기 (초)")]
+    [KoreanLabel("수치 갱신 주기", "FPS 수치를 다시 계산하여 화면을 갱신하는 주기입니다. (단위: 초, 기본: 0.25초)")]
     public float updateInterval = 0.25f;
 
     // 측정 변수
@@ -58,6 +58,15 @@ public class FPSCounterHUD : MonoBehaviour
         timeLeft = updateInterval;
     }
 
+    private void Start()
+    {
+        // 👁️ 시작 시 시야 디버그 모드와 HUD 표시 상태를 1:1 완벽 동기화 (기본: 둘 다 비활성화)
+        if (VisionDetectionManager.Instance != null)
+        {
+            VisionDetectionManager.Instance.isFullVisionDebug = showHUD;
+        }
+    }
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void AutoCreate()
     {
@@ -70,10 +79,15 @@ public class FPSCounterHUD : MonoBehaviour
 
     private void Update()
     {
-        // F3 키로 HUD 켜기/끄기
+        // F12 키로 성능 HUD 및 전술 시야 디버그 모드 동시 토글
         if (Input.GetKeyDown(toggleKey))
         {
             showHUD = !showHUD;
+            if (VisionDetectionManager.Instance != null)
+            {
+                VisionDetectionManager.Instance.isFullVisionDebug = showHUD;
+                Debug.Log($"<color=#00FFFF><b>[FPSCounterHUD] 👁️ [F12] 디버그 모드 전환: {(showHUD ? "활성화(HUD On, 모든 적/경로 강제 노출)" : "비활성화(HUD Off, 정상 전술 시야 규칙 적용)")}</b></color>");
+            }
         }
 
         if (!showHUD) return;
@@ -214,7 +228,7 @@ public class FPSCounterHUD : MonoBehaviour
         GUILayout.BeginVertical();
 
         // 헤더
-        GUILayout.Label("⚡ PERFORMANCE HUD (F3)", headerStyle);
+        GUILayout.Label($"⚡ PERFORMANCE HUD ({toggleKey})", headerStyle);
         GUILayout.Space(4);
 
         // FPS & 프레임 타임
@@ -235,6 +249,11 @@ public class FPSCounterHUD : MonoBehaviour
         // 부대 수 및 메모리
         long memoryMB = System.GC.GetTotalMemory(false) / (1024 * 1024);
         GUILayout.Label($"🚩 부대: {totalSquads} 개 | 메모리: {memoryMB} MB", statStyle);
+
+        // 👁️ 시야 디버그 상태 표기
+        bool isFullVision = (VisionDetectionManager.Instance != null && VisionDetectionManager.Instance.isFullVisionDebug);
+        string visionStatus = isFullVision ? "<color=#00FFFF>전체 시야(맵핵)</color>" : "<color=#AAAAAA>정상 시야(은폐 적용)</color>";
+        GUILayout.Label($"👁️ 전술 시야: {visionStatus}", statStyle);
 
         GUILayout.EndVertical();
         GUILayout.EndArea();

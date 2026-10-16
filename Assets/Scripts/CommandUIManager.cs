@@ -17,9 +17,12 @@ public class CommandUIManager : MonoBehaviour
         }
     }
 
-    [Header("UI References")]
+    [Header("UI 계층 참조")]
+    [KoreanLabel("버튼 컨테이너 (부모 Transform)", "명령 버튼들이 동적으로 생성되어 배치될 UI 부모 컨테이너입니다.")]
     public Transform buttonContainer;
-    public GameObject commandButtonPrefab; // Prefab with Button, Image(Icon), Text/TMPro(Hotkey)
+
+    [KoreanLabel("명령 버튼 프리팹", "명령 패널에 생성될 개별 버튼 UI 프리팹입니다. (Button, Image, Text 포함)")]
+    public GameObject commandButtonPrefab;
 
     private List<GameObject> activeButtons = new List<GameObject>();
 

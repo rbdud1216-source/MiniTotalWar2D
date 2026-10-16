@@ -4,6 +4,8 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.AI;
 using MiniTotalWar.ECS;
+using MiniTotalWar.Roster;
+
 
 /// <summary>
 /// 개별 부대의 스폰 속성(인원 수, 가로 열 수, 진형 형태, 스폰 위치 등)을 정의하는 직렬화 데이터 클래스입니다.
@@ -47,11 +49,11 @@ public class BattleManager : MonoBehaviour
 {
     public static BattleManager Instance { get; private set; }
 
-    [Header("⚡ 1. 초고성능 순수 ECS 시뮬레이션 모드")]
+    [Header("1. 초고성능 순수 ECS 시뮬레이션 모드")]
     [Tooltip("체크 시 유니티 GameObject 생성을 배제하고 순수 GPU 인스턴싱 ECS 엔티티로 5만 기 시뮬레이션을 구동합니다.")]
     public bool usePureECS = false;
 
-    [Header("📦 2. 기본 유닛 및 부대 프리팹 설정")]
+    [Header("2. 기본 유닛 및 부대 프리팹 설정")]
     [Tooltip("플레이어 기본 근접 보병 유닛 프리팹")]
     [SerializeField] private GameObject playerUnitPrefab;
     [Tooltip("플레이어 기본 원거리 궁병 유닛 프리팹")]
@@ -67,43 +69,47 @@ public class BattleManager : MonoBehaviour
     [Tooltip("부대 관리 컴포넌트(Squad) 프리팹")]
     [SerializeField] private GameObject squadPrefab;
 
-    [Header("📍 3. 진영 기본 스폰 위치 및 정면 방향")]
-    [Tooltip("플레이어 군단 기본 스폰 중심 좌표 (실제 활 유효사거리 150m 고증에 맞춰 120m 대치 간격)")]
+    [Header("3. 진영 기본 스폰 위치 및 정면 방향")]
+    [Tooltip("플레이어 군단 기본 스폰 중심 좌표 (단위: m, X, Y, Z)")]
     [SerializeField] private Vector3 playerSpawnCenter = new Vector3(0f, 0f, -60f);
-    [Tooltip("플레이어 군단 기본 정면 회전 각도 (Y축 기준, 0도 = 북쪽 정면)")]
+    public Vector3 PlayerSpawnCenter => playerSpawnCenter;
+
+    [Tooltip("플레이어 군단 기본 정면 회전 각도 (단위: 도, Y축 기준, 0도 = 북쪽 정면)")]
     [SerializeField] private float playerFacingAngle = 0f;
 
-    [Tooltip("적군 군단 기본 스폰 중심 좌표 (실제 활 유효사거리 150m 고증에 맞춰 120m 대치 간격)")]
+    [Tooltip("적군 군단 기본 스폰 중심 좌표 (단위: m, X, Y, Z)")]
     [SerializeField] private Vector3 enemySpawnCenter = new Vector3(0f, 0f, 60f);
-    [Tooltip("적군 군단 기본 정면 회전 각도 (Y축 기준, 180도 = 남쪽 정면)")]
+    public Vector3 EnemySpawnCenter => enemySpawnCenter;
+
+    [Tooltip("적군 군단 기본 정면 회전 각도 (단위: 도, Y축 기준, 180도 = 남쪽 정면)")]
     [SerializeField] private float enemyFacingAngle = 180f;
 
-    [Header("↔️ 4. 군단 자동 횡대 배치 간격")]
-    [Tooltip("자동 횡대 배치 시 인접 부대 간의 가로 여유 간격 (미터 단위, 기본: 4.0m)")]
+    [Header("4. 군단 자동 횡대 배치 간격")]
+    [Tooltip("자동 횡대 배치 시 인접 부대 간의 가로 여유 간격 (단위: m, 기본: 4.0m)")]
     [SerializeField] private float squadSpacing = 4.0f;
 
-    [Header("🛡️ 5. 전역 방진 및 산개도 스탯 튜닝 (전체 부대 공통 적용)")]
+    [Header("5. 전역 방진 및 산개도 스탯 튜닝 (전체 부대 공통 적용)")]
     [Tooltip("체크 시 부대 생성 시 아래의 전역 방진/산개도 스탯 계수를 전체 부대에 일괄 덮어씁니다.")]
     public bool overrideSquadFormationSettings = true;
 
-    [Tooltip("완전 산개 기준 간격(m) - 이 간격 이상으로 벌어지면 밀집 보너스가 0% 적용 (기본: 2.2m)")]
+    [Tooltip("완전 산개 기준 간격 - 이 간격 이상으로 벌어지면 밀집 보너스가 0% 적용 (단위: m, 기본: 2.2m)")]
     public float globalLooseSpacingThreshold = 2.2f;
 
-    [Tooltip("최대 밀집 기준 간격(m) - 이 간격 이하로 좁혀지면 밀집 보너스가 100% 최대로 적용 (기본: 0.7m)")]
+    [Tooltip("최대 밀집 기준 간격 - 이 간격 이하로 좁혀지면 밀집 보너스가 100% 최대로 적용 (단위: m, 기본: 0.7m)")]
     public float globalTightSpacingThreshold = 0.7f;
 
     [Tooltip("일반 방진(Normal) 전역 스탯 계수")]
-    public Squad.FormationStatModifier globalNormalBonus = new Squad.FormationStatModifier(500, 1.2f, 1000, 1.5f, 0.50f);     // 일반 방진 (공속 50% - 2.0초당 1회)
+    public Squad.FormationStatModifier globalNormalBonus = new Squad.FormationStatModifier(500, 1.2f, 1000, 1.5f, 0.50f);
     [Tooltip("쐐기진(Wedge) 전역 스탯 계수 (돌격 특화)")]
-    public Squad.FormationStatModifier globalWedgeBonus = new Squad.FormationStatModifier(200, 1.4f, 500, 1.8f, 0.55f);        // 쐐기진 (돌격 특화, 공속 55% - 1.82초당 1회)
+    public Squad.FormationStatModifier globalWedgeBonus = new Squad.FormationStatModifier(200, 1.4f, 500, 1.8f, 0.55f);
     [Tooltip("사각방진(Square) 전역 스탯 계수 (방어 특화)")]
-    public Squad.FormationStatModifier globalSquareBonus = new Squad.FormationStatModifier(1000, 1.5f, 1500, 2.0f, 0.50f);      // 사각방진 (방어 특화, 공속 50% - 2.0초당 1회)
+    public Squad.FormationStatModifier globalSquareBonus = new Squad.FormationStatModifier(1000, 1.5f, 1500, 2.0f, 0.50f);
     [Tooltip("원형진(Circle) 전역 스탯 계수 (결사항전 특화)")]
-    public Squad.FormationStatModifier globalCircleBonus = new Squad.FormationStatModifier(1200, 1.6f, 1800, 2.2f, 0.45f);      // 원형진 (결사항전, 공속 45% - 2.22초당 1회)
+    public Squad.FormationStatModifier globalCircleBonus = new Squad.FormationStatModifier(1200, 1.6f, 1800, 2.2f, 0.45f);
     [Tooltip("마름모진(Diamond) 전역 스탯 계수 (기동 돌파 특화)")]
-    public Squad.FormationStatModifier globalDiamondBonus = new Squad.FormationStatModifier(400, 1.3f, 600, 1.6f, 0.52f);     // 마름모진 (기동 돌파, 공속 52% - 1.92초당 1회)
+    public Squad.FormationStatModifier globalDiamondBonus = new Squad.FormationStatModifier(400, 1.3f, 600, 1.6f, 0.52f);
 
-    [Header("🚩 6. 플레이어 군단 편성 목록 (Player Army)")]
+    [Header("6. 플레이어 군단 편성 목록 (Player Army)")]
     [SerializeField] private List<SquadSpawnConfig> playerArmyConfigs = new List<SquadSpawnConfig>()
     {
         new SquadSpawnConfig { squadName = "제1 보병대", unitType = UnitType.MeleeInfantry, unitCount = 60, columns = 15 },
@@ -111,10 +117,11 @@ public class BattleManager : MonoBehaviour
         new SquadSpawnConfig { squadName = "제3 궁병대", unitType = UnitType.Archer, unitCount = 40, columns = 10 }
     };
 
-    [Header("⚔️ 7. 적군 군단 편성 목록 (Enemy Army)")]
+    [Header("7. 적군 군단 편성 목록 (Enemy Army)")]
     [SerializeField] private List<SquadSpawnConfig> enemyArmyConfigs = new List<SquadSpawnConfig>()
     {
-        new SquadSpawnConfig { squadName = "적 선봉 보병대", unitType = UnitType.MeleeInfantry, unitCount = 60, columns = 15 },
+        new SquadSpawnConfig { squadName = "적 좌익 보병대", unitType = UnitType.MeleeInfantry, unitCount = 60, columns = 15 },
+        new SquadSpawnConfig { squadName = "적 우익 보병대", unitType = UnitType.MeleeInfantry, unitCount = 60, columns = 15 },
         new SquadSpawnConfig { squadName = "적 중앙 총병대", unitType = UnitType.Gunner, unitCount = 40, columns = 20 },
         new SquadSpawnConfig { squadName = "적 후방 궁병대", unitType = UnitType.Archer, unitCount = 40, columns = 10 }
     };
@@ -157,7 +164,33 @@ public class BattleManager : MonoBehaviour
             {
                 enemyGunnerPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/EnemyUnit_gunner.prefab");
             }
+            // 전술 명령 큐(BattleCommandQueue) 싱글톤 초기화 보장
+            _ = BattleCommandQueue.Instance;
 #endif
+            // 👁️ [삼국지 토탈워식 시야 엔진]: 전장의 안개 및 탐지 매니저 인스턴스 자동 생성 보장
+            _ = VisionDetectionManager.Instance;
+
+            // 🎴 [군단 로스터 컨텍스트]: 에디터 직접 실행 방어용 기본 로스터 세팅 보장
+            BattleRosterContext.EnsureDefaultFallback();
+
+            // 🏛️ [토탈워 전투 수명주기 & 배치 구역 매니저]: 인스턴스 자동 생성 보장
+            if (FindAnyObjectByType<BattlePhaseManager>() == null)
+            {
+                GameObject phaseObj = new GameObject("[BattlePhaseManager]");
+                phaseObj.AddComponent<BattlePhaseManager>();
+            }
+            if (FindAnyObjectByType<DeploymentZoneManager>() == null)
+            {
+                GameObject zoneObj = new GameObject("[DeploymentZoneManager]");
+                DeploymentZoneManager dzm = zoneObj.AddComponent<DeploymentZoneManager>();
+                dzm.playerZoneCenter = playerSpawnCenter;
+                dzm.enemyZoneCenter = enemySpawnCenter;
+            }
+            if (FindAnyObjectByType<BalanceOfPowerUI>() == null)
+            {
+                GameObject bopObj = new GameObject("[BalanceOfPowerUI]");
+                bopObj.AddComponent<BalanceOfPowerUI>();
+            }
         }
         else
         {
@@ -172,7 +205,7 @@ public class BattleManager : MonoBehaviour
 
     #region 3D 다중 유닛 및 군단 스폰
     /// <summary>
-    /// 인스펙터에 설정된 플레이어 및 적군 군단 목록을 바탕으로 전체 전투 시나리오를 시작합니다.
+    /// 인스펙터 또는 BattleRosterContext에 설정된 군단 목록을 바탕으로 전체 전투 시나리오를 시작합니다.
     /// </summary>
     public void SpawnBattleScenario()
     {
@@ -193,17 +226,88 @@ public class BattleManager : MonoBehaviour
             }
         }
 
+        // 🎴 BattleRosterContext 데이터 동기화 (로스터 데이터가 존재하면 인스펙터 설정을 덮어씀)
+        List<SquadSpawnConfig> effectivePlayerConfigs = GetEffectiveConfigs(true, playerArmyConfigs);
+        List<SquadSpawnConfig> effectiveEnemyConfigs = GetEffectiveConfigs(false, enemyArmyConfigs);
+
         // 1. 플레이어 군단 스폰
-        SpawnArmy(true, playerArmyConfigs, playerSpawnCenter, playerFacingAngle);
+        SpawnArmy(true, effectivePlayerConfigs, playerSpawnCenter, playerFacingAngle);
 
         // 2. 적군 군단 스폰
-        SpawnArmy(false, enemyArmyConfigs, enemySpawnCenter, enemyFacingAngle);
+        SpawnArmy(false, effectiveEnemyConfigs, enemySpawnCenter, enemyFacingAngle);
 
         Debug.Log($"[BattleManager] ⚔️ 전투 시나리오 스폰 완료! 총 {allSquads.Count}개 부대 배치됨. (순수 ECS 모드: {usePureECS})");
 
-        // [추가] 적군 자동 AI 공격 (적 부대가 멈춰있지 않고 플레이어에게 돌격하도록 설정)
+        // 🏛️ [토탈워식 배치 단계 검사]:
+        // 현재 전투 상태가 배치 단계(Deployment)라면 즉시 공격하지 않고 플레이어의 재배치 및 [전투 시작] 버튼 입력을 대기합니다!
+        if (BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment)
+        {
+            Debug.Log("<color=#00FFCC><b>[BattleManager] 🛡️ [배치 단계 (Deployment)]: 부대 배치가 완료되었습니다. 부대를 자유롭게 재배치한 뒤 상단의 [전투 시작]을 누르세요.</b></color>");
+        }
+        else
+        {
+            StartCombatEngagement();
+        }
+    }
+
+    /// <summary>
+    /// BattleRosterContext의 부대 카드 목록을 SquadSpawnConfig 목록으로 변환합니다.
+    /// </summary>
+    private List<SquadSpawnConfig> GetEffectiveConfigs(bool isPlayer, List<SquadSpawnConfig> fallbackConfigs)
+    {
+        ArmyRosterData army = isPlayer ? BattleRosterContext.PlayerArmy : BattleRosterContext.EnemyArmy;
+        if (army != null && army.cards != null && army.cards.Count > 0)
+        {
+            List<SquadSpawnConfig> list = new List<SquadSpawnConfig>();
+            for (int i = 0; i < army.cards.Count; i++)
+            {
+                var card = army.cards[i];
+                if (card == null) continue;
+
+                UnitType uType = UnitType.MeleeInfantry;
+                GameObject customPrefab = null;
+
+                if (card.unitTypeId.Contains("Gunner"))
+                {
+                    uType = UnitType.Gunner;
+                    customPrefab = isPlayer ? playerGunnerPrefab : enemyGunnerPrefab;
+                }
+                else if (card.unitTypeId.Contains("Archer") || card.unitTypeId.Contains("Missile"))
+                {
+                    uType = UnitType.Archer;
+                    customPrefab = isPlayer ? playerMissilePrefab : enemyMissilePrefab;
+                }
+                else
+                {
+                    uType = UnitType.MeleeInfantry;
+                    customPrefab = isPlayer ? playerUnitPrefab : enemyUnitPrefab;
+                }
+
+                SquadSpawnConfig cfg = new SquadSpawnConfig
+                {
+                    squadName = string.IsNullOrEmpty(card.customSquadName) ? (isPlayer ? $"아군 부대 {i + 1}" : $"적군 부대 {i + 1}") : card.customSquadName,
+                    unitCount = card.currentUnitCount,
+                    columns = card.columns > 0 ? card.columns : 15,
+                    formationType = card.formationType,
+                    unitType = uType,
+                    customUnitPrefab = customPrefab
+                };
+                list.Add(cfg);
+            }
+            return list;
+        }
+
+        return fallbackConfigs;
+    }
+
+    /// <summary>
+    /// [전투 시작] 버튼을 누르거나 정규 교전이 시작될 때 호출되어 양군이 돌격 및 맞대결을 시작하도록 명령합니다.
+    /// </summary>
+    public void StartCombatEngagement()
+    {
         OrderEnemiesToAttack();
     }
+
 
     private void OrderEnemiesToAttack()
     {
@@ -259,7 +363,7 @@ public class BattleManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 지정된 군단 설정 목록에 따라 부대들을 자동 횡대 또는 수동 좌표로 전장에 스폰합니다.
+    /// 지정된 군단 설정 목록에 따라 부대들을 토탈워식 2열 진형(전열 근접 보병 + 후열 원거리 사격선) 또는 수동 좌표로 전장에 스폰합니다.
     /// </summary>
     private void SpawnArmy(bool isPlayer, List<SquadSpawnConfig> configs, Vector3 baseCenter, float facingAngle)
     {
@@ -267,49 +371,90 @@ public class BattleManager : MonoBehaviour
 
         Quaternion baseRot = Quaternion.Euler(0f, facingAngle, 0f);
 
-        // 자동 배치 대상 부대들의 인덱스와 크기 계산
-        List<int> autoIndices = new List<int>();
-        List<float> autoWidths = new List<float>();
+        // 🛡️ [토탈워식 2열 전투 진형 분할 (Two-Line Battle Deployment)]:
+        // 1열(전열): 근접 보병 및 방패벽 방진
+        // 2열(후열): 원거리 총병 및 궁병 사격선
+        List<int> frontIndices = new List<int>();
+        List<float> frontWidths = new List<float>();
+
+        List<int> rearIndices = new List<int>();
+        List<float> rearWidths = new List<float>();
 
         for (int i = 0; i < configs.Count; i++)
         {
             var cfg = configs[i];
-            if (cfg == null) continue;
+            if (cfg == null || cfg.useCustomPosition) continue;
 
-            if (!cfg.useCustomPosition)
+            int cols = Mathf.Max(1, cfg.columns);
+            float width = (cols - 1) * Squad.DEFAULT_SPACING_X;
+
+            bool isRanged = (cfg.unitType == UnitType.Archer || cfg.unitType == UnitType.Gunner);
+            if (isRanged)
             {
-                autoIndices.Add(i);
-                int cols = Mathf.Max(1, cfg.columns);
-                float width = (cols - 1) * Squad.DEFAULT_SPACING_X;
-                autoWidths.Add(width);
+                rearIndices.Add(i);
+                rearWidths.Add(width);
+            }
+            else
+            {
+                frontIndices.Add(i);
+                frontWidths.Add(width);
             }
         }
 
-        // 자동 배치 부대들의 X 오프셋 계산 (진영 중심점 기준 대칭 정렬)
+        // 만약 한쪽 병과만 존재할 경우 모두 단일 전열로 취급
+        bool hasBothRanks = (frontIndices.Count > 0 && rearIndices.Count > 0);
+        float frontZ = hasBothRanks ? 6.0f : 0f;
+        float rearZ = hasBothRanks ? -10.0f : 0f;
+
         Dictionary<int, Vector3> autoPositions = new Dictionary<int, Vector3>();
-        if (autoIndices.Count > 0)
+
+        // 1. 전열(Front Line) 횡대 배치 계산
+        if (frontIndices.Count > 0)
         {
             float totalWidth = 0f;
-            for (int i = 0; i < autoWidths.Count; i++)
+            for (int i = 0; i < frontWidths.Count; i++)
             {
-                totalWidth += autoWidths[i];
-                if (i < autoWidths.Count - 1) totalWidth += squadSpacing;
+                totalWidth += frontWidths[i];
+                if (i < frontWidths.Count - 1) totalWidth += squadSpacing;
             }
 
             float currentLeft = -totalWidth * 0.5f;
-            for (int i = 0; i < autoIndices.Count; i++)
+            for (int i = 0; i < frontIndices.Count; i++)
             {
-                int idx = autoIndices[i];
-                float w = autoWidths[i];
+                int idx = frontIndices[i];
+                float w = frontWidths[i];
                 float centerX = currentLeft + (w * 0.5f);
-                Vector3 localPos = new Vector3(centerX, 0f, 0f);
+                Vector3 localPos = new Vector3(centerX, 0f, frontZ);
                 Vector3 worldPos = baseCenter + (baseRot * localPos);
                 autoPositions[idx] = worldPos;
                 currentLeft += w + squadSpacing;
             }
         }
 
-        // 개별 부대 스폰
+        // 2. 후열(Rear Line) 횡대 배치 계산
+        if (rearIndices.Count > 0)
+        {
+            float totalWidth = 0f;
+            for (int i = 0; i < rearWidths.Count; i++)
+            {
+                totalWidth += rearWidths[i];
+                if (i < rearWidths.Count - 1) totalWidth += squadSpacing;
+            }
+
+            float currentLeft = -totalWidth * 0.5f;
+            for (int i = 0; i < rearIndices.Count; i++)
+            {
+                int idx = rearIndices[i];
+                float w = rearWidths[i];
+                float centerX = currentLeft + (w * 0.5f);
+                Vector3 localPos = new Vector3(centerX, 0f, rearZ);
+                Vector3 worldPos = baseCenter + (baseRot * localPos);
+                autoPositions[idx] = worldPos;
+                currentLeft += w + squadSpacing;
+            }
+        }
+
+        // 3. 개별 부대 스폰
         for (int i = 0; i < configs.Count; i++)
         {
             var cfg = configs[i];
@@ -327,6 +472,15 @@ public class BattleManager : MonoBehaviour
             {
                 spawnPos = autoPositions.TryGetValue(i, out Vector3 pos) ? pos : baseCenter;
                 spawnRot = baseRot;
+            }
+
+            // 배치 구역 내부 클램핑 (배치 구역 매니저가 있을 경우)
+            if (DeploymentZoneManager.Instance != null)
+            {
+                if (isPlayer)
+                {
+                    spawnPos = DeploymentZoneManager.Instance.ClampToPlayerZone(spawnPos);
+                }
             }
 
             SpawnSquad(isPlayer, cfg, spawnPos, spawnRot);
@@ -476,12 +630,12 @@ public class BattleManager : MonoBehaviour
                 int isRanged = (config.unitType == UnitType.Archer || config.unitType == UnitType.Gunner || (prefabUnit != null && prefabUnit.isRangedUnit)) ? 1 : 0;
                 int defaultCanFireMoving = (prefabUnit != null && !prefabUnit.canFireWhileMoving) ? 0 : 1;
                 int defaultMaxAmmo = (prefabUnit != null) ? prefabUnit.maxAmmo : 25;
-                float defaultRangedRange = (prefabUnit != null && prefabUnit.rangedAttackRange > 1f) ? prefabUnit.rangedAttackRange : 150f;
+                float defaultRangedRange = (prefabUnit != null && prefabUnit.rangedAttackRange > 1f) ? prefabUnit.rangedAttackRange : 140f;
                 float defaultOptimalRange = (prefabUnit != null && prefabUnit.optimalRange > 1f) ? prefabUnit.optimalRange : 50f;
                 float defaultRangedMinRange = (prefabUnit != null) ? prefabUnit.rangedMinRange : 5f;
-                float defaultRangedDamage = (prefabUnit != null && prefabUnit.rangedBaseDamage > 0f) ? prefabUnit.rangedBaseDamage : 15f;
+                float defaultRangedDamage = (prefabUnit != null && prefabUnit.rangedBaseDamage > 0f) ? prefabUnit.rangedBaseDamage : 22f;
                 float defaultMinDmgRatio = (prefabUnit != null && prefabUnit.minDamageRatioAtMax > 0.05f) ? prefabUnit.minDamageRatioAtMax : 0.55f;
-                float defaultRangedCooldown = (prefabUnit != null && prefabUnit.rangedAttackCooldown > 0.05f) ? prefabUnit.rangedAttackCooldown : 2.2f;
+                float defaultRangedCooldown = (prefabUnit != null && prefabUnit.rangedAttackCooldown > 0.05f) ? prefabUnit.rangedAttackCooldown : 7.0f;
                 float defaultProjectileSpeed = (prefabUnit != null && prefabUnit.projectileSpeed > 1f) ? prefabUnit.projectileSpeed : 30f;
                 float defaultProjectileDrag = (prefabUnit != null && prefabUnit.projectileDrag >= 0f) ? prefabUnit.projectileDrag : 0.25f;
                 Vector3 defaultLaunchOffset = (prefabUnit != null) ? prefabUnit.launchOffset : new Vector3(0.15f, 1.35f, 0.45f);

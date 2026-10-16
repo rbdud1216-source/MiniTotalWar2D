@@ -126,13 +126,13 @@ public class SquadEditor : Editor
 
         Squad squad = (Squad)target;
 
-        // 🛡️ [실시간 실효 스탯 요약 박스]
+        // [실시간 실효 스탯 요약 박스]
         DrawLiveStatSummary(squad);
 
         EditorGUILayout.Space(8);
 
         // 1. 부대 기본 식별 정보
-        EditorGUILayout.LabelField("🚩 부대 기본 정보", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("1. 부대 기본 정보", EditorStyles.boldLabel);
         if (squadName != null)
             EditorGUILayout.PropertyField(squadName, new GUIContent("부대 명칭", "UI 및 전황 로그에 표시되는 부대의 고유 이름입니다."));
         if (isPlayer != null)
@@ -141,99 +141,99 @@ public class SquadEditor : Editor
         EditorGUILayout.Space(6);
 
         // 2. 부대원 수 및 속도 설정
-        EditorGUILayout.LabelField("👥 병력 수 및 제식 속도 설정", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("2. 병력 수 및 제식 속도 설정", EditorStyles.boldLabel);
         if (initialUnitCount != null)
-            EditorGUILayout.PropertyField(initialUnitCount, new GUIContent("초기 창설 병력 수", "부대 생성 시 초기 총 인원수입니다."));
+            EditorGUILayout.PropertyField(initialUnitCount, new GUIContent("초기 창설 병력 수", "부대 생성 시 초기 총 인원수입니다. (단위: 명, 기본: 60)"));
         if (currentAliveCount != null)
-            EditorGUILayout.PropertyField(currentAliveCount, new GUIContent("현재 생존 병력 수", "실시간으로 생존해 있는 부대원 수입니다. (전멸 시 0)"));
+            EditorGUILayout.PropertyField(currentAliveCount, new GUIContent("현재 생존 병력 수", "실시간으로 생존해 있는 부대원 수입니다. (단위: 명, 전멸 시 0)"));
         if (walkSpeed != null)
-            EditorGUILayout.PropertyField(walkSpeed, new GUIContent("제식 보행 속도 (m/s)", "대형을 유지하며 평상시 제식으로 걸어갈 때의 부대 기준 속도입니다. (기본 1.0m/s)"));
+            EditorGUILayout.PropertyField(walkSpeed, new GUIContent("제식 보행 속도", "대형을 유지하며 평상시 제식으로 걸어갈 때의 부대 기준 속도입니다. (단위: m/s, 기본: 1.0m/s)"));
         if (runSpeed != null)
-            EditorGUILayout.PropertyField(runSpeed, new GUIContent("전술 구보 속도 (m/s)", "R키를 눌러 달리기(구보) 모드일 때의 부대 기준 속도입니다. (기본 2.4m/s)"));
+            EditorGUILayout.PropertyField(runSpeed, new GUIContent("전술 구보 속도", "R키를 눌러 달리기(구보) 모드일 때의 부대 기준 속도입니다. (단위: m/s, 기본: 2.4m/s)"));
         if (unitMaxSpeed != null)
-            EditorGUILayout.PropertyField(unitMaxSpeed, new GUIContent("병사 최대 추격 속도 (m/s)", "대형에서 뒤처진 병사가 제자리를 찾기 위해 가속할 수 있는 물리적 최고 한계 속도입니다. (기본 5.5m/s)"));
+            EditorGUILayout.PropertyField(unitMaxSpeed, new GUIContent("병사 최대 추격 속도", "대형에서 뒤처진 병사가 제자리를 찾기 위해 가속할 수 있는 물리적 최고 한계 속도입니다. (단위: m/s, 기본: 5.5m/s)"));
         if (isRunning != null)
             EditorGUILayout.PropertyField(isRunning, new GUIContent("현재 구보(달리기) 중", "현재 부대가 달리는 중인지 여부입니다. (R키로 토글 가능)"));
 
         EditorGUILayout.Space(6);
 
         // 3. 진형 및 전투 태세
-        EditorGUILayout.LabelField("⚔️ 진형 및 지휘 상태", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("3. 진형 및 지휘 상태", EditorStyles.boldLabel);
         if (currentFormationType != null)
             EditorGUILayout.PropertyField(currentFormationType, new GUIContent("현재 진형 형태", "부대가 취하고 있는 전술 진형입니다. (일반 일자진, 쐐기진, 사각방진, 원형진, 마름모진 등)"));
         if (isLooseFormation != null)
             EditorGUILayout.PropertyField(isLooseFormation, new GUIContent("산개 대형 여부 (Loose)", "체크 시 유닛 간격이 2배로 넓어지며 산개진이 활성화됩니다. 산개진에서는 방진 보너스가 0이 됩니다."));
         if (currentColumns != null)
-            EditorGUILayout.PropertyField(currentColumns, new GUIContent("현재 가로 열(Columns) 수", "대형의 전면 가로 열 수입니다. 드래그나 Alt 조작으로 동적 확장/축소됩니다."));
+            EditorGUILayout.PropertyField(currentColumns, new GUIContent("현재 가로 열(Columns) 수", "대형의 전면 가로 열 수입니다. (단위: 열)"));
         if (autoAttackEnabled != null)
             EditorGUILayout.PropertyField(autoAttackEnabled, new GUIContent("자동 요격 허용 (V키)", "체크 시 적 발견 시 자동 돌격, 해제 시 제자리에 무기를 박고 버티는 '접촉 방어 태세(Bracing)'가 발동됩니다."));
         if (currentCommandState != null)
-            EditorGUILayout.PropertyField(currentCommandState, new GUIContent("현재 명령 상태", "부대의 지휘 상태 (Idle: 대기, Move: 이동, AttackMove: 공격 이동, MeleeEngaged: 백병전)."));
+            EditorGUILayout.PropertyField(currentCommandState, new GUIContent("현재 명령 상태", "부대의 지휘 상태 (대기, 이동, 공격 이동, 백병전)."));
 
         EditorGUILayout.Space(6);
 
         // 4. 대형 간격 및 산개도 임계값
-        EditorGUILayout.LabelField("📐 대형 간격 및 산개도 임계값 설정", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("4. 대형 간격 및 산개도 임계값 설정", EditorStyles.boldLabel);
         if (spacing != null)
-            EditorGUILayout.PropertyField(spacing, new GUIContent("기본 격자 간격 (m)", "진형 슬롯 간의 기본 표준 간격입니다. (기본 1.15m)"));
+            EditorGUILayout.PropertyField(spacing, new GUIContent("기본 격자 간격", "진형 슬롯 간의 기본 표준 간격입니다. (단위: m, 기본: 1.15m)"));
         if (spacingX != null)
-            EditorGUILayout.PropertyField(spacingX, new GUIContent("가로(횡) 간격 (m)", "좌우 병사 사이의 기본 간격입니다."));
+            EditorGUILayout.PropertyField(spacingX, new GUIContent("가로(횡) 간격", "좌우 병사 사이의 기본 간격입니다. (단위: m)"));
         if (spacingZ != null)
-            EditorGUILayout.PropertyField(spacingZ, new GUIContent("세로(종) 간격 (m)", "앞뒤 병사 사이의 기본 열 간격입니다."));
+            EditorGUILayout.PropertyField(spacingZ, new GUIContent("세로(종) 간격", "앞뒤 병사 사이의 기본 열 간격입니다. (단위: m)"));
         if (useStaggeredFormation != null)
             EditorGUILayout.PropertyField(useStaggeredFormation, new GUIContent("체커보드 지그재그 배치", "체크 시 뒷열 병사가 앞열 병사 사이 빈틈에 엇갈려 서서 시야와 무기 거리를 확보합니다."));
         if (rowReactionDelay != null)
-            EditorGUILayout.PropertyField(rowReactionDelay, new GUIContent("열 단위 순차 출발 지연 (초)", "전진/후진 시 앞열과 뒷열 간의 파동형 순차 출발 반응 시간입니다. (기본 0.08초)"));
+            EditorGUILayout.PropertyField(rowReactionDelay, new GUIContent("열 단위 순차 출발 지연", "전진/후진 시 앞열과 뒷열 간의 파동형 순차 출발 반응 시간입니다. (단위: 초, 기본: 0.08초)"));
 
         EditorGUILayout.Space(4);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField("🏹 원거리 순차 사격 (Rolling Volley / Rank Fire)", EditorStyles.miniBoldLabel);
+        EditorGUILayout.LabelField("원거리 순차 사격 (Rolling Volley / Rank Fire)", EditorStyles.miniBoldLabel);
         if (enableSequentialFire != null)
             EditorGUILayout.PropertyField(enableSequentialFire, new GUIContent("순차 사격 활성화 (교대 발사)", "체크 시 부대원들이 제자리에서 전열부터 행(Row)별로 시간차를 두고 순차 발사하여 지속적인 화망을 유지합니다."));
         if (sequentialRowDelay != null)
-            EditorGUILayout.PropertyField(sequentialRowDelay, new GUIContent("행간 사격 지연 시간 (초)", "각 행(열) 사이의 발사 시간차입니다. (기본: 0.4초)"));
+            EditorGUILayout.PropertyField(sequentialRowDelay, new GUIContent("행간 사격 지연 시간", "각 행(열) 사이의 발사 시간차입니다. (단위: 초, 기본: 0.4초)"));
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(4);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField("📏 산개도(밀집도) 판정 임계 간격", EditorStyles.miniBoldLabel);
+        EditorGUILayout.LabelField("산개도(밀집도) 판정 임계 간격", EditorStyles.miniBoldLabel);
         if (looseSpacingThreshold != null)
-            EditorGUILayout.PropertyField(looseSpacingThreshold, new GUIContent("완전 산개 기준 간격 (m)", "평균 간격이 이 거리 이상으로 넓어지면 밀집도(Tightness)가 0%가 되어 밀집 보너스가 일절 적용되지 않습니다. (기본 2.2m)"));
+            EditorGUILayout.PropertyField(looseSpacingThreshold, new GUIContent("완전 산개 기준 간격", "평균 간격이 이 거리 이상으로 넓어지면 밀집도(Tightness)가 0%가 되어 밀집 보너스가 일절 적용되지 않습니다. (단위: m, 기본: 2.2m)"));
         if (tightSpacingThreshold != null)
-            EditorGUILayout.PropertyField(tightSpacingThreshold, new GUIContent("최대 밀집 기준 간격 (m)", "평균 간격이 이 거리 이하로 밀착되면 밀집도(Tightness)가 100% 최대로 적용되어 방어력과 무게가 극대화됩니다. (기본 0.7m)"));
+            EditorGUILayout.PropertyField(tightSpacingThreshold, new GUIContent("최대 밀집 기준 간격", "평균 간격이 이 거리 이하로 밀착되면 밀집도(Tightness)가 100% 최대로 적용되어 방어력과 무게가 극대화됩니다. (단위: m, 기본: 0.7m)"));
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(6);
 
         // 5. 접촉 방어 태세 (V키) 보너스 설정
-        EditorGUILayout.LabelField("🛡️ 접촉 방어 태세 (Bracing - V키) 보너스", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("5. 접촉 방어 태세 (Bracing - V키) 보너스", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         if (bracingArmorBonus != null)
             EditorGUILayout.IntSlider(bracingArmorBonus, 0, 5000, new GUIContent("접촉 방어 추가 방어력", "V키가 꺼져 접촉 방어 모드일 때 추가 부여되는 방어력 (+만분율). 예: 2000 = +20.00% 추가 감쇄."));
         if (bracingMassMultiplier != null)
-            EditorGUILayout.Slider(bracingMassMultiplier, 1.0f, 3.0f, new GUIContent("접촉 방어 무게 배율", "창이나 방패를 땅에 박고 버틸 때의 질량 배율. 1.8 = +80% 증가로 적의 돌격 충격을 완벽 흡수."));
+            EditorGUILayout.Slider(bracingMassMultiplier, 1.0f, 3.0f, new GUIContent("접촉 방어 무게 배율", "창이나 방패를 땅에 박고 버틸 때의 질량 배율. 1.8 = +80% 증가로 적의 돌격 충격을 완벽 흡수. (단위: 배)"));
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space(6);
 
         // 6. 기준 기본 스탯 (Base Stats)
-        showBaseStats = EditorGUILayout.Foldout(showBaseStats, "📊 부대 기준 기본 스탯 (프리팹 동기화)", true);
+        showBaseStats = EditorGUILayout.Foldout(showBaseStats, "6. 부대 기준 기본 스탯 (프리팹 동기화)", true);
         if (showBaseStats)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             if (baseArmor != null)
-                EditorGUILayout.PropertyField(baseArmor, new GUIContent("기본 원본 방어력 (Base Armor)", "유닛 프리팹 원본의 방어력 (0 ~ 10,000 만분율)."));
+                EditorGUILayout.PropertyField(baseArmor, new GUIContent("기본 원본 방어력", "유닛 프리팹 원본의 방어력 (0 ~ 10,000 만분율)."));
             if (baseMass != null)
-                EditorGUILayout.PropertyField(baseMass, new GUIContent("기본 원본 무게 (Base Mass)", "유닛 프리팹 원본의 기본 무게 (기본 100.0)."));
+                EditorGUILayout.PropertyField(baseMass, new GUIContent("기본 원본 무게", "유닛 프리팹 원본의 기본 무게 (기본: 100.0)."));
             if (baseAttackCooldown != null)
-                EditorGUILayout.PropertyField(baseAttackCooldown, new GUIContent("기본 원본 공격 주기 (초)", "유닛 프리팹 원본의 기본 공격 쿨다운 (기본 1.0초)."));
+                EditorGUILayout.PropertyField(baseAttackCooldown, new GUIContent("기본 원본 공격 주기", "유닛 프리팹 원본의 기본 공격 쿨다운입니다. (단위: 초, 기본: 1.0초)"));
             EditorGUILayout.EndVertical();
         }
 
         EditorGUILayout.Space(6);
 
         // 7. 방진별 스탯 튜닝 (Formation Modifiers)
-        showFormationModifiers = EditorGUILayout.Foldout(showFormationModifiers, "🎛️ 방진별 스탯 계수 튜닝 (기본 효과 vs 산개도 비례 효과)", true);
+        showFormationModifiers = EditorGUILayout.Foldout(showFormationModifiers, "7. 방진별 스탯 계수 튜닝 (기본 효과 vs 산개도 비례 효과)", true);
         if (showFormationModifiers)
         {
             if (normalBonus != null)
@@ -251,18 +251,18 @@ public class SquadEditor : Editor
         EditorGUILayout.Space(6);
 
         // 8. 방진 기하학 배율 (Geometry Multipliers)
-        showGeometrySettings = EditorGUILayout.Foldout(showGeometrySettings, "📐 방진 기하학 배율 (Alt+드래그 연동)", true);
+        showGeometrySettings = EditorGUILayout.Foldout(showGeometrySettings, "8. 방진 기하학 배율 (Alt+드래그 연동)", true);
         if (showGeometrySettings)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             if (formationWidthMultiplier != null)
-                EditorGUILayout.Slider(formationWidthMultiplier, 0.15f, 3.0f, new GUIContent("가로폭 배율 (Alt+우클릭)", "횡방향 대형 폭 배율입니다. 좁힐수록 가로 밀집도가 상승합니다."));
+                EditorGUILayout.Slider(formationWidthMultiplier, 0.15f, 3.0f, new GUIContent("가로폭 배율", "횡방향 대형 폭 배율입니다. 좁힐수록 가로 밀집도가 상승합니다. (단위: 배)"));
             if (formationLengthMultiplier != null)
-                EditorGUILayout.Slider(formationLengthMultiplier, 0.15f, 3.0f, new GUIContent("세로길이 배율 (Alt+좌클릭)", "종방향 대형 깊이 배율입니다. 좁힐수록 전후 밀집도가 상승합니다."));
+                EditorGUILayout.Slider(formationLengthMultiplier, 0.15f, 3.0f, new GUIContent("세로길이 배율", "종방향 대형 깊이 배율입니다. 좁힐수록 전후 밀집도가 상승합니다. (단위: 배)"));
             if (formationLayers != null)
-                EditorGUILayout.IntSlider(formationLayers, 1, 16, new GUIContent("방진 겹수 (Layers)", "사각방진 및 원형진의 두께(겹수)입니다."));
+                EditorGUILayout.IntSlider(formationLayers, 1, 16, new GUIContent("방진 겹수", "사각방진 및 원형진의 두께(겹수)입니다. (단위: 겹)"));
             if (formationLayersSpacingMultiplier != null)
-                EditorGUILayout.Slider(formationLayersSpacingMultiplier, 0.3f, 4.0f, new GUIContent("방진 층간 간격 배율", "방진 겹과 겹 사이의 층간 거리 배율입니다."));
+                EditorGUILayout.Slider(formationLayersSpacingMultiplier, 0.3f, 4.0f, new GUIContent("방진 층간 간격 배율", "방진 겹과 겹 사이의 층간 거리 배율입니다. (단위: 배)"));
             EditorGUILayout.EndVertical();
         }
 
@@ -281,7 +281,7 @@ public class SquadEditor : Editor
     private void DrawFormationModifier(SerializedProperty prop, string formationName, string description)
     {
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField($"🛡️ {formationName}", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField(formationName, EditorStyles.boldLabel);
         EditorGUILayout.LabelField(description, EditorStyles.miniLabel);
         EditorGUILayout.Space(2);
 
@@ -291,18 +291,18 @@ public class SquadEditor : Editor
         SerializedProperty densityMass = prop.FindPropertyRelative("densityMassMultiplier");
         SerializedProperty densitySpeedRatio = prop.FindPropertyRelative("densityAttackSpeedRatio");
 
-        EditorGUILayout.LabelField("  [1단계: 방진 형성 기본 효과 - 진형 전환 즉시 부여]", EditorStyles.miniBoldLabel);
+        EditorGUILayout.LabelField("[1단계: 방진 형성 기본 효과 - 진형 전환 즉시 부여]", EditorStyles.miniBoldLabel);
         if (baseArmor != null)
-            EditorGUILayout.IntSlider(baseArmor, 0, 5000, new GUIContent("    기본 추가 방어력", "이 방진으로 전환했을 때 진형 형태 자체로 기본 부여되는 방어력 (+만분율). 500 = +5.00%"));
+            EditorGUILayout.IntSlider(baseArmor, 0, 5000, new GUIContent("기본 추가 방어력", "이 방진으로 전환했을 때 진형 형태 자체로 기본 부여되는 방어력 (+만분율). 500 = +5.00%"));
         if (baseMass != null)
-            EditorGUILayout.Slider(baseMass, 1.0f, 3.0f, new GUIContent("    기본 무게 배율", "이 방진으로 전환 시 기본 적용되는 무게 배율. 1.2 = +20% 증가로 돌격 저지력 향상."));
+            EditorGUILayout.Slider(baseMass, 1.0f, 3.0f, new GUIContent("기본 무게 배율", "이 방진으로 전환 시 기본 적용되는 무게 배율. 1.2 = +20% 증가로 돌격 저지력 향상. (단위: 배)"));
 
         EditorGUILayout.Space(2);
-        EditorGUILayout.LabelField("  [2단계: 산개/밀집도 비례 추가 효과 - 밀집할수록 점진적 가산]", EditorStyles.miniBoldLabel);
+        EditorGUILayout.LabelField("[2단계: 산개/밀집도 비례 추가 효과 - 밀집할수록 점진적 가산]", EditorStyles.miniBoldLabel);
         if (densityArmor != null)
-            EditorGUILayout.IntSlider(densityArmor, 0, 5000, new GUIContent("    최대 밀집 추가 방어력", "대형이 최대로 좁혀졌을 때(초밀집) 추가 가산되는 최대 방어력 (+만분율). 1000 = +10.00% 추가."));
+            EditorGUILayout.IntSlider(densityArmor, 0, 5000, new GUIContent("최대 밀집 추가 방어력", "대형이 최대로 좁혀졌을 때(초밀집) 추가 가산되는 최대 방어력 (+만분율). 1000 = +10.00% 추가."));
         if (densityMass != null)
-            EditorGUILayout.Slider(densityMass, 1.0f, 4.0f, new GUIContent("    최대 밀집 무게 배율", "대형이 최대로 좁혀졌을 때(초밀집) 추가 적용되는 최종 무게 배율. 1.5 = +50% 추가."));
+            EditorGUILayout.Slider(densityMass, 1.0f, 4.0f, new GUIContent("최대 밀집 무게 배율", "대형이 최대로 좁혀졌을 때(초밀집) 추가 적용되는 최종 무게 배율. 1.5 = +50% 추가. (단위: 배)"));
         if (densitySpeedRatio != null)
         {
             float ratio = densitySpeedRatio.floatValue;
@@ -310,8 +310,8 @@ public class SquadEditor : Editor
             float aps = 1.0f * ratio; // 기본 1.0초 기준 초당 공격 횟수
             float cd = (ratio > 0.01f) ? (1.0f / ratio) : 10.0f;
 
-            EditorGUILayout.Slider(densitySpeedRatio, 0.1f, 1.0f, new GUIContent($"    🔻 최대 밀집 시 공속 둔화 (남은 속도)", $"대형이 최대로 밀집했을 때의 최종 공격 속도 비율입니다. 현재 설정: {ratio * 100:F0}% 속도 (-{slowPercent:F0}% 둔화)."));
-            EditorGUILayout.LabelField($"       ↳ 🔻 밀집 패널티: {slowPercent:F0}% 둔화 (공속 {ratio * 100:F0}%) | 초당 {aps:F2}회 타격 ({cd:F2}초당 1회)", EditorStyles.miniLabel);
+            EditorGUILayout.Slider(densitySpeedRatio, 0.1f, 1.0f, new GUIContent("최대 밀집 시 공속 둔화 (남은 속도)", $"대형이 최대로 밀집했을 때의 최종 공격 속도 비율입니다. 현재 설정: {ratio * 100:F0}% 속도 (-{slowPercent:F0}% 둔화)."));
+            EditorGUILayout.LabelField($"   ↳ 밀집 패널티: {slowPercent:F0}% 둔화 (공속 {ratio * 100:F0}%) | 초당 {aps:F2}회 타격 ({cd:F2}초당 1회)", EditorStyles.miniLabel);
         }
 
         EditorGUILayout.EndVertical();
@@ -359,20 +359,20 @@ public class SquadEditor : Editor
             normal = { textColor = new Color(0.2f, 0.8f, 1.0f) }
         };
 
-        EditorGUILayout.LabelField("📊 [실시간 실효 스탯 요약]", headerStyle);
+        EditorGUILayout.LabelField("[실시간 실효 스탯 요약]", headerStyle);
         EditorGUILayout.LabelField($"• 현재 진형: {squad.currentFormationType} {(isLoose ? "(산개 상태 - 보너스 0%)" : "")}");
         EditorGUILayout.LabelField($"• 평균 간격: {avgSpacing:F2}m (산개 기준: {squad.looseSpacingThreshold:F1}m / 밀집 기준: {squad.tightSpacingThreshold:F1}m)");
         EditorGUILayout.LabelField($"• 현재 밀집도 (Tightness): {(tightness * 100f):F1}%");
 
         EditorGUILayout.Space(2);
         string stanceText = (!squad.autoAttackEnabled) ? " [접촉 방어 태세 가산 중]" : "";
-        EditorGUILayout.LabelField($"🛡️ 실효 방어력: {totalArmor} (피해 감쇄율: {damageReduction:F2}%){stanceText}");
-        EditorGUILayout.LabelField($"⚖️ 실효 무게 (돌격 저지력): {totalMass:F1} (기본 대비 {(totalMass / Mathf.Max(1f, bMass) * 100f):F0}%)");
+        EditorGUILayout.LabelField($"실효 방어력: {totalArmor} (피해 감쇄율: {damageReduction:F2}%){stanceText}");
+        EditorGUILayout.LabelField($"실효 무게 (돌격 저지력): {totalMass:F1} (기본 대비 {(totalMass / Mathf.Max(1f, bMass) * 100f):F0}%)");
 
         string speedStatusText = currentSlowdownPercent > 0.1f
-            ? $"[🔻 {currentSlowdownPercent:F1}% 둔화됨 (공속 {attackSpeedPercent:F1}% / 초당 {currentAps:F2}회 타격)]"
+            ? $"[{currentSlowdownPercent:F1}% 둔화됨 (공속 {attackSpeedPercent:F1}% / 초당 {currentAps:F2}회 타격)]"
             : $"[정상 속도 (초당 {currentAps:F2}회 타격 / 100%)]";
-        EditorGUILayout.LabelField($"⏱️ 실효 공격 주기: {totalCd:F2}초 {speedStatusText}");
+        EditorGUILayout.LabelField($"실효 공격 주기: {totalCd:F2}초 {speedStatusText}");
 
         EditorGUILayout.EndVertical();
     }

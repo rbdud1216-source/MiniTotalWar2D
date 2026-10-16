@@ -16,7 +16,8 @@ public class SquadIconUIManager : MonoBehaviour
         }
     }
 
-    [Header("UI References")]
+    [Header("UI 계층 참조")]
+    [KoreanLabel("부대 머리 위 아이콘 프리팹", "월드 상 부대 머리 위에 띄울 2D 아이콘 UI 프리팹입니다.")]
     public GameObject squadIconPrefab;
 
     private RectTransform dedicatedContainer;

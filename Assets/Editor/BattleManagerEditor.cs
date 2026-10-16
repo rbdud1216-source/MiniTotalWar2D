@@ -90,7 +90,7 @@ public class BattleManagerEditor : Editor
         EditorGUILayout.Space(6);
 
         // 1. 시뮬레이션 모드 섹션
-        showSimulationMode = EditorGUILayout.Foldout(showSimulationMode, "⚡ 1. 시뮬레이션 엔진 모드", true, EditorStyles.foldoutHeader);
+        showSimulationMode = EditorGUILayout.Foldout(showSimulationMode, "1. 시뮬레이션 엔진 모드", true, EditorStyles.foldoutHeader);
         if (showSimulationMode)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
@@ -100,7 +100,7 @@ public class BattleManagerEditor : Editor
                     "체크 시 개별 유닛 GameObject 생성을 완전히 배제하고, 순수 GPU 인스턴싱 ECS 엔티티로 5만 기 이상의 대규모 전투를 60FPS로 구동합니다."));
                 if (usePureECS.boolValue)
                 {
-                    EditorGUILayout.HelpBox("⚡ [순수 ECS 모드 활성화됨] GameObject가 생성되지 않고 PureECSRenderer를 통해 직접 GPU 렌더링됩니다.", MessageType.Info);
+                    EditorGUILayout.HelpBox("[순수 ECS 모드 활성화됨] GameObject가 생성되지 않고 PureECSRenderer를 통해 직접 GPU 렌더링됩니다.", MessageType.Info);
                 }
             }
             EditorGUILayout.EndVertical();
@@ -109,61 +109,61 @@ public class BattleManagerEditor : Editor
         EditorGUILayout.Space(6);
 
         // 2. 기본 프리팹 섹션
-        showPrefabs = EditorGUILayout.Foldout(showPrefabs, "📦 2. 기본 유닛 및 부대 프리팹 설정", true, EditorStyles.foldoutHeader);
+        showPrefabs = EditorGUILayout.Foldout(showPrefabs, "2. 기본 유닛 및 부대 프리팹 설정", true, EditorStyles.foldoutHeader);
         if (showPrefabs)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("🔵 아군(Player) 기본 프리팹", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField("아군(Player) 기본 프리팹", EditorStyles.miniBoldLabel);
             if (playerUnitPrefab != null)
-                EditorGUILayout.PropertyField(playerUnitPrefab, new GUIContent("  아군 보병 유닛 프리팹", "플레이어 진영의 기본 근접 보병(검병/창병) 프리팹입니다."));
+                EditorGUILayout.PropertyField(playerUnitPrefab, new GUIContent("아군 보병 유닛 프리팹", "플레이어 진영의 기본 근접 보병(검병/창병) 프리팹입니다."));
             if (playerMissilePrefab != null)
-                EditorGUILayout.PropertyField(playerMissilePrefab, new GUIContent("  아군 궁병 유닛 프리팹", "플레이어 진영의 기본 원거리 궁병 프리팹입니다."));
+                EditorGUILayout.PropertyField(playerMissilePrefab, new GUIContent("아군 궁병 유닛 프리팹", "플레이어 진영의 기본 원거리 궁병 프리팹입니다."));
 
             EditorGUILayout.Space(4);
-            EditorGUILayout.LabelField("🔴 적군(Enemy) 기본 프리팹", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField("적군(Enemy) 기본 프리팹", EditorStyles.miniBoldLabel);
             if (enemyUnitPrefab != null)
-                EditorGUILayout.PropertyField(enemyUnitPrefab, new GUIContent("  적군 보병 유닛 프리팹", "적군 진영의 기본 근접 보병 프리팹입니다."));
+                EditorGUILayout.PropertyField(enemyUnitPrefab, new GUIContent("적군 보병 유닛 프리팹", "적군 진영의 기본 근접 보병 프리팹입니다."));
             if (enemyMissilePrefab != null)
-                EditorGUILayout.PropertyField(enemyMissilePrefab, new GUIContent("  적군 궁병 유닛 프리팹", "적군 진영의 기본 원거리 궁병 프리팹입니다."));
+                EditorGUILayout.PropertyField(enemyMissilePrefab, new GUIContent("적군 궁병 유닛 프리팹", "적군 진영의 기본 원거리 궁병 프리팹입니다."));
 
             EditorGUILayout.Space(4);
-            EditorGUILayout.LabelField("🚩 부대 컨트롤러 프리팹", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField("부대 컨트롤러 프리팹", EditorStyles.miniBoldLabel);
             if (squadPrefab != null)
-                EditorGUILayout.PropertyField(squadPrefab, new GUIContent("  부대 관리자(Squad) 프리팹", "부대 진형, 이동, 명령 등을 총괄하는 Squad 루트 프리팹입니다."));
+                EditorGUILayout.PropertyField(squadPrefab, new GUIContent("부대 관리자(Squad) 프리팹", "부대 진형, 이동, 명령 등을 총괄하는 Squad 루트 프리팹입니다."));
             EditorGUILayout.EndVertical();
         }
 
         EditorGUILayout.Space(6);
 
         // 3. 진영 기본 스폰 위치 및 방향 섹션
-        showSpawns = EditorGUILayout.Foldout(showSpawns, "📍 3. 진영 기본 스폰 위치 및 정면 방향", true, EditorStyles.foldoutHeader);
+        showSpawns = EditorGUILayout.Foldout(showSpawns, "3. 진영 기본 스폰 위치 및 정면 방향", true, EditorStyles.foldoutHeader);
         if (showSpawns)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("🔵 아군(Player) 군단 스폰 기준", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField("아군(Player) 군단 스폰 기준", EditorStyles.miniBoldLabel);
             if (playerSpawnCenter != null)
-                EditorGUILayout.PropertyField(playerSpawnCenter, new GUIContent("  아군 스폰 중심 좌표", "아군 군단이 배치될 중심 월드 좌표입니다. (X, Y, Z)"));
+                EditorGUILayout.PropertyField(playerSpawnCenter, new GUIContent("아군 스폰 중심 좌표", "아군 군단이 배치될 중심 월드 좌표입니다. (단위: m, X, Y, Z)"));
             if (playerFacingAngle != null)
-                EditorGUILayout.Slider(playerFacingAngle, 0f, 360f, new GUIContent("  아군 정면 회전 각도", "아군 군단의 기본 정면 각도입니다. (0도 = 북쪽 정면)"));
+                EditorGUILayout.Slider(playerFacingAngle, 0f, 360f, new GUIContent("아군 정면 회전 각도", "아군 군단의 기본 정면 각도입니다. (단위: 도, 0도 = 북쪽 정면)"));
 
             EditorGUILayout.Space(4);
-            EditorGUILayout.LabelField("🔴 적군(Enemy) 군단 스폰 기준", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField("적군(Enemy) 군단 스폰 기준", EditorStyles.miniBoldLabel);
             if (enemySpawnCenter != null)
-                EditorGUILayout.PropertyField(enemySpawnCenter, new GUIContent("  적군 스폰 중심 좌표", "적군 군단이 배치될 중심 월드 좌표입니다. (X, Y, Z)"));
+                EditorGUILayout.PropertyField(enemySpawnCenter, new GUIContent("적군 스폰 중심 좌표", "적군 군단이 배치될 중심 월드 좌표입니다. (단위: m, X, Y, Z)"));
             if (enemyFacingAngle != null)
-                EditorGUILayout.Slider(enemyFacingAngle, 0f, 360f, new GUIContent("  적군 정면 회전 각도", "적군 군단의 기본 정면 각도입니다. (180도 = 남쪽 정면)"));
+                EditorGUILayout.Slider(enemyFacingAngle, 0f, 360f, new GUIContent("적군 정면 회전 각도", "적군 군단의 기본 정면 각도입니다. (단위: 도, 180도 = 남쪽 정면)"));
 
             EditorGUILayout.Space(4);
-            EditorGUILayout.LabelField("↔️ 군단 횡대 자동 정렬 간격", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField("군단 횡대 자동 정렬 간격", EditorStyles.miniBoldLabel);
             if (squadSpacing != null)
-                EditorGUILayout.Slider(squadSpacing, 1.0f, 15.0f, new GUIContent("  부대 간 가로 여유 간격 (m)", "군단 횡대 자동 배치 시 인접 부대 사이의 가로 여백 거리입니다."));
+                EditorGUILayout.Slider(squadSpacing, 1.0f, 15.0f, new GUIContent("부대 간 가로 여유 간격", "군단 횡대 자동 배치 시 인접 부대 사이의 가로 여백 거리입니다. (단위: m, 권장: 3.0~5.0m)"));
             EditorGUILayout.EndVertical();
         }
 
         EditorGUILayout.Space(6);
 
         // 4. 전역 방진 및 산개도 스탯 튜닝 섹션
-        showFormationStats = EditorGUILayout.Foldout(showFormationStats, "🛡️ 4. 전역 방진 및 산개도 스탯 튜닝 (공통 적용)", true, EditorStyles.foldoutHeader);
+        showFormationStats = EditorGUILayout.Foldout(showFormationStats, "4. 전역 방진 및 산개도 스탯 튜닝 (공통 적용)", true, EditorStyles.foldoutHeader);
         if (showFormationStats)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
@@ -171,14 +171,14 @@ public class BattleManagerEditor : Editor
                 EditorGUILayout.PropertyField(overrideSquadFormationSettings, new GUIContent("전역 방진 스탯 덮어쓰기", "체크 시 부대 생성 시 아래의 스탯 계수를 전체 부대에 일괄 적용합니다."));
 
             EditorGUILayout.Space(4);
-            EditorGUILayout.LabelField("📏 산개도(밀집도) 판정 임계 간격", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField("산개도(밀집도) 판정 임계 간격", EditorStyles.miniBoldLabel);
             if (globalLooseSpacingThreshold != null)
-                EditorGUILayout.Slider(globalLooseSpacingThreshold, 1.5f, 5.0f, new GUIContent("  완전 산개 기준 간격 (m)", "병사 간격이 이 거리 이상으로 넓어지면 밀집 보너스가 0%가 됩니다. (기본: 2.2m)"));
+                EditorGUILayout.Slider(globalLooseSpacingThreshold, 1.5f, 5.0f, new GUIContent("완전 산개 기준 간격", "병사 간격이 이 거리 이상으로 넓어지면 밀집 보너스가 0%가 됩니다. (단위: m, 권장: 2.2m)"));
             if (globalTightSpacingThreshold != null)
-                EditorGUILayout.Slider(globalTightSpacingThreshold, 0.4f, 1.2f, new GUIContent("  최대 밀집 기준 간격 (m)", "병사 간격이 이 거리 이하로 밀착되면 밀집 보너스가 100% 최대로 적용됩니다. (기본: 0.7m)"));
+                EditorGUILayout.Slider(globalTightSpacingThreshold, 0.4f, 1.2f, new GUIContent("최대 밀집 기준 간격", "병사 간격이 이 거리 이하로 밀착되면 밀집 보너스가 100% 최대로 적용됩니다. (단위: m, 권장: 0.7m)"));
 
             EditorGUILayout.Space(6);
-            EditorGUILayout.LabelField("🎛️ 방진별 2단계 전역 스탯 계수", EditorStyles.miniBoldLabel);
+            EditorGUILayout.LabelField("방진별 2단계 전역 스탯 계수", EditorStyles.miniBoldLabel);
             if (globalNormalBonus != null)
                 DrawFormationModifier(globalNormalBonus, "일반 방진 (Normal)", "표준적인 보병 방진으로 균형 잡힌 기본 방어력과 저지력을 제공합니다.");
             if (globalWedgeBonus != null)
@@ -196,7 +196,7 @@ public class BattleManagerEditor : Editor
         EditorGUILayout.Space(6);
 
         // 5. 플레이어 군단 편성 목록
-        showPlayerArmy = EditorGUILayout.Foldout(showPlayerArmy, $"🚩 5. 플레이어 군단 편성 목록 ({playerArmyConfigs.arraySize}개 부대)", true, EditorStyles.foldoutHeader);
+        showPlayerArmy = EditorGUILayout.Foldout(showPlayerArmy, $"5. 플레이어 군단 편성 목록 ({playerArmyConfigs.arraySize}개 부대)", true, EditorStyles.foldoutHeader);
         if (showPlayerArmy)
         {
             DrawArmyConfigList(playerArmyConfigs, "플레이어 부대", new Color(0.2f, 0.6f, 1.0f, 0.15f));
@@ -205,7 +205,7 @@ public class BattleManagerEditor : Editor
         EditorGUILayout.Space(6);
 
         // 6. 적군 군단 편성 목록
-        showEnemyArmy = EditorGUILayout.Foldout(showEnemyArmy, $"⚔️ 6. 적군 군단 편성 목록 ({enemyArmyConfigs.arraySize}개 부대)", true, EditorStyles.foldoutHeader);
+        showEnemyArmy = EditorGUILayout.Foldout(showEnemyArmy, $"6. 적군 군단 편성 목록 ({enemyArmyConfigs.arraySize}개 부대)", true, EditorStyles.foldoutHeader);
         if (showEnemyArmy)
         {
             DrawArmyConfigList(enemyArmyConfigs, "적군 부대", new Color(1.0f, 0.35f, 0.2f, 0.15f));
@@ -217,13 +217,13 @@ public class BattleManagerEditor : Editor
         if (Application.isPlaying)
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField("🎮 런타임 실시간 제어", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("런타임 실시간 제어", EditorStyles.boldLabel);
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("⚔️ 전투 시나리오 재스폰", GUILayout.Height(30)))
+            if (GUILayout.Button("전투 시나리오 재스폰", GUILayout.Height(30)))
             {
                 bm.SpawnBattleScenario();
             }
-            if (GUILayout.Button("🔄 전체 유닛 물리 리셋", GUILayout.Height(30)))
+            if (GUILayout.Button("전체 유닛 물리 리셋", GUILayout.Height(30)))
             {
                 bm.ResetAllUnitsPhysics();
             }
@@ -240,7 +240,7 @@ public class BattleManagerEditor : Editor
     private void DrawHeaderBanner(BattleManager bm)
     {
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField("⚔️ 토탈워 전장 총괄 관리자 (BattleManager)", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("토탈워 전장 총괄 관리자 (BattleManager)", EditorStyles.boldLabel);
         string modeText = bm.usePureECS ? "순수 ECS 모드 (Zero-GameObject)" : "하이브리드 모드 (GameObject + Job)";
         int pCount = bm.PlayerArmyConfigs != null ? bm.PlayerArmyConfigs.Count : 0;
         int eCount = bm.EnemyArmyConfigs != null ? bm.EnemyArmyConfigs.Count : 0;
@@ -258,7 +258,7 @@ public class BattleManagerEditor : Editor
         int count = listProp.arraySize;
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.LabelField($"등록된 부대 수: {count}개", EditorStyles.miniBoldLabel);
-        if (GUILayout.Button("➕ 새 부대 추가", GUILayout.Width(110)))
+        if (GUILayout.Button("새 부대 추가", GUILayout.Width(110)))
         {
             listProp.InsertArrayElementAtIndex(count);
             SerializedProperty newElem = listProp.GetArrayElementAtIndex(count);
@@ -295,7 +295,7 @@ public class BattleManagerEditor : Editor
             EditorGUILayout.BeginHorizontal();
             elem.isExpanded = EditorGUILayout.Foldout(elem.isExpanded, $"#{i + 1} [{displayName}] ({unitTypeStr}, {units}명)", true, EditorStyles.boldLabel);
             GUI.backgroundColor = new Color(1f, 0.4f, 0.4f);
-            if (GUILayout.Button("✕ 삭제", GUILayout.Width(55)))
+            if (GUILayout.Button("삭제", GUILayout.Width(55)))
             {
                 listProp.DeleteArrayElementAtIndex(i);
                 GUI.backgroundColor = Color.white;
@@ -316,9 +316,9 @@ public class BattleManagerEditor : Editor
                 if (uType != null)
                     EditorGUILayout.PropertyField(uType, new GUIContent("병과 종류", "근접 보병, 창병, 궁병, 기병 등 병과의 역할을 지정합니다."));
                 if (uCount != null)
-                    EditorGUILayout.IntSlider(uCount, 1, 200, new GUIContent("부대 총 인원 수", "이 부대에 소속될 병사의 총 인원 수입니다."));
+                    EditorGUILayout.IntSlider(uCount, 1, 200, new GUIContent("부대 총 인원 수", "이 부대에 소속될 병사의 총 인원 수입니다. (단위: 명, 기본: 60)"));
                 if (cols != null)
-                    EditorGUILayout.IntSlider(cols, 1, 50, new GUIContent("가로 열(Columns) 수", "대형의 가로 폭(한 열에 서는 병사 수)입니다."));
+                    EditorGUILayout.IntSlider(cols, 1, 50, new GUIContent("가로 열(Columns) 수", "대형의 가로 폭(한 열에 서는 병사 수)입니다. (단위: 열, 기본: 15)"));
                 if (fType != null)
                     EditorGUILayout.PropertyField(fType, new GUIContent("초기 진형 형태", "스폰 시 초기에 형성할 기본 진형입니다. (일반, 쐐기진, 사각방진 등)"));
 
@@ -330,9 +330,9 @@ public class BattleManagerEditor : Editor
                 {
                     EditorGUI.indentLevel++;
                     if (customPos != null)
-                        EditorGUILayout.PropertyField(customPos, new GUIContent("수동 스폰 좌표 (World)", "부대 중심이 스폰될 월드 좌표 (X, Y, Z)입니다."));
+                        EditorGUILayout.PropertyField(customPos, new GUIContent("수동 스폰 좌표 (World)", "부대 중심이 스폰될 월드 좌표 (단위: m, X, Y, Z)입니다."));
                     if (customRot != null)
-                        EditorGUILayout.Slider(customRot, 0f, 360f, new GUIContent("수동 회전 각도 (Y축)", "부대가 바라볼 정면 각도입니다."));
+                        EditorGUILayout.Slider(customRot, 0f, 360f, new GUIContent("수동 회전 각도 (Y축)", "부대가 바라볼 정면 각도입니다. (단위: 도)"));
                     EditorGUI.indentLevel--;
                 }
 
@@ -356,7 +356,7 @@ public class BattleManagerEditor : Editor
     private void DrawFormationModifier(SerializedProperty prop, string formationName, string description)
     {
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField($"🛡️ {formationName}", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField(formationName, EditorStyles.boldLabel);
         EditorGUILayout.LabelField(description, EditorStyles.miniLabel);
         EditorGUILayout.Space(2);
 
@@ -366,20 +366,20 @@ public class BattleManagerEditor : Editor
         SerializedProperty densityMass = prop.FindPropertyRelative("densityMassMultiplier");
         SerializedProperty densitySpeedRatio = prop.FindPropertyRelative("densityAttackSpeedRatio");
 
-        EditorGUILayout.LabelField("  [1단계: 방진 형성 기본 효과 - 진형 전환 즉시 부여]", EditorStyles.miniBoldLabel);
+        EditorGUILayout.LabelField("[1단계: 방진 형성 기본 효과 - 진형 전환 즉시 부여]", EditorStyles.miniBoldLabel);
         if (baseArmor != null)
-            EditorGUILayout.IntSlider(baseArmor, 0, 5000, new GUIContent("    기본 추가 방어력", "진형 형태 자체로 기본 부여되는 방어력 (+만분율). 500 = +5.00%"));
+            EditorGUILayout.IntSlider(baseArmor, 0, 5000, new GUIContent("기본 추가 방어력", "진형 형태 자체로 기본 부여되는 방어력 (+만분율). 500 = +5.00%"));
         if (baseMass != null)
-            EditorGUILayout.Slider(baseMass, 1.0f, 3.0f, new GUIContent("    기본 무게 배율", "진형 전환 시 기본 적용되는 무게 배율. 1.2 = +20% 증가로 돌격 저지력 향상."));
+            EditorGUILayout.Slider(baseMass, 1.0f, 3.0f, new GUIContent("기본 무게 배율", "진형 전환 시 기본 적용되는 무게 배율. 1.2 = +20% 증가로 돌격 저지력 향상. (단위: 배)"));
 
         EditorGUILayout.Space(2);
-        EditorGUILayout.LabelField("  [2단계: 산개도 비례 추가 효과 - 밀집할수록 점진적 적용]", EditorStyles.miniBoldLabel);
+        EditorGUILayout.LabelField("[2단계: 산개도 비례 추가 효과 - 밀집할수록 점진적 적용]", EditorStyles.miniBoldLabel);
         if (densityArmor != null)
-            EditorGUILayout.IntSlider(densityArmor, 0, 5000, new GUIContent("    최대 밀집 추가 방어력", "최대 밀집 시 추가 가산되는 방어력 (+만분율). 1000 = +10.00%"));
+            EditorGUILayout.IntSlider(densityArmor, 0, 5000, new GUIContent("최대 밀집 추가 방어력", "최대 밀집 시 추가 가산되는 방어력 (+만분율). 1000 = +10.00%"));
         if (densityMass != null)
-            EditorGUILayout.Slider(densityMass, 1.0f, 3.0f, new GUIContent("    최대 밀집 추가 무게", "최대 밀집 시 추가 가산되는 무게 배율. 1.5 = +50% 추가"));
+            EditorGUILayout.Slider(densityMass, 1.0f, 3.0f, new GUIContent("최대 밀집 추가 무게", "최대 밀집 시 추가 가산되는 무게 배율. 1.5 = +50% 추가 (단위: 배)"));
         if (densitySpeedRatio != null)
-            EditorGUILayout.Slider(densitySpeedRatio, 0.3f, 1.0f, new GUIContent("    밀집 시 공격 속도 비율", "최대 밀집 시 공속 둔화율. 0.50 = 공속 50% 수준으로 반감."));
+            EditorGUILayout.Slider(densitySpeedRatio, 0.3f, 1.0f, new GUIContent("밀집 시 공격 속도 비율", "최대 밀집 시 공속 둔화율. 0.50 = 공속 50% 수준으로 반감. (단위: 배)"));
 
         EditorGUILayout.EndVertical();
     }

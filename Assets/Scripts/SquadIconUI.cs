@@ -16,15 +16,20 @@ public class SquadIconUI : MonoBehaviour, IPointerClickHandler
     private PlayerController playerController;
 
     [Header("UI 위치 오프셋 (스크린 좌표)")]
+    [KoreanLabel("스크린 위치 오프셋", "부대 중심점 상단에 아이콘을 띄울 2D 화면 픽셀 오프셋입니다. (기본: Y=40)")]
     public Vector3 offset = new Vector3(0, 40f, 0);
 
     [Header("부대 조직력(체력) 표시 이미지")]
+    [KoreanLabel("조직력 게이지 이미지 (Fill)", "부대의 실시간 생존력/체력 비율을 표시할 Fill 방식의 Image 컴포넌트입니다.")]
     [SerializeField] private Image organizationImage;
 
-    [Header("🏹 원거리 탄약(화살) 잔량 게이지")]
+    [Header("원거리 탄약(화살) 잔량 게이지")]
+    [KoreanLabel("탄약 바 이미지 (Fill)", "부대의 잔여 화살 비율을 표시할 Fill 방식의 Image 컴포넌트입니다.")]
     [SerializeField] private Image ammoBarImage;
+
+    [KoreanLabel("탄약 바 루트 오브젝트", "탄약 바를 켜고 끌 부모 게임오브젝트입니다.")]
     [SerializeField] private GameObject ammoBarRoot;
-    private bool hasFiredAmmo = false; // 🏹 토탈워 삼국: 첫 사격을 시작할 때부터 게이지 표시
+    private bool hasFiredAmmo = false;
 
     private void Awake()
     {
@@ -292,6 +297,14 @@ public class SquadIconUI : MonoBehaviour, IPointerClickHandler
             return;
         }
 
+        // 👁️ [삼국지 토탈워식 시야 은폐]: 적군 부대가 아군 시야(LoS)에 가려지면 머리 위 UI가 서서히 페이드 아웃
+        float visionAlpha = targetSquad.isPlayer ? 1.0f : targetSquad.visibilityAlpha;
+        if (visionAlpha <= 0.001f)
+        {
+            SetUIVisible(false, 0f);
+            return;
+        }
+
         // 부대 전체 살아있는 유닛들의 기하학적 정중앙(VisualCenter)을 추적하여 방진 머리 위에 정확히 표시
         Vector3 realCenter = targetSquad.GetVisualCenter();
 
@@ -313,7 +326,7 @@ public class SquadIconUI : MonoBehaviour, IPointerClickHandler
                              screenPos.x >= -100f && screenPos.x <= Screen.width + 100f && 
                              screenPos.y >= -100f && screenPos.y <= Screen.height + 100f;
 
-            SetUIVisible(isVisible);
+            SetUIVisible(isVisible, visionAlpha);
 
             if (isVisible)
             {
@@ -336,13 +349,13 @@ public class SquadIconUI : MonoBehaviour, IPointerClickHandler
         }
     }
 
-    private void SetUIVisible(bool visible)
+    private void SetUIVisible(bool visible, float alpha = 1.0f)
     {
         if (canvasGroup != null)
         {
-            canvasGroup.alpha = visible ? 1f : 0f;
-            canvasGroup.blocksRaycasts = visible;
-            canvasGroup.interactable = visible;
+            canvasGroup.alpha = visible ? alpha : 0f;
+            canvasGroup.blocksRaycasts = visible && (alpha > 0.1f);
+            canvasGroup.interactable = visible && (alpha > 0.1f);
         }
         else
         {

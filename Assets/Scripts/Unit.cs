@@ -13,6 +13,7 @@ public class Unit : MonoBehaviour
 
     [Tooltip("유닛 실시간 현재 체력 (게임 시작 시 최대 체력으로 자동 초기화)")]
     public float currentHp = 100f;
+    public bool IsAlive => currentHp > 0f;
 
     [Tooltip("유닛 기본 방어력 (0 ~ 10000 정수 입력, 10000 = 100.00% 완전 방어. 예: 2812 입력 시 28.12% 피해 감쇄)")]
     [Range(0, 10000)]
@@ -25,117 +26,186 @@ public class Unit : MonoBehaviour
     [Tooltip("유닛의 병종 및 전술적 역할")]
     public UnitType unitType = UnitType.MeleeInfantry;
 
-    [Header("🏹 원거리(사격) 유닛 설정")]
-    [Tooltip("원거리 사격 유닛 여부 (체크(V) 시 활 사격 및 전용 탄약 시스템 활성화, 해제 시 순수 근접 유닛으로 동작)")]
+    [Header("원거리(사격) 유닛 설정")]
+    [Tooltip("원거리 사격 유닛 여부 (체크 시 활 사격 및 전용 탄약 시스템 활성화, 해제 시 순수 근접 유닛으로 동작)")]
     public bool isRangedUnit = false;
 
     [Tooltip("이동 중 사격 가능 여부 (체크 시 이동 중에도 사격 가능, 체크 해제 시 제자리에 멈춰 서서만 일제사격)")]
     public bool canFireWhileMoving = true;
 
-    [Tooltip("🏹 자유 사격 (Fire at Will) 활성화 여부 (체크 시 사거리 내 적에게 자동 일제사격, 해제 시 지정 공격 명령 시에만 사격)")]
+    [Tooltip("자유 사격 (Fire at Will) 활성화 여부 (체크 시 사거리 내 적에게 자동 일제사격, 해제 시 지정 공격 명령 시에만 사격)")]
     public bool fireAtWill = true;
 
-    [Tooltip("병사 1인당 소지 화살 총량 (원거리 유닛 전용, 0발 시 근접 보병 모드로 영구 전환)")]
+    [Tooltip("Alt+우클릭 강제 백병전 돌격 활성화 여부 (활 사격 금지 및 단검/칼 백병전)")]
+    public bool isForcedMelee = false;
+
+    [Header("👁️ [삼국지 토탈워식 시야 및 발각 시스템]")]
+    [Tooltip("아군(플레이어)에게 발각되어 화면에 보이는지 여부")]
+    public bool isSpotted = true;
+    [Tooltip("자유 유닛의 기본 관측 시야 반경(m)")]
+    public float visionRange = 60.0f;
+
+    [Tooltip("실시간 시야 가시성 알파값 (0.0f = 완전 투명, 1.0f = 완전 노출)")]
+    [System.NonSerialized] public float visibilityAlpha = 1.0f;
+    private Renderer[] cachedRenderers;
+    private MaterialPropertyBlock propBlock;
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorId = Shader.PropertyToID("_Color");
+
+    /// <summary>
+    /// 아군 시야(LoS) 내 진입 또는 이탈 시 GameObject 렌더러 가시성을 일괄 토글합니다.
+    /// </summary>
+    public void SetVisibility(bool visible)
+    {
+        isSpotted = visible;
+        SetVisibilityAlpha(visible ? 1.0f : 0.0f);
+    }
+
+    /// <summary>
+    /// 부드러운 페이드 인/페이드 아웃 알파값(0.0~1.0)을 유닛 렌더러에 적용합니다.
+    /// </summary>
+    public void SetVisibilityAlpha(float alpha)
+    {
+        visibilityAlpha = alpha;
+        isSpotted = (alpha > 0.001f);
+
+        if (cachedRenderers == null)
+        {
+            cachedRenderers = GetComponentsInChildren<Renderer>(true);
+        }
+        if (propBlock == null)
+        {
+            propBlock = new MaterialPropertyBlock();
+        }
+
+        bool isVisible = alpha > 0.001f;
+
+        for (int i = 0; i < cachedRenderers.Length; i++)
+        {
+            Renderer r = cachedRenderers[i];
+            if (r == null) continue;
+
+            if (r.enabled != isVisible)
+            {
+                r.enabled = isVisible;
+            }
+
+            if (isVisible)
+            {
+                r.GetPropertyBlock(propBlock);
+                Color c = isPlayer ? new Color(0.12f, 0.50f, 0.95f, alpha) : new Color(0.95f, 0.22f, 0.22f, alpha);
+                propBlock.SetColor(BaseColorId, c);
+                propBlock.SetColor(ColorId, c);
+                r.SetPropertyBlock(propBlock);
+            }
+        }
+    }
+
+    [Tooltip("병사 1인당 소지 화살 총량 (단위: 발, 원거리 유닛 전용, 0발 시 근접 보병 모드로 영구 전환, 기본: 25발)")]
     public int maxAmmo = 25;
 
-    [Tooltip("실시간 잔여 화살 수")]
+    [Tooltip("실시간 잔여 화살 수 (단위: 발)")]
     public int currentAmmo = 25;
 
-    [Tooltip("원거리 최대 유효 사거리 (미터 단위, 실제 전투 활 및 토탈워 기준: 150m)")]
-    public float rangedAttackRange = 150.0f;
+    [Tooltip("원거리 최대 유효 사거리 (단위: m, 실제 전투 활 및 토탈워 기준: 150m)")]
+    public float rangedAttackRange = 140.0f;
 
-    [Tooltip("최적 사거리 (m 단위, 이 거리 이내에서는 100% 명중 및 100% 최대 대미지 적용)")]
+    [Tooltip("최적 사거리 (단위: m, 이 거리 이내에서는 100% 명중 및 100% 최대 대미지 적용, 기본: 50m)")]
     public float optimalRange = 50.0f;
 
-    [Tooltip("원거리 최소 사거리 (m 단위, 적이 이 거리 이내로 접근 시 활 사격을 중단)")]
+    [Tooltip("원거리 최소 사거리 (단위: m, 적이 이 거리 이내로 접근 시 활 사격을 중단, 기본: 5m)")]
     public float rangedMinRange = 5.0f;
 
-    [Tooltip("원거리 기본 타격 대미지 (최적 사거리 기준)")]
-    public float rangedBaseDamage = 15.0f;
+    [Tooltip("원거리 기본 타격 대미지 (최적 사거리 기준, 기본: 22.0)")]
+    public float rangedBaseDamage = 22.0f;
 
-    [Tooltip("최대 사거리(150m) 끝에서 적용될 최소 대미지 비율 (멀어질수록 선형 감쇠, 기본: 0.55 = 55%)")]
+    [Tooltip("최대 사거리 끝에서 적용될 최소 대미지 비율 (단위: 배, 기본: 0.55 = 55%)")]
     [Range(0.1f, 1.0f)]
     public float minDamageRatioAtMax = 0.55f;
 
-    [Tooltip("원거리 사격 간격 쿨다운 (초 단위, 2.2초당 1발 일제사격)")]
-    public float rangedAttackCooldown = 2.2f;
+    [Tooltip("원거리 사격 간격 쿨다운 (단위: 초, 기본: 궁병 7.0초, 총병 15.0초)")]
+    public float rangedAttackCooldown = 7.0f;
 
-    [Tooltip("근거리(최적 사거리 이내)에서의 착탄 오차 반경 (m 단위, 기본: 0.3m로 정밀 타격)")]
+    [Tooltip("근거리(최적 사거리 이내)에서의 착탄 오차 반경 (단위: m, 기본: 0.3m로 정밀 타격)")]
     public float minSpreadRadius = 0.3f;
 
-    [Tooltip("최대 사거리(150m)에서의 착탄 오차 반경 (m 단위, 기본: 3.5m로 탄착군 분산 및 빗맞음 발생)")]
+    [Tooltip("최대 사거리(150m)에서의 착탄 오차 반경 (단위: m, 기본: 3.5m로 탄착군 분산 발생)")]
     public float maxSpreadRadius = 3.5f;
 
-    [Tooltip("사격 궤적 모드 (HighArc: 곡사 포물선 - 활, Flat: 직선 평사 - 쇠뇌)")]
+    [Tooltip("사격 궤적 모드 (HighArc: 곡사 포물선 - 활, Flat: 직선 평사 - 쇠뇌/총)")]
     public TrajectoryMode trajectoryMode = TrajectoryMode.HighArc;
 
-    [Tooltip("화살 순수 비행 속도 (m/s, 기본: 30.0m/s)")]
+    [Tooltip("사격 가능 수평 각도 (단위: 도, 부채꼴 사격 호 각도. 총병: 60도, 궁수: 120도, 원형: 360도 등)")]
+    [Range(10f, 360f)]
+    public float firingArcAngle = 120.0f;
+
+    [Tooltip("화살 순수 비행 속도 (단위: m/s, 기본: 30.0m/s)")]
     public float projectileSpeed = 30.0f;
 
-    [Tooltip("화살 공기 저항(항력) 감속 계수 (0 = 무저항 등속, 0.25 = 비행할수록 자연스럽게 감속되어 묵직하게 착탄, 높을수록 급감속)")]
+    [Tooltip("화살 공기 저항(항력) 감속 계수 (0 = 무저항 등속, 0.25 = 비행할수록 자연스럽게 감속 후 착탄)")]
     [Range(0.0f, 1.0f)]
     public float projectileDrag = 0.25f;
 
-    [Tooltip("중력 가속도 영향 배율 (곡사 시 포물선 최고점 높이 계수, 기본: 1.0)")]
+    [Tooltip("중력 가속도 영향 배율 (곡사 시 포물선 최고점 높이 계수, 단위: 배, 기본: 1.0)")]
     public float gravityScale = 1.0f;
 
-    [Header("🎯 원거리 무기 발사 위치 설정 (Launch / Muzzle Point)")]
-    [Tooltip("프리팹 자식의 발사 위치 빈 오브젝트 (씬 뷰에서 마우스로 직접 조절 가능. 지정 시 launchOffset과 양방향 자동 동기화)")]
+    [Header("원거리 무기 발사 위치 설정 (Launch / Muzzle Point)")]
+    [Tooltip("프리팹 자식의 발사 위치 빈 오브젝트 (씬 뷰에서 마우스로 직접 조절 가능)")]
     public Transform launchPoint;
 
-    [Tooltip("유닛 피벗 기준 원거리 무기 발사 로컬 오프셋 (유닛 0.5 스케일 구체 기준: X=0.25 우측손, Y=0.15 어깨높이, Z=0.45 전방팔뻗음)")]
+    [Tooltip("유닛 피벗 기준 원거리 무기 발사 로컬 오프셋 (단위: m, 기본: X=0.25, Y=0.15, Z=0.45)")]
     public Vector3 launchOffset = new Vector3(0.25f, 0.15f, 0.45f);
 
-    [Tooltip("원거리 화살/투사체 적중 시 피격 유닛에게 가하는 물리 넉백 충격 세기 (m/s 단위, 기본: 0.35m/s, 0이면 넉백 없음)")]
+    [Tooltip("원거리 화살 적중 시 피격 유닛에게 가하는 물리 넉백 충격 세기 (단위: m/s, 기본: 0.35m/s)")]
     public float rangedKnockbackPower = 0.35f;
 
     [Tooltip("방어력 100% 완전 무시 여부 (체크 시 트루 데미지 적용)")]
     public bool ignoreArmor = false;
 
-    [Tooltip("방어력 무시 관통 피해 비율 (0.0~1.0, 기본: 0.25 = 대미지의 25%는 방어력 100% 무시 직격)")]
+    [Tooltip("방어력 무시 관통 피해 비율 (기본: 0.25 = 대미지의 25%는 방어력 무시 직격)")]
     [Range(0.0f, 1.0f)]
     public float armorPiercingRatio = 0.25f;
 
     [Tooltip("적 방어력을 깎아내고 계산하는 관통 수치 (만분율 단위)")]
     public int armorShredAmount = 0;
 
-    [Tooltip("적이 이 거리 이내로 접근 시 활을 거두고 근접 주무기(칼)로 백병전 강제 전환 (기본: 5.0m)")]
+    [Tooltip("적이 이 거리 이내로 접근 시 활을 거두고 근접 주무기(칼)로 백병전 강제 전환 (단위: m, 기본: 5.0m)")]
     public float meleeSwitchDistance = 5.0f;
 
-    [Header("📐 원거리 사선 및 무기 동작 공간 (Clearance)")]
-    [Tooltip("뒤로 팔/무기를 젖히는 데 필요한 최소 후방 거리 (활: 0.8m, 투창: 1.0m, 쇠뇌/총: 0.0m - 밀착 사격 가능)")]
+    [Header("원거리 사선 및 무기 동작 공간 (Clearance)")]
+    [Tooltip("뒤로 팔/무기를 젖히는 데 필요한 최소 후방 거리 (단위: m, 활: 0.8m, 투창: 1.0m, 쇠뇌/총: 0.0m)")]
     public float minRearSpacing = 0.8f;
 
-    [Tooltip("양옆으로 무기를 다루는 데 필요한 최소 측면 거리 (활: 0.8m, 쇠뇌/총: 0.55m)")]
+    [Tooltip("양옆으로 무기를 다루는 데 필요한 최소 측면 거리 (단위: m, 활: 0.75m, 쇠뇌/총: 0.55m)")]
     public float minLateralSpacing = 0.75f;
 
-    [Tooltip("앞사람 머리 위를 지나가야 하는 최소 안전 여유 고도 (m 단위, 기본: 0.25m)")]
+    [Tooltip("앞사람 머리 위를 지나가야 하는 최소 안전 여유 고도 (단위: m, 기본: 0.25m)")]
     public float headClearanceMargin = 0.25f;
 
     [Tooltip("체커보드 엇갈림 대형에서 2열의 수평 틈새 직사 허용 여부 (기본: true)")]
     public bool allowStaggeredRank2DirectFire = true;
 
-    [Header("🚩 권장 소속 부대 진형 및 사격 전술 설정 (Squad Formation Defaults)")]
+    [Header("권장 소속 부대 진형 및 사격 전술 설정 (Squad Formation Defaults)")]
     [Tooltip("이 유닛 프리팹의 설정으로 소속 부대(Squad)의 진형 간격 및 사격 전술을 자동 동기화할지 여부")]
     public bool overrideSquadFormationDefaults = true;
 
-    [Tooltip("이 병과가 소속될 부대의 권장 가로(좌우) 간격 (m, 기본 보병: 1.0m, 궁병: 1.1m)")]
+    [Tooltip("이 병과가 소속될 부대의 권장 가로(좌우) 간격 (단위: m, 기본 보병: 1.0m, 궁병: 1.1m)")]
     public float recommendedSquadSpacingX = 1.0f;
 
-    [Tooltip("이 병과가 소속될 부대의 권장 세로(앞뒤) 간격 (m, 기본 보병: 1.0m, 장궁병: 1.3m, 쇠뇌: 0.8m)")]
+    [Tooltip("이 병과가 소속될 부대의 권장 세로(앞뒤) 간격 (단위: m, 기본 보병: 1.0m, 장궁병: 1.3m, 쇠뇌: 0.8m)")]
     public float recommendedSquadSpacingZ = 1.0f;
 
-    [Tooltip("이 병과가 소속될 부대의 엇갈린 대형 권장 여부 (체크 시 부대에서 [T] 키나 버튼으로 2열 틈새 직사 사격 대형 전환 가능)")]
+    [Tooltip("이 병과가 소속될 부대의 엇갈린 대형 권장 여부 (체크 시 2열 틈새 직사 사격 대형 전환 가능)")]
     public bool recommendedStaggeredFormation = false;
 
     [Tooltip("이 병과가 소속될 부대의 순차 사격(Rolling Volley) 권장 여부 (원거리 유닛: true 권장)")]
     public bool recommendedSequentialFire = false;
 
-    [Tooltip("이 병과가 소속될 부대의 순차 사격 행간 지연 시간 (초, 기본 0.4초)")]
+    [Tooltip("이 병과가 소속될 부대의 순차 사격 행간 지연 시간 (단위: 초, 기본: 0.4초)")]
     public float recommendedSequentialRowDelay = 0.4f;
 
-    [Header("⚔️ 근접 주무기 (Primary Melee Weapon) 설정")]
-    [Tooltip("일반 백병전 1회 타격 공격력 (활을 접었을 때 휘두를 칼/창 공격력)")]
+    [Header("근접 주무기 (Primary Melee Weapon) 설정")]
+    [Tooltip("일반 백병전 1회 타격 공격력 (기본 검병: 10.0, 장창병: 14.0)")]
     public float damage = 10f;
 
     [Tooltip("공격 쿨다운 주기 (초 단위, 수치가 작을수록 빠르게 공격)")]
@@ -269,11 +339,11 @@ public class Unit : MonoBehaviour
     [SerializeField] private float separationForce = 1.2f;
     private static readonly Collider[] separationBuffer = new Collider[16];
 
-    [Header("⛰️ 지형 및 경사면 설정 (Terrain & Slope)")]
-    [Tooltip("지형 경사면 기울기 반영 여부 (체크(V) 시 경사면 법선에 맞춰 몸체가 기울어짐(옵션 B), 해제 시 중력 수직 유지(옵션 A))")]
+    [Header("지형 및 경사면 설정 (Terrain & Slope)")]
+    [Tooltip("지형 경사면 기울기 반영 여부 (체크 시 경사면 법선에 맞춰 몸체가 기울어짐(옵션 B), 해제 시 중력 수직 유지(옵션 A))")]
     public bool alignToSlope = false;
 
-    [Tooltip("지면으로부터 유닛 중심의 Y축 높이 오프셋 (m 단위, 기본: 0.39m = 큐브 크기 0.78m의 절반)")]
+    [Tooltip("지면으로부터 유닛 중심의 Y축 높이 오프셋 (단위: m, 기본: 0.39m = 큐브 크기 0.78m의 절반)")]
     public float groundYOffset = 0.39f;
 
     private NavMeshAgent agent;
@@ -358,6 +428,7 @@ public class Unit : MonoBehaviour
 
         transform.localScale = new Vector3(0.78f, 0.78f, 0.78f);
         currentHp = maxHp;
+        isSpotted = isPlayer;
 
         // 🛡️ 구버전 프리팹/씬 직렬화 속도 값(0.6f / 1.8f) 자동 보정
         if (unitMaxSpeed < 5.0f) unitMaxSpeed = 5.5f;
@@ -379,10 +450,10 @@ public class Unit : MonoBehaviour
                 unitType = UnitType.Archer;
             }
             currentAmmo = maxAmmo;
-            if (rangedAttackRange < 10.0f) rangedAttackRange = 150.0f;
+            if (rangedAttackRange < 10.0f) rangedAttackRange = 140.0f;
             if (optimalRange < 5.0f) optimalRange = 50.0f;
             if (rangedMinRange < 1.0f) rangedMinRange = 5.0f;
-            if (rangedBaseDamage < 1.0f) rangedBaseDamage = 15.0f;
+            if (rangedBaseDamage < 1.0f) rangedBaseDamage = 22.0f;
             if (projectileSpeed < 10.0f) projectileSpeed = 30.0f;
             if (projectileDrag < 0f) projectileDrag = 0.25f;
             if (meleeSwitchDistance < 1.0f) meleeSwitchDistance = 5.0f;
@@ -423,6 +494,22 @@ public class Unit : MonoBehaviour
 
     private void Update()
     {
+        // 🏛️ [토탈워식 배치 단계 (Deployment Phase)]:
+        // 전투 시작 전 배치 단계 중에는 모든 유닛이 제자리에 정지하여 대기합니다 (이동, 자동 탐색, 교전 완전 동결)
+        if (BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment)
+        {
+            if (agent != null && agent.isActiveAndEnabled && agent.isOnNavMesh)
+            {
+                if (!agent.isStopped)
+                {
+                    agent.ResetPath();
+                    agent.isStopped = true;
+                    agent.velocity = Vector3.zero;
+                }
+            }
+            return;
+        }
+
         // 멀티코어 Job System이 실행 중일 때는 개별 Update 부하를 생략하여 극강의 성능 확보
         if (UnitJobSimulationManager.Instance != null)
         {
@@ -523,10 +610,10 @@ public class Unit : MonoBehaviour
                     {
                         target = foundEnemy;
                         float d = Vector3.Distance(transform.position, foundEnemy.transform.position);
-                        // 🏹 궁병은 적이 5m 이내로 들어오지 않는 한 백병전(MeleeEngaged)으로 전환되지 않고 사격 자세 유지
-                        if (isRangedUnit && currentAmmo > 0 && d > meleeSwitchDistance)
+                        // 🏹 원거리 유닛은 탄약이 남아있는 한 백병전(MeleeEngaged)으로 전환되어 뛰어나가지 않고 대형 및 사격 자세 유지
+                        if (isRangedUnit && currentAmmo > 0)
                         {
-                            // 원거리 사격 자세 유지
+                            // 원거리 사격 자세 및 대형 슬롯 유지
                         }
                         else
                         {
@@ -538,6 +625,18 @@ public class Unit : MonoBehaviour
         }
         else // 적 AI
         {
+            // 🏛️ [배치 단계 동결]: 전투 개시 전에는 적 AI가 적을 탐색하거나 달려가지 않음
+            if (BattlePhaseManager.Instance != null && BattlePhaseManager.Instance.IsInDeployment)
+            {
+                if (agent != null && agent.isActiveAndEnabled && agent.isOnNavMesh && !agent.isStopped)
+                {
+                    agent.ResetPath();
+                    agent.isStopped = true;
+                    agent.velocity = Vector3.zero;
+                }
+                return;
+            }
+
             if (Time.time >= nextSearchTime)
             {
                 nextSearchTime = Time.time + searchInterval;

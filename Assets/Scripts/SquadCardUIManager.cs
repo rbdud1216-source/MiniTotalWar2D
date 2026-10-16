@@ -16,8 +16,11 @@ public class SquadCardUIManager : MonoBehaviour
         }
     }
 
-    [Header("UI References")]
+    [Header("UI 계층 참조")]
+    [KoreanLabel("카드 컨테이너 (부모 Transform)", "부대 카드들이 가로로 정렬되어 생성될 부모 컨테이너 Transform입니다.")]
     public Transform cardContainer;
+
+    [KoreanLabel("부대 카드 프리팹", "부대 카드 UI를 인스턴스화할 프리팹 에셋입니다.")]
     public GameObject squadCardPrefab;
 
     private List<SquadCardUI> activeCards = new List<SquadCardUI>();
