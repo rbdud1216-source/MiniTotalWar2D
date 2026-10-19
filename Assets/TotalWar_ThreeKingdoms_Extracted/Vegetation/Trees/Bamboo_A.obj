@@ -4,6 +4,7 @@
 mtllib Bamboo_A.mtl
 o Bamboo_A
 g Trunk
+usemtl Trunk
 usemtl Trunk_Mat
 v -0.1126 -0.0332 0.1952
 v -0.2253 -0.0333 0.0000
@@ -788,6 +789,7 @@ f 191/191/191 192/192/192 190/190/190
 f 192/192/192 191/191/191 193/193/193
 f 193/193/193 194/194/194 192/192/192
 g Leaves
+usemtl Leaves
 usemtl Leaves_Mat
 v -3.4258 17.0938 -4.2891
 v -3.2559 17.2188 -2.2676

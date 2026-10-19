@@ -73,19 +73,19 @@ flowchart TD
 
 | 변수명 | 타입 | 기본값 | 설명 및 인스펙터 튜닝 가이드 |
 | :--- | :--- | :--- | :--- |
-| `sunElevation` | `float` | `40.0f` | **태양 고도각 (Elevation)**: 지평선에서 수직으로 올라간 각도. 삼탈워 공식 기본값 40도. |
-| `sunAzimuth` | `float` | `90.0f` | **태양 방위각 (Azimuth)**: 정북(0도) 기준 시계방향 회전각. 삼탈워 공식 기본값 90도(동쪽). |
-| `sunIntensity` | `float` | `1.35f` | **태양광 강도**: 전장 지면과 유닛에 내리쬐는 직사광의 밝기. |
+| `sunElevation` | `float` | `29.5f` | **태양 고도각 (Elevation)**: 지평선에서 수직으로 올라간 각도. 구름 속 햇살 튜닝 기본값 29.5도. |
+| `sunAzimuth` | `float` | `275.0f` | **태양 방위각 (Azimuth)**: 정북(0도) 기준 시계방향 회전각. 스카이박스 햇살 중심점 튜닝 기본값 275도. |
+| `sunIntensity` | `float` | `1.59f` | **태양광 강도**: 전장 지면과 유닛에 내리쬐는 직사광의 밝기. |
 | `sunColor` | `Color` | `(1.0, 0.96, 0.88)` | **태양 직사광 색상**: 따뜻하고 화사한 온백색 햇살. |
 | `enableSunDisk` | `bool` | `true` | **태양 광구 디스크 활성화 여부**: 체크 시 하늘에 동그란 해와 코로나 후광 렌더링. |
-| `sunDiskSize` | `float` | `0.028f` | **태양 광구 시직경(크기)**: 각반경(Angular Radius). 기본값 약 1.6도. |
-| `sunDiskColor` | `Color` | `(2.0, 1.9, 1.6)` | **태양 광구 HDR 색상**: 맑고 찬란한 온백색 발광 색상. |
-| `sunCoronaColor` | `Color` | `(1.0, 0.85, 0.6)` | **대기 코로나 후광 색상**: 태양 주변으로 은은하게 퍼지는 황금빛 산란광. |
-| `sunCoronaFalloff` | `float` | `4.0f` | **대기 후광 감쇄 지수**: 값이 높을수록 태양 중심에 응집되고, 주변 하늘 백화 방지. |
+| `sunDiskSize` | `float` | `0.005f` | **태양 광구 시직경(크기)**: 각반경(Angular Radius). 선명하고 정밀한 태양 원반. |
+| `sunDiskColor` | `Color` | `(2.5, 2.3, 1.8)` | **태양 광구 HDR 색상**: 맑고 찬란한 온백색 발광 색상. |
+| `sunCoronaColor` | `Color` | `(1.0, 0.82, 0.55)` | **대기 코로나 후광 색상**: 태양 주변으로 은은하게 퍼지는 황금빛 산란광. |
+| `sunCoronaFalloff` | `float` | `5.0f` | **대기 후광 감쇄 지수**: 값이 높을수록 태양 중심에 응집되고, 주변 하늘 백화 방지. |
 | `skyExposure` | `float` | `1.0f` | **스카이박스 노출값**: 하늘 배경 텍스처의 전체적인 밝기. |
 | `skyRotation` | `float` | `0.0f` | **스카이박스 수평 회전각 (Yaw)**: 0~360도. 텍스처 속 원래 구름 햇살과 광원 방향을 1:1로 일치. |
 | `horizonOffset` | `float` | `0.0f` | **수평선 높이 오프셋**: 카메라 쿼터뷰 각도에 맞춰 지평선 위치 조절. |
-| `horizonFogIntensity`| `float`| `0.65f`| **지평선 대기 안개 강도**: 삼탈워 공식 지평선 연무(Horizon Fog) 세기. 지형과 하늘 경계 융합. |
+| `horizonFogIntensity`| `float`| `0.55f`| **지평선 대기 안개 강도**: 삼탈워 공식 지평선 연무(Horizon Fog) 세기. 지형과 하늘 경계 융합. |
 | `horizonFogHeight` | `float` | `0.22f` | **지평선 안개 퍼짐 높이**: 안개가 수평선 위아래로 퍼지는 높이 범위. |
 | `horizonFogColor` | `Color` | `(0.72, 0.75, 0.78)` | **지평선 안개 색상**: 원경의 아련한 대기 연무빛. |
 | `skyboxTextureName`| `string` | `"3k_sky_blue_1_diffuse.dds"` | 추출된 삼탈워 스카이박스 DDS 파일명 (morning, evening, overcast 등 교체 가능). |

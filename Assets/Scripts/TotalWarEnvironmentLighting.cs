@@ -13,20 +13,20 @@ using UnityEditor;
 public class TotalWarEnvironmentLighting : MonoBehaviour
 {
     [Header("☀️ 삼탈워 태양광 설정 (Sun Light)")]
-    [Tooltip("태양 고도각 (Elevation, 구름 텍스처 햇살 고도: 약 24도)")]
+    [Tooltip("태양 고도각 (Elevation, 구름 텍스처 햇살 고도: 약 29.5도)")]
     [Range(5f, 85f)]
-    public float sunElevation = 24.0f;
+    public float sunElevation = 29.5f;
 
-    [Tooltip("태양 방위각 (Azimuth, 0~360도)")]
+    [Tooltip("태양 방위각 (Azimuth, 0~360도, 구름 햇살 방위: 275도)")]
     [Range(0f, 360f)]
-    public float sunAzimuth = 90.0f;
+    public float sunAzimuth = 275.0f;
 
     [Tooltip("스카이박스 구름 햇살과 태양 광원 방향 자동 결속")]
     public bool lockSunToSkyRotation = false;
 
     [Tooltip("태양광 밝기 (Intensity)")]
     [Range(0.5f, 3.0f)]
-    public float sunIntensity = 1.35f;
+    public float sunIntensity = 1.59f;
 
     [Tooltip("태양광 색상 (따뜻한 햇살 골드 화이트)")]
     public Color sunColor = new Color(1.0f, 0.96f, 0.88f);
@@ -35,9 +35,9 @@ public class TotalWarEnvironmentLighting : MonoBehaviour
     [Tooltip("태양 광구 디스크 활성화")]
     public bool enableSunDisk = true;
 
-    [Tooltip("태양 광구 원반 크기 (Angular Radius, 기본: 0.016)")]
-    [Range(0.005f, 0.08f)]
-    public float sunDiskSize = 0.016f;
+    [Tooltip("태양 광구 원반 크기 (Angular Radius, 기본: 0.005)")]
+    [Range(0.002f, 0.08f)]
+    public float sunDiskSize = 0.005f;
 
     [Tooltip("태양 광구 색상 (HDR 온백색 찬란한 골드)")]
     public Color sunDiskColor = new Color(2.5f, 2.3f, 1.8f, 1f);
@@ -47,7 +47,7 @@ public class TotalWarEnvironmentLighting : MonoBehaviour
 
     [Tooltip("태양 대기 후광 퍼짐 지수 (수치가 높을수록 중심에 집중)")]
     [Range(1f, 32f)]
-    public float sunCoronaFalloff = 6.0f;
+    public float sunCoronaFalloff = 5.0f;
 
     [Header("🌌 삼탈워 스카이박스 설정 (Skybox)")]
     [Tooltip("스카이박스 노출도 (Exposure)")]
@@ -65,7 +65,7 @@ public class TotalWarEnvironmentLighting : MonoBehaviour
 
     [Tooltip("지평선 대기 안개 강도 (지형과 하늘 경계 융합)")]
     [Range(0.0f, 1.0f)]
-    public float horizonFogIntensity = 0.65f;
+    public float horizonFogIntensity = 0.55f;
 
     [Tooltip("지평선 안개 퍼짐 높이")]
     [Range(0.05f, 0.5f)]

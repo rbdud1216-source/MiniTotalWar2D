@@ -23,6 +23,13 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
         [Header(Wind Wave Animation)]
         _WindMultiplier ("Wind Sway Multiplier", Range(0.0, 3.0)) = 1.0
         _LeafFlutter ("Leaf Flutter Strength", Range(0.0, 2.0)) = 0.8
+
+        [Header(Fire and Charred Burning)]
+        _BurnProgress ("Burn Progress (0=Normal, 1=Charred Ash)", Range(0.0, 1.0)) = 0.0
+        _CharredMap ("Charred Ash Texture", 2D) = "black" {}
+        _CharredTile ("Charred Texture Tiling", Float) = 3.0
+        _CharredColor ("Charred Ash Color", Color) = (0.05, 0.05, 0.05, 1.0)
+        _EmberGlowColor ("Ember Glow Color", Color) = (3.5, 0.9, 0.15, 1.0)
     }
 
     SubShader
@@ -84,6 +91,10 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 half _Metallic;
                 float _WindMultiplier;
                 float _LeafFlutter;
+                float _BurnProgress;
+                float _CharredTile;
+                half4 _CharredColor;
+                half4 _EmberGlowColor;
                 float _Cull;
             CBUFFER_END
 
@@ -91,6 +102,8 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
             SAMPLER(sampler_BaseMap);
             TEXTURE2D(_BumpMap);
             SAMPLER(sampler_BumpMap);
+            TEXTURE2D(_CharredMap);
+            SAMPLER(sampler_CharredMap);
 
             // 전역 바람 변수 (TotalWarWindManager에서 실시간 공급)
             float4 _TotalWarWindVector; // (DirX * Strength, DirZ * Strength, Speed, Time)
@@ -121,18 +134,25 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 float stemPhase = windTime * 0.9 + dot(worldPos.xz, float2(0.03, 0.025));
                 float stemWave = sin(stemPhase) * (0.06 * windStrength);
 
-                // 4. 나뭇잎/잔가지 카드 고주파 파르르 떨림 (Leaf Flutter)
-                // 잎사귀 메쉬 버텍스별 고유 위상으로 파르르 떠는 토탈워 특유의 생동감 연출
-                float leafPhase = windTime * 4.2 + dot(input.positionOS.xyz, float3(2.5, 3.8, 1.7));
-                float leafWave = sin(leafPhase) * (0.045 * _LeafFlutter);
+                // 4. 나뭇잎/잔가지 바람결 진행 파동 (Traveling Wave & Directional Flutter)
+                // - 원점 중심 구형 좌표 대신 월드 바람 진행축(windTravelAxis)을 사용하여 바람이 파도처럼 숲을 훑고 지나가도록 구현
+                // - 노멀(Normal) 방향 팽창을 원천 배제하여 '원형 동심원 팽창' 및 '그림자 경계 교차로 인한 밝아짐/어두워짐 점멸' 완전 해결
+                float windTravelAxis = dot(worldPos.xz, normWindDir);
+                float leafNoise = dot(input.positionOS.xyz, float3(1.2, 2.4, 1.6));
+                float leafPhase = windTime * 3.8 + windTravelAxis * 0.65 + leafNoise;
+                float leafWave = sin(leafPhase) * (0.040 * _LeafFlutter);
 
-                // 5. 오브젝트 로컬 공간 변위 합성
+                // 5. 오브젝트 로컬 공간 변위 합성 (바람 진행 벡터 및 수직 횡방향 탄성 진동)
                 float3 worldWindDir = float3(normWindDir.x, 0.0, normWindDir.y);
                 float3 objWindDir = normalize(TransformWorldToObjectDir(worldWindDir));
+                float3 objWindCross = normalize(float3(-objWindDir.z, 0.0, objWindDir.x));
 
-                // 줄기 굽힘 변위 (Stem Sway) + 잎사귀 국소 진동 (Leaf Flutter)
+                // 줄기 굽힘 변위 (Stem Sway)
                 float3 stemDisp = objWindDir * (stemWave * stemBendFactor * _WindMultiplier);
-                float3 leafDisp = (input.normalOS * 0.65 + objWindDir * 0.35) * (leafWave * saturate(normY + 0.15) * _WindMultiplier);
+
+                // 나뭇잎 바람결 변위: 바람 진행 방향(70%) + 횡방향 탄성 살랑임(25%) + 풍압 하강(5%)
+                float3 leafDir = objWindDir * 0.70 + objWindCross * (cos(leafPhase * 0.75) * 0.25) - float3(0.0, 0.06, 0.0);
+                float3 leafDisp = leafDir * (leafWave * saturate(normY + 0.12) * _WindMultiplier);
 
                 float3 totalDisp = stemDisp + leafDisp;
 
@@ -164,28 +184,50 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 half4 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor;
 
             #if defined(_ALPHATEST_ON)
-                clip(albedo.a - _Cutoff);
+                // [사용자 요구사항 100% 반영: 착화 즉시 나뭇잎 소멸 & 화염 치환]
+                // 나뭇잎 색이 자글거리거나 붉어지며 지저분하게 남아있는 현상을 완전 박멸하고,
+                // 불이 붙는 바로 그 시점(_BurnProgress > 0.001)에 나뭇잎을 즉시 완전히 소멸시킵니다.
+                // 나뭇잎이 사라진 빈 공간은 나뭇잎 표면에서 타오르는 3중 복합 화염 파티클이 100% 대체합니다!
+                if (_BurnProgress > 0.001)
+                {
+                    clip(-1.0);
+                }
+
+                half currentAlpha = albedo.a * _BaseColor.a;
+                clip(currentAlpha - _Cutoff);
+            #else
+                // [줄기/기둥(Trunk) 점진적 숯 탄화 (Gradual Carbonization / Charring)]
+                // 불이 어느 정도 타오르는 중반(_BurnProgress 0.20~0.75)부터 나무 기둥과 가지가
+                // 원래 수피에서 삼탈워 공식 숯/재 텍스처(Charred Wood Ashes)로 서서히 그을려 검게 탄화됨!
+                half trunkCharFactor = saturate((_BurnProgress - 0.20) / 0.55);
+                trunkCharFactor = trunkCharFactor * trunkCharFactor * (3.0 - 2.0 * trunkCharFactor); // 부드러운 전이
+
+                half4 charredSample = SAMPLE_TEXTURE2D(_CharredMap, sampler_CharredMap, input.uv * _CharredTile);
+                half3 charredAlbedo = charredSample.rgb * _CharredColor.rgb * 1.8;
+                albedo.rgb = lerp(albedo.rgb, charredAlbedo, trunkCharFactor);
             #endif
 
                 float3 normalWS = normalize(input.normalWS);
             #if defined(_NORMALMAP)
                 half4 nSample = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv);
                 half3 normalTS = UnpackNormalScale(nSample, _BumpScale);
-                // Two-sided 양면 노멀 보정
                 normalWS = normalize(normalWS);
             #endif
 
                 // URP 메인 라이트 (태양광) 조명 연산
                 Light mainLight = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
                 half NdotL = saturate(dot(normalWS, mainLight.direction));
-                // 양면 렌더링 나뭇잎 투광(Subsurface Bounce) 근사
+            #if defined(_ALPHATEST_ON)
                 NdotL = max(NdotL, saturate(dot(-normalWS, mainLight.direction) * 0.45));
+            #endif
 
                 half3 diffuse = albedo.rgb * (mainLight.color * (NdotL * mainLight.shadowAttenuation));
-
-                // 앰비언트 환경광 (삼탈워 Trilight 지면 반사광)
                 half3 ambient = SampleSH(normalWS) * albedo.rgb;
                 half3 finalColor = diffuse + ambient;
+
+
+                // [기둥/줄기는 스스로 빛나는 네온사인이 아님]
+                // 기둥 본체는 검은 숯(Charred Bark)으로 그을릴 뿐이며, 빛은 화염 파티클의 실제 불길과 포인트 라이트가 비춤!
 
                 // 포그 적용
                 finalColor = MixFog(finalColor, input.fogFactor);
@@ -240,6 +282,10 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 half _Metallic;
                 float _WindMultiplier;
                 float _LeafFlutter;
+                float _BurnProgress;
+                float _CharredTile;
+                half4 _CharredColor;
+                half4 _EmberGlowColor;
                 float _Cull;
             CBUFFER_END
 
@@ -268,14 +314,18 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 float stemPhase = windTime * 0.9 + dot(worldPos.xz, float2(0.03, 0.025));
                 float stemWave = sin(stemPhase) * (0.06 * windStrength);
 
-                float leafPhase = windTime * 4.2 + dot(input.positionOS.xyz, float3(2.5, 3.8, 1.7));
-                float leafWave = sin(leafPhase) * (0.045 * _LeafFlutter);
+                float windTravelAxis = dot(worldPos.xz, normWindDir);
+                float leafNoise = dot(input.positionOS.xyz, float3(1.2, 2.4, 1.6));
+                float leafPhase = windTime * 3.8 + windTravelAxis * 0.65 + leafNoise;
+                float leafWave = sin(leafPhase) * (0.040 * _LeafFlutter);
 
                 float3 worldWindDir = float3(normWindDir.x, 0.0, normWindDir.y);
                 float3 objWindDir = normalize(TransformWorldToObjectDir(worldWindDir));
+                float3 objWindCross = normalize(float3(-objWindDir.z, 0.0, objWindDir.x));
 
                 float3 stemDisp = objWindDir * (stemWave * stemBendFactor * _WindMultiplier);
-                float3 leafDisp = (input.normalOS * 0.65 + objWindDir * 0.35) * (leafWave * saturate(normY + 0.15) * _WindMultiplier);
+                float3 leafDir = objWindDir * 0.70 + objWindCross * (cos(leafPhase * 0.75) * 0.25) - float3(0.0, 0.06, 0.0);
+                float3 leafDisp = leafDir * (leafWave * saturate(normY + 0.12) * _WindMultiplier);
 
                 float3 totalDisp = stemDisp + leafDisp;
                 float dispLen = length(totalDisp);
@@ -299,6 +349,10 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 UNITY_SETUP_INSTANCE_ID(input);
 
             #if defined(_ALPHATEST_ON)
+                if (_BurnProgress > 0.001)
+                {
+                    clip(-1.0);
+                }
                 half alpha = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).a * _BaseColor.a;
                 clip(alpha - _Cutoff);
             #endif

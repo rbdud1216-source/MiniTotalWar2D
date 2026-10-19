@@ -4,6 +4,7 @@
 mtllib Huangshan_Pine_A.mtl
 o Huangshan_Pine_A
 g Trunk
+usemtl Trunk
 usemtl Trunk_Mat
 v 1.5762 -0.2065 2.4180
 v 2.2988 -0.2079 2.6504
@@ -10224,6 +10225,7 @@ f 2529/2529/2529 2527/2527/2527 2523/2523/2523
 f 2528/2528/2528 2529/2529/2529 2526/2526/2526
 f 2523/2523/2523 2526/2526/2526 2529/2529/2529
 g Leaves
+usemtl Leaves
 usemtl Leaves_Mat
 v -10.2422 24.4844 -2.6289
 v -6.6836 26.2344 -8.8750
