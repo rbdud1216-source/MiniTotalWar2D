@@ -7,6 +7,7 @@ using UnityEngine;
 /// 게임을 실행(Play)하기 전 에디터 상태에서도 하이어라키 창에
 /// 'TotalWar_EnvironmentLighting', 'TotalWar_WindManager', 'Forest_West_HuangshanPine', 'Forest_East_BambooGrove'가
 /// 항상 존재하도록 자동 생성 및 배치하여, 개발자가 에디터에서 자유롭게 인스펙터 값을 조절할 수 있도록 보장합니다.
+/// (Updated: 2026-10-21 Nanman Jungle & Evergreen/Deciduous Separation)
 /// </summary>
 [InitializeOnLoad]
 public static class TotalWarEnvironmentHierarchyBuilder
@@ -17,45 +18,61 @@ public static class TotalWarEnvironmentHierarchyBuilder
         EditorSceneManager.sceneOpened += (scene, mode) => EnsureEnvironmentInScene(forceRebuild: false);
     }
 
+    [MenuItem("MiniTotalWar/🍂 사계절 설정/🌸 봄 (Spring - 화사한 새싹과 매화)", false, 10)]
+    public static void SetGlobalSeasonSpring()
+    {
+        TacticalForestZone.SetGlobalSeason(TacticalForestZone.Season.Spring);
+    }
+
+    [MenuItem("MiniTotalWar/🍂 사계절 설정/☀️ 여름 (Summer - 울창하고 짙은 녹음)", false, 11)]
+    public static void SetGlobalSeasonSummer()
+    {
+        TacticalForestZone.SetGlobalSeason(TacticalForestZone.Season.Summer);
+    }
+
+    [MenuItem("MiniTotalWar/🍂 사계절 설정/🍁 가을 (Autumn - 황금 은행과 선홍 단풍)", false, 12)]
+    public static void SetGlobalSeasonAutumn()
+    {
+        TacticalForestZone.SetGlobalSeason(TacticalForestZone.Season.Autumn);
+    }
+
+    [MenuItem("MiniTotalWar/🍂 사계절 설정/❄️ 겨울 (Winter - 창백한 설경과 설목)", false, 13)]
+    public static void SetGlobalSeasonWinter()
+    {
+        TacticalForestZone.SetGlobalSeason(TacticalForestZone.Season.Winter);
+    }
+
     [MenuItem("MiniTotalWar/☀️ 전장 환경 & 숲 하이어라키에 배치 (Bake Scene Environment)", false, 50)]
     public static void ManualBakeEnvironment()
     {
         AssetDatabase.Refresh();
         EnsureEnvironmentInScene(forceRebuild: true);
-    }
 
-    [MenuItem("MiniTotalWar/🔥 서쪽 숲 바람결 연쇄 화재 전파 개시 (Start Wildfire Propagation)", false, 70)]
-    public static void StartWildfirePropagationWestForest()
-    {
+        // 현재 씬의 모든 TacticalForestZone 최신 초목 모델/머티리얼로 재생성
         var zones = Object.FindObjectsByType<TacticalForestZone>(FindObjectsSortMode.None);
         foreach (var z in zones)
         {
-            if (z.name.Contains("West") || z.theme == TacticalForestZone.ForestTheme.HuangshanPine)
+            if (z != null)
             {
-                z.StartWildfirePropagation();
-                Debug.Log("<color=#FF5500><b>[MiniTotalWar] 🔥 서쪽 황산 소나무림 풍상측 나무에 착화! 바람을 타고 숲 전체로 불길이 전파됩니다.</b></color>");
-            }
-        }
-    }
-
-    [MenuItem("MiniTotalWar/🔥 서쪽 숲 전면 화재 즉시 점화 (Ignite West Forest Instant)", false, 71)]
-    public static void IgniteWestForest()
-    {
-        var zones = Object.FindObjectsByType<TacticalForestZone>(FindObjectsSortMode.None);
-        foreach (var z in zones)
-        {
-            if (z.name.Contains("West") || z.theme == TacticalForestZone.ForestTheme.HuangshanPine)
-            {
-                z.enableFireVFX = true;
-                z.burningTreesCount = 8;
                 z.GenerateVegetation();
-                z.SpawnFireVFX();
-                Debug.Log("<color=#FF5500><b>[MiniTotalWar] 🔥 서쪽 황산 소나무림에 삼탈워 화재 파티클이 점화되었습니다!</b></color>");
             }
         }
+        Debug.Log("<color=#00FF88><b>[MiniTotalWar] ☀️ 전장 환경, 바람, 조명 및 모든 숲 초목이 최신 3D 모델로 완벽히 갱신 배치되었습니다.</b></color>");
     }
 
-    [MenuItem("MiniTotalWar/🧯 전장 화재 전면 진압 (Extinguish All Fires)", false, 72)]
+    [MenuItem("MiniTotalWar/🔥 전장 모든 숲 화재 점화 (Ignite All Forest Fires)", false, 70)]
+    public static void IgniteAllForests()
+    {
+        var zones = Object.FindObjectsByType<TacticalForestZone>(FindObjectsSortMode.None);
+        foreach (var z in zones)
+        {
+            z.enableFireVFX = true;
+            z.SpawnFireVFX();
+        }
+        Debug.Log("<color=#FF5500><b>[MiniTotalWar] 🔥 전장의 모든 숲에 삼탈워 화재 VFX가 점화되었습니다!</b></color>");
+    }
+
+    [MenuItem("MiniTotalWar/🧯 전장 화재 전면 진압 (Extinguish All Fires)", false, 71)]
     public static void ExtinguishAllFires()
     {
         var zones = Object.FindObjectsByType<TacticalForestZone>(FindObjectsSortMode.None);

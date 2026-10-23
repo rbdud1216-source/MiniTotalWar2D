@@ -4,6 +4,7 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
     {
         [Header(Base Texture)]
         _BaseMap ("Albedo Map", 2D) = "white" {}
+        [HideInInspector] _MainTex ("BaseMap (RGB)", 2D) = "white" {}
         _BaseColor ("Base Color Tint", Color) = (1, 1, 1, 1)
 
         [Header(Alpha Cutout)]
@@ -26,9 +27,9 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
 
         [Header(Fire and Charred Burning)]
         _BurnProgress ("Burn Progress (0=Normal, 1=Charred Ash)", Range(0.0, 1.0)) = 0.0
-        _CharredMap ("Charred Ash Texture", 2D) = "black" {}
+        _CharredMap ("Charred Ash Texture", 2D) = "gray" {}
         _CharredTile ("Charred Texture Tiling", Float) = 3.0
-        _CharredColor ("Charred Ash Color", Color) = (0.05, 0.05, 0.05, 1.0)
+        _CharredColor ("Charred Ash Color", Color) = (0.35, 0.32, 0.30, 1.0)
         _EmberGlowColor ("Ember Glow Color", Color) = (3.5, 0.9, 0.15, 1.0)
     }
 
@@ -79,6 +80,7 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 float3 normalWS : TEXCOORD1;
                 float2 uv : TEXCOORD3;
                 float fogFactor : TEXCOORD4;
+                nointerpolation float leafPhaseNoise : TEXCOORD5;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -91,12 +93,16 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 half _Metallic;
                 float _WindMultiplier;
                 float _LeafFlutter;
-                float _BurnProgress;
                 float _CharredTile;
                 half4 _CharredColor;
                 half4 _EmberGlowColor;
                 float _Cull;
+                float _BurnProgress;
             CBUFFER_END
+
+            UNITY_INSTANCING_BUFFER_START(Props)
+                UNITY_DEFINE_INSTANCED_PROP(float, _BurnProgress)
+            UNITY_INSTANCING_BUFFER_END(Props)
 
             TEXTURE2D(_BaseMap);
             SAMPLER(sampler_BaseMap);
@@ -174,6 +180,11 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
                 output.fogFactor = ComputeFogFactor(vertexInput.positionCS.z);
 
+                // 나뭇잎 카드(클러스터)별 고유 시드 계산
+                // 로컬 좌표를 3.5m 단위로 퀀타이즈하여 같은 잎 카드 내 버텍스는 동일한 해시 시드를 공유
+                float3 leafCell = floor(input.positionOS.xyz * 3.5);
+                output.leafPhaseNoise = frac(sin(dot(leafCell, float3(12.9898, 78.233, 45.164))) * 43758.5453);
+
                 return output;
             }
 
@@ -182,29 +193,91 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 UNITY_SETUP_INSTANCE_ID(input);
 
                 half4 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor;
+                float burnProg = UNITY_ACCESS_INSTANCED_PROP(Props, _BurnProgress);
 
             #if defined(_ALPHATEST_ON)
-                // [사용자 요구사항 100% 반영: 착화 즉시 나뭇잎 소멸 & 화염 치환]
-                // 나뭇잎 색이 자글거리거나 붉어지며 지저분하게 남아있는 현상을 완전 박멸하고,
-                // 불이 붙는 바로 그 시점(_BurnProgress > 0.001)에 나뭇잎을 즉시 완전히 소멸시킵니다.
-                // 나뭇잎이 사라진 빈 공간은 나뭇잎 표면에서 타오르는 3중 복합 화염 파티클이 100% 대체합니다!
-                if (_BurnProgress > 0.001)
+                // [나뭇잎 점진적 유기적 연소 시스템 (Organic Per-Leaf Combustion System)]
+                // 1) 착화 전(burnProg <= 0.001)에는 단풍/탄화 로직을 건너뛰어 원본 녹색 잎 100% 보존
+                // 2) 3차원 공간 가지 뭉치(Branch Clump) 노이즈: 위에서 아래로 스캔하듯 사라지는 선형성 완전 제거
+                // 3) 고온 열기에 달아오르는 주황빛 앰버 화선(Combustion Wave Front) 선행
+                // 4) 삼탈워 원본 숯 텍스처(_CharredMap)를 나뭇잎에 직접 매핑하여 깊은 흑색 숯(Charcoal Black)과 회백색 재(Ash)로 완벽 탄화
+                // 5) 숯 결(Cracks)과 엽맥 고주파 노이즈를 타고 구멍이 숭숭 뚫리며 바스러지는 침식 디졸브(Perforated Ash Dissolve)
+
+                half dynamicCutoff = _Cutoff;
+
+                if (burnProg > 0.001)
                 {
-                    clip(-1.0);
+                    // 3차원 공간 가지 뭉치(Branch Clump) 노이즈:
+                    // X, Y, Z 입체 좌표를 결합하여 나뭇가지 덩어리별로 불규칙하게 시차 연소
+                    float branchClump = sin(input.positionWS.x * 0.95 + input.positionWS.z * 0.75) * cos(input.positionWS.y * 0.85 + input.positionWS.x * 0.40);
+                    float leafPhaseOffset = (input.leafPhaseNoise - 0.5) * 0.28 + branchClump * 0.16;
+
+                    // 불이 실제로 붙기 시작할 때부터 서서히 시차가 발현되도록 오프셋 가중치 적용
+                    float offsetWeight = saturate(burnProg * 2.5);
+                    float effectiveOffset = leafPhaseOffset * offsetWeight;
+
+                    // 개별 나뭇잎의 로컬 연소 진행도 (0.0: 완전 정상 녹색잎 -> 1.0: 완전 전소 소멸)
+                    float localProgress = saturate((burnProg + effectiveOffset - 0.03) / 0.52);
+
+                    if (localProgress >= 0.96)
+                    {
+                        clip(-1.0); // 완전히 타서 재가 된 잎 소멸
+                    }
+
+                    // --- 1단계: 고온 열기 화선 (Combustion Wave Front - 주황/앰버 달아오름) ---
+                    // 탄화 직전(localProgress 0.04 ~ 0.35), 고온 열기로 잎사귀 수분이 증발하며
+                    // 잎사귀 면 전체가 바싹 마른 단풍 앰버 및 이글거리는 숯불 주황/골드 톤으로 서서히 달아오름
+                    half heatFactor = smoothstep(0.04, 0.32, localProgress) * (1.0 - smoothstep(0.35, 0.65, localProgress));
+                    half3 heatColor = albedo.rgb * half3(1.6, 0.85, 0.22) + half3(0.42, 0.18, 0.02);
+                    albedo.rgb = lerp(albedo.rgb, heatColor, heatFactor * 0.85);
+
+                    // --- 2단계: 흑색 숯 및 재 탄화 (Charcoal & Ash Carbonization) ---
+                    half charProgress = smoothstep(0.22, 0.68, localProgress);
+                    half4 charredSample = SAMPLE_TEXTURE2D(_CharredMap, sampler_CharredMap, input.uv * _CharredTile);
+                    half sampleLuma = dot(charredSample.rgb, half3(0.299, 0.587, 0.114));
+                    if (charProgress > 0.001)
+                    {
+                        half3 leafCharredAlbedo;
+                        if (sampleLuma > 0.02)
+                        {
+                            leafCharredAlbedo = charredSample.rgb * half3(0.12, 0.11, 0.11);
+                        }
+                        else
+                        {
+                            leafCharredAlbedo = albedo.rgb * half3(0.05, 0.05, 0.05);
+                        }
+                        albedo.rgb = lerp(albedo.rgb, leafCharredAlbedo, charProgress);
+                    }
+
+                    // --- 3단계: 구멍 뚫림 및 침식 디졸브 (Perforated Ash Dissolve) ---
+                    half shrinkFactor = smoothstep(0.48, 0.95, localProgress);
+                    half crackNoise = (sampleLuma > 0.02) ? (charredSample.r - 0.5) * 0.35 : 0.0;
+                    half pinholeNoise = sin(input.uv.x * 45.0) * cos(input.uv.y * 45.0) * 0.14;
+                    dynamicCutoff = lerp(_Cutoff, 0.99, shrinkFactor) + (crackNoise + pinholeNoise) * shrinkFactor;
                 }
 
                 half currentAlpha = albedo.a * _BaseColor.a;
-                clip(currentAlpha - _Cutoff);
+                clip(currentAlpha - dynamicCutoff);
             #else
                 // [줄기/기둥(Trunk) 점진적 숯 탄화 (Gradual Carbonization / Charring)]
-                // 불이 어느 정도 타오르는 중반(_BurnProgress 0.20~0.75)부터 나무 기둥과 가지가
-                // 원래 수피에서 삼탈워 공식 숯/재 텍스처(Charred Wood Ashes)로 서서히 그을려 검게 탄화됨!
-                half trunkCharFactor = saturate((_BurnProgress - 0.20) / 0.55);
-                trunkCharFactor = trunkCharFactor * trunkCharFactor * (3.0 - 2.0 * trunkCharFactor); // 부드러운 전이
+                half trunkCharFactor = (burnProg > 0.001) ? saturate((burnProg - 0.10) / 0.55) : 0.0;
+                trunkCharFactor = trunkCharFactor * trunkCharFactor * (3.0 - 2.0 * trunkCharFactor);
 
-                half4 charredSample = SAMPLE_TEXTURE2D(_CharredMap, sampler_CharredMap, input.uv * _CharredTile);
-                half3 charredAlbedo = charredSample.rgb * _CharredColor.rgb * 1.8;
-                albedo.rgb = lerp(albedo.rgb, charredAlbedo, trunkCharFactor);
+                if (trunkCharFactor > 0.001)
+                {
+                    half4 charredSample = SAMPLE_TEXTURE2D(_CharredMap, sampler_CharredMap, input.uv * _CharredTile);
+                    half sampleLuma = dot(charredSample.rgb, half3(0.299, 0.587, 0.114));
+                    half3 charredAlbedo;
+                    if (sampleLuma > 0.02)
+                    {
+                        charredAlbedo = charredSample.rgb * half3(0.14, 0.13, 0.13);
+                    }
+                    else
+                    {
+                        charredAlbedo = albedo.rgb * half3(0.08, 0.075, 0.075);
+                    }
+                    albedo.rgb = lerp(albedo.rgb, charredAlbedo, trunkCharFactor);
+                }
             #endif
 
                 float3 normalWS = normalize(input.normalWS);
@@ -217,13 +290,22 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 // URP 메인 라이트 (태양광) 조명 연산
                 Light mainLight = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
                 half NdotL = saturate(dot(normalWS, mainLight.direction));
-            #if defined(_ALPHATEST_ON)
-                NdotL = max(NdotL, saturate(dot(-normalWS, mainLight.direction) * 0.45));
-            #endif
 
-                half3 diffuse = albedo.rgb * (mainLight.color * (NdotL * mainLight.shadowAttenuation));
-                half3 ambient = SampleSH(normalWS) * albedo.rgb;
+            #if defined(_ALPHATEST_ON)
+                // [삼탈워 실사 나뭇잎: 반투명 햇살 투광 (Subsurface Translucency)]
+                // 햇빛을 등진 반대편 나뭇잎에도 나뭇잎 세포 조직을 뚫고 나오는 화사한 투광 적용 (역광 암부 떡짐 방지)
+                half transmission = saturate(dot(-normalWS, mainLight.direction) * 0.75 + 0.25) * 0.50;
+                half directLight = (NdotL + transmission) * mainLight.shadowAttenuation;
+                half3 diffuse = albedo.rgb * (mainLight.color * directLight);
+
+                // 그림자 진 영역에서도 디테일이 뭉개지지 않도록 부드러운 스카이라이트 SH 바운스 확보
+                half3 ambient = max(SampleSH(normalWS), SampleSH(float3(0, 1, 0)) * 0.42) * albedo.rgb;
                 half3 finalColor = diffuse + ambient;
+            #else
+                half3 diffuse = albedo.rgb * (mainLight.color * (NdotL * mainLight.shadowAttenuation));
+                half3 ambient = max(SampleSH(normalWS), SampleSH(float3(0, 1, 0)) * 0.35) * albedo.rgb;
+                half3 finalColor = diffuse + ambient;
+            #endif
 
 
                 // [기둥/줄기는 스스로 빛나는 네온사인이 아님]
@@ -270,6 +352,8 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                nointerpolation float leafPhaseNoise : TEXCOORD1;
+                float3 positionWS : TEXCOORD2;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -282,12 +366,16 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 half _Metallic;
                 float _WindMultiplier;
                 float _LeafFlutter;
-                float _BurnProgress;
                 float _CharredTile;
                 half4 _CharredColor;
                 half4 _EmberGlowColor;
                 float _Cull;
+                float _BurnProgress;
             CBUFFER_END
+
+            UNITY_INSTANCING_BUFFER_START(Props)
+                UNITY_DEFINE_INSTANCED_PROP(float, _BurnProgress)
+            UNITY_INSTANCING_BUFFER_END(Props)
 
             TEXTURE2D(_BaseMap);
             SAMPLER(sampler_BaseMap);
@@ -339,7 +427,11 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 float3 normalWS = TransformObjectToWorldNormal(input.normalOS);
 
                 output.positionCS = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, _MainLightPosition.xyz));
+                output.positionWS = positionWS;
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+
+                float3 leafCell = floor(input.positionOS.xyz * 3.5);
+                output.leafPhaseNoise = frac(sin(dot(leafCell, float3(12.9898, 78.233, 45.164))) * 43758.5453);
 
                 return output;
             }
@@ -349,12 +441,29 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 UNITY_SETUP_INSTANCE_ID(input);
 
             #if defined(_ALPHATEST_ON)
-                if (_BurnProgress > 0.001)
+                float burnProg = UNITY_ACCESS_INSTANCED_PROP(Props, _BurnProgress);
+                half dynamicCutoff = _Cutoff;
+
+                if (burnProg > 0.001)
                 {
-                    clip(-1.0);
+                    float branchClump = sin(input.positionWS.x * 0.95 + input.positionWS.z * 0.75) * cos(input.positionWS.y * 0.85 + input.positionWS.x * 0.40);
+                    float leafPhaseOffset = (input.leafPhaseNoise - 0.5) * 0.28 + branchClump * 0.16;
+                    float offsetWeight = saturate(burnProg * 2.5);
+                    float effectiveOffset = leafPhaseOffset * offsetWeight;
+                    float localProgress = saturate((burnProg + effectiveOffset - 0.03) / 0.52);
+
+                    if (localProgress >= 0.96)
+                    {
+                        clip(-1.0);
+                    }
+
+                    half shrinkFactor = smoothstep(0.48, 0.95, localProgress);
+                    half pinholeNoise = sin(input.uv.x * 45.0) * cos(input.uv.y * 45.0) * 0.14;
+                    dynamicCutoff = lerp(_Cutoff, 0.99, shrinkFactor) + pinholeNoise * shrinkFactor;
                 }
+
                 half alpha = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).a * _BaseColor.a;
-                clip(alpha - _Cutoff);
+                clip(alpha - dynamicCutoff);
             #endif
 
                 return 0;

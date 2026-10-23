@@ -1,0 +1,7 @@
+# MTL file for Shrub_ElephantGrass_A
+newmtl Leaves
+Kd 1 1 1
+d 1
+newmtl Leaves_Mat
+Kd 1 1 1
+d 1

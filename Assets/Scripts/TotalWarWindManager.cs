@@ -70,6 +70,24 @@ public class TotalWarWindManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 현재 바람이 불어가는 월드 3D 방향 벡터(단위 벡터)를 반환합니다. (XZ 평면)
+    /// </summary>
+    public Vector3 GetWindDirectionVector()
+    {
+        float rad = windAngle * Mathf.Deg2Rad;
+        return new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad)).normalized;
+    }
+
+    /// <summary>
+    /// 현재 바람이 불어가는 2D 방향 벡터를 반환합니다. (X, Y)
+    /// </summary>
+    public Vector2 GetWindDirectionVector2()
+    {
+        float rad = windAngle * Mathf.Deg2Rad;
+        return new Vector2(Mathf.Sin(rad), Mathf.Cos(rad)).normalized;
+    }
+
+    /// <summary>
     /// 전역 셰이더 프로퍼티로 실시간 바람 벡터 및 매개변수를 브로드캐스트합니다.
     /// </summary>
     public void UpdateWindShaderGlobals()

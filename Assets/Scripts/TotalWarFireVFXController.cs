@@ -84,7 +84,51 @@ public class TotalWarFireVFXController : MonoBehaviour
         {
             targetRenderers = treeObj.GetComponentsInChildren<Renderer>(true);
             UpdateTreeMaterialProperties();
+
+            // 단독 프리팹 테스트 환경을 위한 체적/수종별 burnDuration 자동 보정
+            if (targetRenderers != null && targetRenderers.Length > 0 && Mathf.Approximately(burnDuration, 40.0f))
+            {
+                Bounds b = targetRenderers[0].bounds;
+                for (int i = 1; i < targetRenderers.Length; i++)
+                {
+                    if (targetRenderers[i] != null) b.Encapsulate(targetRenderers[i].bounds);
+                }
+
+                float r = Mathf.Max(b.extents.x, b.extents.z);
+                float h = b.size.y;
+                float vol = Mathf.Clamp((r / 2.5f) * (r / 2.5f) * (h / 5.0f), 0.35f, 3.2f);
+                float duration = 40.0f * Mathf.Pow(vol, 0.40f);
+
+                string nameLower = treeObj.name.ToLower();
+                if (nameLower.Contains("bamboo")) duration *= 0.65f;
+                else if (nameLower.Contains("pine")) duration *= 0.95f;
+                else duration *= 1.15f;
+
+                burnDuration = Mathf.Clamp(duration, 20.0f, 65.0f);
+            }
         }
+    }
+
+
+
+    /// <summary>
+    /// 외부에서 생성된 연기 파티클 시스템 등록
+    /// </summary>
+    public void RegisterSmokeParticle(ParticleSystem ps)
+    {
+        if (ps == null) return;
+        psSmoke = ps;
+        initialSmokeRate = ps.emission.rateOverTime.constant;
+    }
+
+    /// <summary>
+    /// 외부에서 생성된 불티 파티클 시스템 등록
+    /// </summary>
+    public void RegisterEmbersParticle(ParticleSystem ps)
+    {
+        if (ps == null) return;
+        psEmbers = ps;
+        initialEmbersRate = ps.emission.rateOverTime.constant;
     }
 
     private void InitComponents()
@@ -227,10 +271,34 @@ public class TotalWarFireVFXController : MonoBehaviour
     /// - 0.35 ~ 0.70: 절정 연소 및 기둥 숯 탄화 단계 (나뭇잎 소멸 디졸브 + 기둥/가지가 검은 숯으로 탄화)
     /// - 0.70 ~ 0.95: 연료(잎사귀) 소진 단계 (화염이 잦아들고 연기가 지배)
     /// - 0.98 ~ 1.0: 완전 전소 (화염 소멸, 앙상하게 탄화된 잿더미 나무 골격 완성)
+    /// <summary>
+    /// 외부에서 나뭇잎 표면에 생성된 화염 파티클 시스템을 명시적으로 등록
+    /// </summary>
+    public void RegisterFlameParticle(ParticleSystem ps)
+    {
+        if (ps == null) return;
+        if (!psFlamesList.Contains(ps))
+        {
+            if (psFlames == null) psFlames = ps;
+            psFlamesList.Add(ps);
+            float rate = ps.emission.rateOverTime.constant;
+            initialFlamesRates.Add(rate > 0.01f ? rate : 42f);
+            initialFlamesRate = rate > 0.01f ? rate : 42f;
+        }
+    }
+
+
+    /// <summary>
+    /// 삼국지 토탈워 본편 공식 화재 진화 5단계 수명주기 (나뭇잎 연소 생동감 극대화):
+    /// 1. [착화 전 훈연 (0.0 ~ 0.04, 약 1초)]: 불꽃 0개! 나무에서 불은 안 보이고 연기만 먼저 스멀스멀 피어오름
+    /// 2. [초기 발화 (0.04 ~ 0.10, 약 1~3초)]: 연기 속에서 첫 불씨 2~4개가 톡톡 발화
+    /// 3. [불길 증식 및 급격 확산 (0.10 ~ 0.35, 약 3~10초)]: 불의 숫자가 폭발적으로 늘어나며 수관 전역이 맹렬한 불바다로 변모
+    /// 4. [절정 연소 및 디졸브 (0.35 ~ 0.65, 약 10~18초)]: 수관 전체 화염 최대치 + 나뭇잎이 불꽃 속에서 자연스럽게 전소
+    /// 5. [전소 및 소멸 (0.65 ~ 0.90)]: 나뭇잎 소멸(0.65) 시 화염 즉시 0 차단, 앙상한 숯 가지만 남고 잔여 실연기 후 완전 종료
     /// </summary>
     private void UpdateParticleLifecycle()
     {
-        // 화염 (Flames) 제어: 나뭇잎이 불로 대체되듯이 피크를 이루다 잎이 사라지면 감쇠
+        // 1. 화염 (Flames) 제어: 착화 전 연기 선행 -> 점진적 개수 증식 -> 전소 즉시 0 차단
         for (int i = 0; i < psFlamesList.Count; i++)
         {
             var flamePs = psFlamesList[i];
@@ -238,65 +306,94 @@ public class TotalWarFireVFXController : MonoBehaviour
             float baseRate = (i < initialFlamesRates.Count) ? initialFlamesRates[i] : initialFlamesRate;
 
             var emission = flamePs.emission;
-            if (burnProgress >= 0.96f)
+            if (burnProgress >= 0.65f)
             {
+                // [5단계: 전소] 나뭇잎 소멸 시점에 허공 불꽃 100% 즉시 차단
                 emission.rateOverTime = 0f;
                 if (flamePs.isPlaying) flamePs.Stop(true, ParticleSystemStopBehavior.StopEmitting);
             }
-            else if (burnProgress >= 0.70f)
-            {
-                float decay = 1.0f - ((burnProgress - 0.70f) / 0.26f);
-                emission.rateOverTime = Mathf.Max(0f, baseRate * 1.35f * decay);
-            }
             else if (burnProgress >= 0.35f)
             {
-                // 절정 연소 피크 (나뭇잎 층 전체를 집어삼키는 화염)
-                emission.rateOverTime = baseRate * 1.35f;
+                // [4단계: 절정 연소] 수관 전체를 집어삼킨 맹렬한 화염 (기본의 1.45배)
+                emission.rateOverTime = baseRate * 1.45f;
+            }
+            else if (burnProgress >= 0.10f)
+            {
+                // [3단계: 불의 숫자가 폭발적으로 늘어남!] 0.4배 -> 1.45배로 나뭇잎 전역에 불꽃 급증식
+                float t = (burnProgress - 0.10f) / 0.25f;
+                emission.rateOverTime = Mathf.Lerp(baseRate * 0.40f, baseRate * 1.45f, t);
+            }
+            else if (burnProgress >= 0.04f)
+            {
+                // [2단계: 최초 발화] 연기 속에서 첫 불씨들이 톡톡 튀어나오며 착화 개시
+                float t = (burnProgress - 0.04f) / 0.06f;
+                emission.rateOverTime = Mathf.Lerp(baseRate * 0.15f, baseRate * 0.40f, t);
             }
             else
             {
-                // 초반: 나무 착화 즉시 나뭇잎 층 전체를 불꽃으로 대체하며 격렬히 점화
-                float grow = Mathf.Lerp(1.1f, 1.45f, burnProgress / 0.35f);
-                emission.rateOverTime = baseRate * grow;
+                // [1단계: 착화 전 훈연 (약 1초)] 🔥 불은 전혀 없고 연기만 먼저 남!
+                emission.rateOverTime = 0f;
             }
         }
 
-        // 불티 (Embers) 제어
+        // 2. 불티 (Embers) 제어: 불이 붙는 0.05부터 발생, 0.65에서 차단
         if (psEmbers != null)
         {
             var emission = psEmbers.emission;
-            if (burnProgress >= 0.95f)
+            if (burnProgress >= 0.65f || burnProgress < 0.05f)
             {
                 emission.rateOverTime = 0f;
-                if (psEmbers.isPlaying) psEmbers.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+                if (burnProgress >= 0.65f && psEmbers.isPlaying) 
+                    psEmbers.Stop(true, ParticleSystemStopBehavior.StopEmitting);
             }
-            else if (burnProgress >= 0.65f)
+            else if (burnProgress >= 0.40f)
             {
-                float decay = 1.0f - ((burnProgress - 0.65f) / 0.30f);
+                float decay = 1.0f - ((burnProgress - 0.40f) / 0.25f);
                 emission.rateOverTime = Mathf.Max(0f, initialEmbersRate * decay);
+            }
+            else if (burnProgress >= 0.10f)
+            {
+                float grow = (burnProgress - 0.10f) / 0.30f;
+                emission.rateOverTime = Mathf.Lerp(initialEmbersRate * 0.30f, initialEmbersRate, grow);
             }
             else
             {
-                emission.rateOverTime = initialEmbersRate;
+                float grow = (burnProgress - 0.05f) / 0.05f;
+                emission.rateOverTime = Mathf.Lerp(0f, initialEmbersRate * 0.30f, grow);
             }
         }
 
-        // 연기 (Smoke) 제어
+        // 3. 연기 (Smoke) 제어: 불 나기 전(0.0~0.12)부터 선행 훈연 -> 화재 절정 -> 전소 후 실연기 -> 완전 소멸
         if (psSmoke != null)
         {
             var emission = psSmoke.emission;
-            if (burnProgress >= 1.0f)
+            if (burnProgress >= 0.90f)
             {
-                // 전소 후 앙상한 가지에서 가느다랗게 피어오르는 잔여 연기
-                emission.rateOverTime = Mathf.Min(3.0f, initialSmokeRate * 0.25f);
+                // 완전 전소 완료 시 연기 완전 차단 및 정지
+                emission.rateOverTime = 0f;
+                if (psSmoke.isPlaying) psSmoke.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+            }
+            else if (burnProgress >= 0.68f)
+            {
+                // 앙상하게 탄 숯가지만 남은 단계: 실낱같이 가느다랗게 피어오르는 미세 잔여 훈연
+                float remain = 1.0f - ((burnProgress - 0.68f) / 0.22f);
+                emission.rateOverTime = Mathf.Max(0.5f, 2.0f * remain);
             }
             else if (burnProgress >= 0.50f)
             {
+                // 나뭇잎 소진에 따라 연기 발생량이 서서히 잦아듦
+                float decay = 1.0f - ((burnProgress - 0.50f) / 0.18f);
+                emission.rateOverTime = Mathf.Lerp(2.0f, initialSmokeRate * 1.25f, decay);
+            }
+            else if (burnProgress >= 0.10f)
+            {
+                // 불길 확산 및 절정 단계: 풍성한 훈연 구름
                 emission.rateOverTime = initialSmokeRate * 1.25f;
             }
             else
             {
-                emission.rateOverTime = initialSmokeRate;
+                // [착화 전 훈연 및 초기 발화 단계]: 불은 없거나 작은데 연기부터 뭉게뭉게 피어오름!
+                emission.rateOverTime = initialSmokeRate * 0.95f;
             }
         }
 
@@ -355,33 +452,54 @@ public class TotalWarFireVFXController : MonoBehaviour
 
     /// <summary>
     /// 전장 풍향/풍속에 따른 파티클 외력(Force over Lifetime) 실시간 동기화
+    /// 삼국지 토탈워 본편 공식: 풍향에 따라 연기 기둥이 순풍 쪽으로 비스듬히 눕고,
+    /// 불티(Embers)가 돌풍(Gust)을 타고 공중으로 흩날리는 전장 동역학 구현
     /// </summary>
     private void UpdateWindForces()
     {
         if (!reactToWind || TotalWarWindManager.Instance == null) return;
 
-        float windAngleRad = TotalWarWindManager.Instance.windAngle * Mathf.Deg2Rad;
-        float speed = TotalWarWindManager.Instance.windSpeed;
+        var wind = TotalWarWindManager.Instance;
+        float windAngleRad = wind.windAngle * Mathf.Deg2Rad;
+        // 월드 공간 기준 풍향 벡터 (Sin: X, Cos: Z)
         Vector3 windDir = new Vector3(Mathf.Sin(windAngleRad), 0.0f, Mathf.Cos(windAngleRad));
 
+        // 돌풍(Gust) 및 실효 풍력 계수 계산
+        float gustFactor = 1.0f;
+        if (wind.enableGust)
+        {
+            float timeVal = Application.isPlaying ? Time.time : (float)Time.realtimeSinceStartup;
+            float noise = Mathf.PerlinNoise(timeVal * wind.gustFrequency, 0.5f);
+            gustFactor = Mathf.Lerp(0.75f, wind.gustMultiplier, noise);
+        }
+        float effectiveWindPower = wind.windSpeed * wind.windStrength * gustFactor;
+
+        // 1. 연기 구름(Smoke): 바람에 순응하여 순풍 방향으로 기울어지면서도 열기 상승 부력 유지
         if (psSmoke != null)
         {
             var forceModule = psSmoke.forceOverLifetime;
             if (!forceModule.enabled) forceModule.enabled = true;
-            Vector3 force = windDir * (speed * windInfluenceOnSmoke) + new Vector3(0f, 1.0f, 0f);
-            forceModule.x = force.x;
-            forceModule.y = force.y;
-            forceModule.z = force.z;
+            forceModule.space = ParticleSystemSimulationSpace.World; // [핵심] 월드 풍향 1:1 일치 보장
+
+            // [핵심 해결: 수직 치솟음 차단] 수직 상승 외력을 1.35f -> 0.25f로 대폭 완화
+            // 연기가 위로 솟구치지 않고, 나뭇잎에서 스멀스멀 흘러나와 순풍 방향으로 낮게 드리우며 흐르도록 유도
+            Vector3 force = windDir * (effectiveWindPower * windInfluenceOnSmoke * 1.8f) + new Vector3(0f, 0.25f, 0f);
+            forceModule.x = new ParticleSystem.MinMaxCurve(force.x);
+            forceModule.y = new ParticleSystem.MinMaxCurve(force.y);
+            forceModule.z = new ParticleSystem.MinMaxCurve(force.z);
         }
 
+        // 2. 불티(Embers): 질량이 가벼워 바람을 타며 돌풍에 민감하게 사선 상공으로 비산
         if (psEmbers != null)
         {
             var forceModule = psEmbers.forceOverLifetime;
             if (!forceModule.enabled) forceModule.enabled = true;
-            Vector3 force = windDir * (speed * windInfluenceOnEmbers) + new Vector3(0f, 0.4f, 0f);
-            forceModule.x = force.x;
-            forceModule.y = force.y;
-            forceModule.z = force.z;
+            forceModule.space = ParticleSystemSimulationSpace.World; // [핵심] 월드 풍향 1:1 일치 보장
+
+            Vector3 force = windDir * (effectiveWindPower * windInfluenceOnEmbers * 2.4f) + new Vector3(0f, 0.35f, 0f);
+            forceModule.x = new ParticleSystem.MinMaxCurve(force.x);
+            forceModule.y = new ParticleSystem.MinMaxCurve(force.y);
+            forceModule.z = new ParticleSystem.MinMaxCurve(force.z);
         }
     }
 

@@ -1,0 +1,19 @@
+# MTL file for Castanopsis_Jungle_B
+newmtl Trunk
+Kd 1 1 1
+d 1
+newmtl Trunk_Mat
+Kd 1 1 1
+d 1
+newmtl Leaves
+Kd 1 1 1
+d 1
+newmtl Leaves_Mat
+Kd 1 1 1
+d 1
+newmtl Leaves
+Kd 1 1 1
+d 1
+newmtl Leaves_Mat
+Kd 1 1 1
+d 1

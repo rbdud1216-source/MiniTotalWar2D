@@ -28,6 +28,23 @@ public static class TotalWarTreeFirePrefabBuilder
         };
     }
 
+    [MenuItem("TotalWar/VFX/🔍 화재 머티리얼 로드 유효성 검증")]
+    public static void ValidateFireMaterials()
+    {
+        var fl = Resources.Load<Material>("VFX/M_TotalWar_CompositeFlames");
+        var sm = Resources.Load<Material>("VFX/M_TotalWar_WispySmoke");
+        var em = Resources.Load<Material>("VFX/M_TotalWar_Embers");
+        var ch = Resources.Load<Material>("VFX/M_TotalWar_CharredWood");
+
+        Debug.Log($"[Fire VFX Material Validation] Resources.Load: Flames={(fl != null ? fl.name : "NULL")}, Smoke={(sm != null ? sm.name : "NULL")}, Embers={(em != null ? em.name : "NULL")}, Charred={(ch != null ? ch.name : "NULL")}");
+
+        var sh1 = Shader.Find("TotalWar/VFX/CompositeFlames");
+        var sh2 = Shader.Find("Universal Render Pipeline/TotalWarFoliageWind");
+        var sh3 = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+
+        Debug.Log($"[Fire VFX Shader Validation] CompositeFlames={sh1 != null}, FoliageWind={sh2 != null}, ParticlesUnlit={sh3 != null}");
+    }
+
     [MenuItem("TotalWar/VFX/🌲 5대 나뭇가지 플립북 화재 프리팹 생성 (Build Multi-Branch Flipbook Fire Prefab)")]
     public static void BuildPrefab()
     {
@@ -135,19 +152,19 @@ public static class TotalWarTreeFirePrefabBuilder
         main.startLifetime = 2.67f;
         main.startSpeed = 0f;
 
-        // [사용자 피드백 반영] 불 크기 대폭 축소 (0.35m ~ 0.65m)
-        float minSize = (layerIndex == 0) ? 0.35f : ((layerIndex == 1) ? 0.40f : 0.30f);
-        float maxSize = (layerIndex == 0) ? 0.55f : ((layerIndex == 1) ? 0.65f : 0.50f);
+        // [삼탈워 본편 일치 화염 군집] 날렵한 0.32~0.65m 불꽃들이 가지 사이사이에 촘촘하게 타오름
+        float minSize = (layerIndex == 0) ? 0.32f : ((layerIndex == 1) ? 0.38f : 0.28f);
+        float maxSize = (layerIndex == 0) ? 0.58f : ((layerIndex == 1) ? 0.68f : 0.48f);
 
         main.startSize = new ParticleSystem.MinMaxCurve(minSize, maxSize);
-        main.startRotation = new ParticleSystem.MinMaxCurve(-0.06f, 0.06f);
+        main.startRotation = new ParticleSystem.MinMaxCurve(-0.08f, 0.08f);
         main.flipRotation = 0.5f;
         main.gravityModifier = 0f;
         main.startColor = Color.white;
-        main.maxParticles = 30;
+        main.maxParticles = 180;
 
         var emission = ps.emission;
-        emission.rateOverTime = 4.2f;
+        emission.rateOverTime = 72f;
 
         var shape = ps.shape;
         shape.enabled = true;
@@ -236,43 +253,68 @@ public static class TotalWarTreeFirePrefabBuilder
         var main = ps.main;
         main.duration = 1.0f;
         main.loop = true;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(2.0f, 3.8f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(0.6f, 1.4f);
-        main.startSize = new ParticleSystem.MinMaxCurve(1.8f, 3.2f);
-        main.startRotation = new ParticleSystem.MinMaxCurve(-3.14f, 3.14f);
-        main.gravityModifier = -0.12f;
-        main.startColor = new Color(0.24f, 0.18f, 0.12f, 0.60f);
-        main.maxParticles = 120;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(4.2f, 6.0f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.12f, 0.38f);
+        main.startSize = new ParticleSystem.MinMaxCurve(1.6f, 3.4f);
+        main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+        main.flipRotation = 0.5f;
+        main.gravityModifier = -0.022f;
+        main.startColor = Color.white;
+        main.maxParticles = 90;
 
         var emission = ps.emission;
-        emission.rateOverTime = 22f;
+        emission.rateOverTime = 18f;
 
         var shape = ps.shape;
-        shape.shapeType = ParticleSystemShapeType.Cone;
-        shape.radius = 1.2f;
-        shape.angle = 14f;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius = 1.6f;
+        shape.position = Vector3.zero;
+        shape.rotation = Vector3.zero;
+
+        var noise = ps.noise;
+        noise.enabled = true;
+        noise.strength = 0.32f;
+        noise.frequency = 0.30f;
+        noise.scrollSpeed = 0.50f;
+        noise.damping = true;
+
+        var rotOverLifetime = ps.rotationOverLifetime;
+        rotOverLifetime.enabled = true;
+        rotOverLifetime.z = new ParticleSystem.MinMaxCurve(-0.18f, 0.18f);
 
         var sizeOverLifetime = ps.sizeOverLifetime;
         sizeOverLifetime.enabled = true;
         AnimationCurve curve = new AnimationCurve();
-        curve.AddKey(0f, 0.35f);
-        curve.AddKey(0.4f, 1.0f);
-        curve.AddKey(1f, 1.6f);
+        curve.AddKey(0f, 0.55f);
+        curve.AddKey(0.35f, 1.15f);
+        curve.AddKey(1f, 1.75f);
         sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, curve);
 
         var colorOverLifetime = ps.colorOverLifetime;
         colorOverLifetime.enabled = true;
         Gradient grad = new Gradient();
         grad.SetKeys(
-            new GradientColorKey[] { new GradientColorKey(new Color(0.32f, 0.22f, 0.14f), 0f), new GradientColorKey(new Color(0.20f, 0.15f, 0.10f), 1f) },
-            new GradientAlphaKey[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.65f, 0.2f), new GradientAlphaKey(0.45f, 0.7f), new GradientAlphaKey(0f, 1f) }
+            new GradientColorKey[] { 
+                new GradientColorKey(new Color(0.56f, 0.51f, 0.46f), 0f), 
+                new GradientColorKey(new Color(0.40f, 0.38f, 0.36f), 1f) 
+            },
+            new GradientAlphaKey[] { 
+                new GradientAlphaKey(0f, 0f), 
+                new GradientAlphaKey(0.65f, 0.15f), 
+                new GradientAlphaKey(0.48f, 0.60f), 
+                new GradientAlphaKey(0f, 1f) 
+            }
         );
         colorOverLifetime.color = grad;
 
         var renderer = ps.GetComponent<ParticleSystemRenderer>();
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.alignment = ParticleSystemRenderSpace.View;
+        renderer.sortMode = ParticleSystemSortMode.Distance;
         if (smokeMat != null) renderer.material = smokeMat;
+
+        ps.Play();
     }
 
     private static void SetupEmbersPS(ParticleSystem ps, Material emberMat)
@@ -282,25 +324,37 @@ public static class TotalWarTreeFirePrefabBuilder
         var main = ps.main;
         main.duration = 1.0f;
         main.loop = true;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(1.6f, 3.2f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(1.2f, 3.4f);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.06f, 0.16f);
-        main.gravityModifier = -0.15f;
-        main.startColor = new Color(3.5f, 1.8f, 0.5f, 1.0f);
-        main.maxParticles = 160;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(2.2f, 3.8f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.35f, 0.75f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.035f, 0.075f);
+        main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+        main.gravityModifier = -0.14f;
+        main.startColor = new Color(3.2f, 1.6f, 0.4f, 1.0f);
+        main.maxParticles = 70;
 
         var emission = ps.emission;
-        emission.rateOverTime = 28f;
+        emission.rateOverTime = 16f;
 
         var shape = ps.shape;
-        shape.shapeType = ParticleSystemShapeType.Sphere;
-        shape.radius = 2.0f;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle = 14f;
+        shape.radius = 1.6f;
+        shape.rotation = new Vector3(-90f, 0f, 0f);
+
+        var noise = ps.noise;
+        noise.enabled = true;
+        noise.strength = 0.28f;
+        noise.frequency = 0.55f;
+        noise.scrollSpeed = 0.7f;
+        noise.damping = true;
 
         var sizeOverLifetime = ps.sizeOverLifetime;
         sizeOverLifetime.enabled = true;
         AnimationCurve curve = new AnimationCurve();
-        curve.AddKey(0f, 1f);
-        curve.AddKey(1f, 0.1f);
+        curve.AddKey(0f, 0.8f);
+        curve.AddKey(0.3f, 1.1f);
+        curve.AddKey(1f, 0.05f);
         sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, curve);
 
         var renderer = ps.GetComponent<ParticleSystemRenderer>();

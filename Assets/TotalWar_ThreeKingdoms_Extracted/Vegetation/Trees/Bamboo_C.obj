@@ -1,11 +1,9 @@
-# Total War Three Kingdoms Converted Mesh (Accurate UV & Normals)
+# Total War Three Kingdoms Converted Mesh (Accurate UV & Normals & Standardized Submeshes)
 # Model: Bamboo_C
 # Skeleton: tree
 mtllib Bamboo_C.mtl
 o Bamboo_C
 g Trunk
-usemtl Trunk
-usemtl Trunk_Mat
 v 0.1254 1.7695 -0.0000
 v 0.1260 2.9980 -0.0000
 v 0.0755 3.0000 0.0875
@@ -567,6 +565,7 @@ vn -0.0001 -1.0000 -0.0000
 vn -0.0001 -1.0000 0.0000
 vn -0.0001 -1.0000 0.0000
 vn -0.0001 -1.0000 0.0000
+usemtl Trunk_Mat
 f 1/1/1 2/2/2 3/3/3
 f 3/3/3 4/4/4 1/1/1
 f 5/5/5 1/1/1 4/4/4
@@ -756,8 +755,6 @@ f 182/182/182 185/185/185 183/183/183
 f 185/185/185 186/186/186 183/183/183
 f 182/182/182 187/187/187 185/185/185
 g Leaves
-usemtl Leaves
-usemtl Leaves_Mat
 v 2.3984 30.2813 0.1379
 v 2.3301 30.1406 0.1509
 v 2.5078 30.0000 0.0237
@@ -10694,6 +10691,7 @@ vn 0.2428 0.8413 -0.4832
 vn -0.3818 0.8262 -0.4148
 vn 0.4346 0.6777 -0.5933
 vn -0.2251 0.5918 -0.7739
+usemtl Leaves_Mat
 f 188/188/188 189/189/189 190/190/190
 f 189/189/189 188/188/188 191/191/191
 f 191/191/191 188/188/188 192/192/192

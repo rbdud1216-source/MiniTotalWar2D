@@ -7,19 +7,50 @@
 
 ## 💡 핵심 요약 & 역할 (Summary & Role)
 
-- **핵심 역할**: 삼국지 토탈워 본편의 실제 에셋을 기반으로 전장에 **숲 매복(Ambush) 및 시야 은폐/사선 차폐 메커니즘**을 구현합니다.
+- **핵심 역할**: 삼국지 토탈워 본편의 실제 에셋을 기반으로 전장에 **숲 매복(Ambush) 및 시야 은폐/사선 차폐 메커니즘**을 구현하고, 중국 전역의 다양한 생태계(화북 소나무림, 강남 수변림, 중원 평야림, **남만 원시 밀림**, 격전지 고목림 등)와 사계절(봄/여름/가을/겨울)에 대응하는 인스펙터 토글 시스템을 제공합니다.
 - **실제 삼국지 토탈워 3D 초목 모델 연동 (Total War Extracted 3D Assets)**:
-  - 기존의 임시 실린더+구체 나무와 깨진 샘플 프리팹을 전면 퇴출하고, 리버스 엔지니어링(REA) 파이프라인으로 추출된 순수 토탈워 3D 모델(`.obj`)과 원본 텍스처(`.dds`)를 URP Lit 셰이더로 렌더링합니다.
+  - 스팀 본편 `vegetation.pack` 리버스 엔지니어링(REA) 파이프라인으로 추출된 순수 토탈워 17대 거목 3D 모델(`.obj`)과 사계절 원본 텍스처(`.dds`)를 URP FoliageWind 및 Lit 셰이더로 렌더링합니다.
   - 저장 위치: `Assets/TotalWar_ThreeKingdoms_Extracted/Vegetation/`
-    - `Trees/`: `Huangshan_Pine_A/B` (황산 소나무), `Pine_A` (소나무), `Bamboo_A/C` (대나무), `Castanopsis_A` (활엽수)
-    - `Shrubs/`: `Pine_Shrub_Q` (솔관목), `Fern_Royal_A` (고사리), `Scholar_Bush_K` (선비덤불), `Convallaria_Shrub_A` (은방울꽃)
-    - `Textures/`: 총 2,125개 텍스처 (672.9MB)
-      - `Branches_Leaves/`: 실제 3D 모델용 고해상도 솔잎 가지, 대나무 잎, 활엽수, 버드나무 가지 텍스처
-      - `Trunks/`: 황산소나무, 대나무, 소나무, 활엽수 수피 텍스처
-      - `Seasons/`: 사계절 빌보드 텍스처 (`Spring/`, `Summer/`, `Autumn/`, `Winter/`)
-- **테마별 숲 및 사계절 선택 (Themes & Seasons)**:
-  - 숲 테마: `Mixed` (혼합림), `HuangshanPine` (황산 소나무림), `BambooGrove` (대나무숲), `CastanopsisWood` (활엽수림)
-  - 계절 설정: `Summer` (여름 녹음), `Spring` (봄 연초록), `Autumn` (가을 단풍), `Winter` (겨울 설경)
+    - `Trees/`: 총 46개 3D 거목/고사목 모델
+      - **1. 🌲 온대/한대 상록수**: `Huangshan_Pine_A/B` (황산 소나무), `Pine_A` (직립 소나무), `Bamboo_A/C` (대나무), `Castanopsis_A` (구실잣밤나무), `Camphor_A` (녹나무)
+      - **2. 🌴 열대/남만 상록 식생**: `Ficus_C/D` (남만 반얀트리), `Palm_Banana_A/B` (바나나 야자), `Palm_Coconut_A/C` (코코넛 야자), `Castanopsis_Jungle_A/B` (정글 구실잣밤), `Palm_Windmill_A` (종려야자)
+      - **3. 🍂 낙엽수 & 꽃나무**: `Magnolia_A/B` (목련나무 거목), `Plum_A` (매화나무), `Ginkgo_A/B` (은행나무), `Maple_A/B` (단풍나무), `Willow_A/B` (수양버들), `Scholar_A/B` (회화나무/선비나무)
+      - **6. 🪵 전장 고목 & 고사목 (총 19종)**:
+        - `Pine_Dead_M/O/S` (앙상한 소나무 고사목 3종, 잎 0개 순수 뼈대)
+        - `Pine_Broken_H/K/L/N` (부러진 소나무 4종, 줄기+잔여 솔잎)
+        - `Scholar_Broken_A/B/C/D` (부러진 회화나무 4종, 꺾인 중원 고목 뼈대)
+        - `Castanopsis_Dead_A/B/C/D/E` (활엽 고사목 5종, 마른 거목 뼈대)
+        - `Castanopsis_Jungle_Dead_A/B/C` (남만 정글 고사목 3종, 덩굴 뒤엉킨 밀림 고목)
+    - `Shrubs/`: 총 29개 관목/초본/밑동/나뭇가지 모델
+      - **1. 온대 관목**: `Shrub_Tea_A` (차나무 상록 관목)
+      - **2. 열대 관목**: `Shrub_ElephantGrass_A` (남만 코끼리풀), `Shrub_Fern_Sword_A` (열대 검고사리)
+      - **3. 꽃덤불**: `Shrub_Magnolia_A` (목련 관목), `Shrub_Rhododendron_A` (진달래/철쭉 꽃덤불)
+      - **4. 수변 & 농경지**: `Shrub_Lotus_A` (연꽃 수생 식생), `Shrub_Rice_A` (벼 논작물), `Shrub_Millet_A` (기장 밭작물)
+      - **5. 지표 하층 관목**: `Pine_Shrub_Q` (솔관목), `Fern_Royal_A` (왕고사리), `Scholar_Bush_K` (선비덤불), `Convallaria_Shrub_A` (은방울꽃)
+      - **6. 밑동, 그루터기 & 나뭇가지 잔해 (총 17종)**:
+        - `Bamboo_Stump_A/B/C/D` (단일 대나무 밑동 4종)
+        - `Bamboo_Stump_Group_A/B/C/D` (대나무 밑동 군락 4종)
+        - `Stump_A/B/D` (거목 순수 밑동 3종 - 대형/중형/소형 밑동, 삼탈워 원본 나이테 단면 및 수피 1:1 정합)
+        - `Stump_C` (싹튼 밑동 1종 - 원작 0.35배 스케일, 새순 잎사귀 Cutout 및 사계절 잎 색상 대응)
+        - `BrokenBranch_A/B/C/D` (부러진 나뭇가지 잔해 더미 4종)
+        - `Stump_E` (지표 잔가지 파편 1종 - 원작 0.22배 스케일, 지표면 밀착 투명 컷아웃 Clutter)
+    - `Textures/`: 고해상도 수피, 잎사귀, 사계절 텍스처 DDS 860여 종 완벽 연동.
+- **⛰️ 지형 적응 및 뿌리 고정 (Terrain Anchoring) 물리 알고리즘 탑재**:
+  - `SampleTerrainNormal()` 지형 법선 계산을 통해 가파른 산비탈에서도 거목의 뿌리를 땅속으로 최대 0.85m 파묻는 동적 매립(`sinkDepth`)을 수행하여 **경사지 공중 부양을 원천 방지**합니다.
+  - 지형 경사면에 맞춘 자연스러운 기울임 블렌딩(`slopeAlignmentWeight`)과 40도 초과 가파른 절벽 스폰 제한 필터링 완비.
+- **🛠️ `TacticalForestZoneEditor.cs` 전용 커스텀 인스펙터 제공**:
+  - 인스펙터 상단에 **[🌲 초목 즉시 재생성]**, **[🌸 봄 / ☀️ 여름 / 🍁 가을 / ❄️ 겨울]**, **[🔥 화재 점화 / 🧯 화재 진압]** 원클릭 컨트롤 버튼 제공으로 체크박스 토글 즉시 씬 뷰 실시간 갱신 보장.
+- **인스펙터 토글 및 테마별 숲·사계절 선택 (Inspector Toggles & Themes)**:
+  - **상록수 vs 낙엽수 카테고리 분리 인스펙터 토글**: 계절 변화에도 변하지 않는 상록수(10종)와 계절에 반응하는 낙엽수(5종), 지표 관목(6종)을 명확한 헤더와 한글 툴팁으로 분리 제공.
+  - **지역별 숲 테마 프리셋**:
+    - `NanmanJungle` (**남만 밀림**: 반얀트리 + 바나나 야자 + 코코넛 야자 + 남만 정글 구실잣밤 + 종려야자 + 코끼리풀 + 검고사리)
+    - `JiangnanRiverside` (강남 수변림: 수양버들 + 대나무 + 단풍나무)
+    - `CentralPlains` (중원 평야림: 은행나무 + 회화나무 + 매화나무)
+    - `HuangshanPine` (황산 소나무림: 황산소나무 + 일반소나무)
+    - `BambooGrove` (대나무 군락지: 삼탈워 순수 대나무숲)
+    - `Mixed` (혼합림: 전 수종 전체 선택)
+    - `CustomSelection` (사용자 지정: 체크박스로 자유 조합)
+  - **사계절 환경 모드 (`currentSeason`)**: `Summer` (여름 녹음), `Spring` (봄 매화/새싹), `Autumn` (가을 황금 은행/선홍 단풍), `Winter` (겨울 설화/창백 잎)
 - **토탈워 전술 시야 규칙 연동**:
   1. **숲 내부 은폐 (Forest Stealth)**: 숲 속에 들어간 부대(`isHiddenInForest = true`)는 **25m 이내로 초근접하지 않으면 아군 시야에서 완전히 사라집니다.** (단, 전력질주/구보 시에는 45m로 확장)
   2. **숲 관통 사선 차폐 (Line of Sight Block)**: 울창한 숲 지대를 가로지르는 사선은 차단되어, 숲 너머의 적 부대는 보이지 않습니다.
@@ -34,17 +65,19 @@
   - `Awake()`, `Update()`: 지형 고도 자동 스냅 (`SnapToTerrain`)
 - 📁 **2. 삼국지 토탈워 초목 생성 엔진 (Total War Vegetation Spawner)**
   - `GenerateVegetation()`: 지정 형상 및 테마에 맞춰 3D 나무 및 수풀 스폰
-  - `InitTotalWarMaterials()`: 토탈워 원본 DDS 텍스처를 적용한 URP Lit 머티리얼 구성
+  - `InitTotalWarMaterials()`: 3중 방어형(Resources.Load -> AssetDatabase -> 런타임 프로그래매틱 머티리얼) 안전 로더를 통해 화염, 훈연 연기, 불티 머티리얼의 null 참조를 100% 원천 차단하고 마젠타(핑크색) 깨짐 방지
   - `LoadTreeModels()`: 선택된 테마에 해당하는 토탈워 3D 나무 OBJ 프리팹 로드
   - `LoadShrubModels()`: 지표 관목/고사리/덤불 3D OBJ 프리팹 로드
-  - `ApplyTreeMaterials()`: 줄기(Trunk)와 잎(Leaves) 서브메시에 각각 전용 머티리얼 바인딩
-  - `ApplyShrubMaterials()`: 관목 서브메시에 텍스처 머티리얼 바인딩
-  - `ClearVegetation()`: 생성된 초목 오브젝트 일괄 정리
+  - `ApplyTreeMaterials()`: `GetComponentsInChildren<MeshRenderer>(true)`로 모든 자식 렌더러를 탐색하여 `Trunk`(줄기)와 `Leaves`(나뭇잎) 자식 오브젝트에 각각 1:1로 정확한 전용 머티리얼을 단독 바인딩
+  - `ApplyShrubMaterials()`: `GetComponentsInChildren<MeshRenderer>(true)`로 관목/초본/작물 자식 렌더러에 1:1 전용 머티리얼 바인딩
+  - `RefreshVegetationMaterials()`: `vegetationRoot`의 모든 식생 인스턴스를 순회하며 계층형 자식 렌더러 머티리얼 일괄 재바인딩
 - 📁 **3. 화재 전파 및 나뭇잎 서브메시 표면 화재 시스템 (Wildfire Simulation & Leaves Surface Fire VFX)**
   - `CalculateTreeLeavesCenterAndRadius()`: 나무 밑동(지면)을 배제하고 Submesh 1(Leaves)의 월드 3D 중심점 및 수관 반경 정밀 산출
-  - `CreateTreeFireInstance()`: 전용 복합 화염 셰이더(`TotalWar/VFX/CompositeFlames`)와 머티리얼(`M_TotalWar_CompositeFlames`)을 바인딩하여, 단일 파티클(불 하나)에 삼탈워 3종 화염(A 코어, B 너울, H 팁)이 1:1로 정확하게 포개어져 타오르는 일체형 복합 화염(`Flames_Composite_TotalWar`) 및 2200K 화재 포인트 라이트 스폰
-  - `SetupFlamesPS()`: 삼국지 토탈워 8x8 (64프레임) 플립북, 24 FPS 하드웨어 고정, 프레임 간 크로스페이드 보간, 아담한 크기(0.35m~0.55m)로 나뭇잎 서브메시(`Submesh 1: Leaves`) 표면 밀착 연소
-  - `TotalWarFoliageWind.shader`: 착화 시점(`_BurnProgress > 0.001`)에 0초 만에 나뭇잎과 그림자를 즉시 클립 소멸시켜 자글거림/붉은색 노이즈를 100% 박멸하고 나뭇잎 자리를 화염이 즉시 대체, 줄기(Trunk)는 40초 동안 검은 숯으로 점진적 탄화
+  - `CreateTreeFireInstance()`: 전용 복합 화염 셰이더(`TotalWar/VFX/CompositeFlames`)와 머티리얼(`M_TotalWar_CompositeFlames`)을 바인딩하여, 단일 파티클(불 하나)에 삼탈워 3종 화염(A 코어, B 너울, H 팁)이 1:1로 정확하게 포개어져 타오르는 일체형 복합 화염(`Flames_Composite_TotalWar`), 2200K 화재 포인트 라이트 및 삼탈워 정품 볼륨 잿빛/황갈색 연기(`wispy_smoke_diffuse`) 스폰
+  - `SetupFlamesPS()`: 삼탈워 본편 1:1 일치 규격으로 불꽃 크기를 0.32~0.68m로 아담하고 날렵하게 조정하고, 방출량(72f/s, 최대 180개 파티클)을 약 3배로 대폭 늘려 나뭇가지 사이사이에서 춤추는 촘촘하고 풍성한 화염 군집망 복원
+  - `TotalWarFoliageWind.shader`: 착화 전(`burnProg <= 0.001`)에는 연소 로직을 바이패스하여 100% 정상 녹색 잎 보존(단풍 버그 원천 차단), 착화 시 가중치 오프셋 적용, 3D 공간 가지 클러스터링(`branchClump`) 기반 입체 시차 연소, 삼탈워 원본 숯 텍스처 결 및 고주파 엽맥 결 기반 숯 결 구멍 침식 디졸브(Perforated Ash Dissolve) 및 양면 반투명 햇살 투광(Subsurface Translucency)으로 역광 암부 뭉개짐 방지
+  - `SetupSmokePS()`: 삼탈워 규격 볼륨 크기(1.4~3.4m), 수관 체적 구형(`Sphere`) 에미터, 초저속(`0.12~0.38m/s`), 짙은 웜 차콜 알파(0.75)로 화염 뒤편을 은은하고 자욱하게 감싸주는 자연스러운 대기 훈연(Soft Atmospheric Smoke) 연출
+  - `TotalWarFireVFXController.cs`: 박진감 넘치는 삼탈워 공식 5단계 화재 수명주기(① 0.0~0.04 착화 전 훈연 선행 불꽃 0개 -> ② 0.04~0.10 첫 불씨 발화 -> ③ 0.10~0.35 불길 급격 증식 수관 불바다 -> ④ 0.35~0.65 절정 연소 및 나뭇잎 전소 -> ⑤ 0.65 화염 즉시 0 차단 및 0.90 연기 완전 종료) 및 풍향/풍속 월드 동역학 시뮬레이션 제어
   - `IgniteTreeNode()`: 단일 나무 노드 수관에 화재 착화
   - `UpdateWildfireSimulation()`: 전장 바람(풍향/풍속) 연동 이웃 나무 연쇄 착화 및 숲 은폐 해제 판정
 - 📁 **4. 공간 쿼리 및 시야 판정 파이프라인 (Spatial Queries & LoS Engine)**
@@ -112,11 +145,61 @@ flowchart TD
 | 필드명 | 타입 | 기본값 | 역할 및 튜닝 가이드 |
 | :--- | :--- | :--- | :--- |
 | `shape` | `ZoneShape` | `Circle` | 숲 구역 형태 (`Circle`: 원형 숲, `Box`: 직사각형 숲) |
-| `theme` | `ForestTheme` | `Mixed` | 숲 수종 테마 (`Mixed`, `HuangshanPine`, `BambooGrove`, `CastanopsisWood`) |
+| `theme` | `ForestTheme` | `CustomSelection` | 숲 테마 프리셋 (`NanmanJungle`, `JiangnanRiverside`, `CentralPlains`, `HuangshanPine`, `BambooGrove`, `CastanopsisWood`, `Mixed`, `CustomSelection`) |
+| `currentSeason` | `Season` | `Summer` | 사계절 환경 모드 (`Summer`: 여름 녹음, `Spring`: 봄 매화/새싹, `Autumn`: 가을 황금 은행/선홍 단풍, `Winter`: 겨울 설화) |
 | `radius` | `float` | `30.0f` | 원형 숲의 유효 반경 (단위: m) |
 | `boxSize` | `Vector2` | `(50, 35)` | 직사각형 숲의 가로(X), 세로(Z) 크기 (단위: m) |
-| `treeCount` | `int` | `24` | 스폰할 삼국지 토탈워 3D 나무 개수 |
-| `bushCount` | `int` | `45` | 스폰할 삼국지 토탈워 3D 관목/수풀 개수 |
+| 필드명 | 타입 | 기본값 | 역할 및 튜닝 가이드 |
+| :--- | :--- | :--- | :--- |
+| `shape` | `ZoneShape` | `Circle` | 숲 구역 형태 (`Circle`: 원형 숲, `Box`: 직사각형 숲) |
+| `theme` | `ForestTheme` | `CustomSelection` | 숲 테마 프리셋 (`NanmanJungle`, `JiangnanRiverside`, `CentralPlains`, `HuangshanPine`, `BambooGrove`, `CastanopsisWood`, `BattlefieldRuins`, `Mixed`, `CustomSelection`) |
+| `currentSeason` | `Season` | `Summer` | 사계절 환경 모드 (`Summer`: 여름 녹음, `Spring`: 봄 매화/목련 개화, `Autumn`: 가을 황금 은행/선홍 단풍, `Winter`: 겨울 설화) |
+| `radius` | `float` | `30.0f` | 원형 숲의 유효 반경 (단위: m) |
+| `boxSize` | `Vector2` | `(50, 35)` | 직사각형 숲의 가로(X), 세로(Z) 크기 (단위: m) |
+| **🌲 1. [온대/한대 상록수]** | | | **사계절 내내 푸른 잎사귀 유지 (소나무는 겨울에만 은백색 설화 적설)** |
+| `spawnHuangshanPine` | `bool` | `true` | **황산 소나무** - 굽이치는 가지와 넓은 솔잎 수관 (겨울 설화) |
+| `spawnPine` | `bool` | `true` | **직립 소나무** - 하늘로 곧게 뻗은 일반 소나무 (겨울 설화) |
+| `spawnBamboo` | `bool` | `true` | **대나무** - 사철 푸른 빽빽한 줄기의 청록색 대나무림 (빠른 전소) |
+| `spawnCastanopsis` | `bool` | `true` | **구실잣밤나무** - 온대/난대 남방의 짙푸른 상록 참나무과 거목 |
+| `spawnCamphor` | `bool` | `true` | **녹나무** - 거대한 상록 활엽 거목 (장뇌유 성분으로 화염 폭발 연소) |
+| `spawnShrubTea` | `bool` | `true` | **차나무** - 중국 남방 명차 밭의 둥글고 푸른 상록 관목/소교목 |
+| **🌴 2. [열대/남만 상록 식생]** | | | **사계절 짙고 울창한 원시 정글 녹음 (사계절 불변)** |
+| `spawnFicus` | `bool` | `true` | **남만 반얀트리 / 피쿠스 거목** - 기근과 덩굴이 얽힌 남만 원시 거목 |
+| `spawnBananaPalm` | `bool` | `true` | **남만 바나나 야자** - 넓은 타원형 잎사귀의 열대 야자수 |
+| `spawnCoconutPalm` | `bool` | `true` | **남만 코코넛 야자** - 원시 밀림 높게 뻗은 열대 코코넛 야자수 |
+| `spawnJungleCastanopsis`| `bool`| `true` | **남만 정글 구실잣밤** - 이끼와 덩굴이 얽힌 짙은 정글 활엽수 |
+| `spawnPalm` | `bool` | `true` | **종려 야자** - 남만 밀림 및 남방 전장의 열대 부채꼴 야자 |
+| `spawnShrubElephantGrass`| `bool`| `true` | **열대 코끼리풀** - 열대 정글 바닥을 무성하게 뒤덮는 키 큰 거대 초본 |
+| `spawnShrubSwordFern` | `bool` | `true` | **열대 검고사리** - 남만 밀림 숲속의 날렵한 열대 양치식물 |
+| **🍂 3. [낙엽수 & 꽃나무]** | | | **계절 반응 (봄 개화/새싹, 가을 단풍, 겨울 설화)** |
+| `spawnMagnolia` | `bool` | `true` | **목련나무 거목** - 봄철 크고 화사한 백목련 꽃이 만개하는 중국 고유 거목 |
+| `spawnPlum` | `bool` | `true` | **매화나무** - 고즈넉한 봄철 화사한 분홍/백매화 꽃 만개 |
+| `spawnGinkgo` | `bool` | `true` | **은행나무** - 중원 평야의 장엄한 고목 (가을철 찬란한 황금빛 단풍) |
+| `spawnMaple` | `bool` | `true` | **단풍나무** - 가을철 선홍빛 붉은 단풍잎으로 전장을 물들이는 활엽수 |
+| `spawnWillow` | `bool` | `true` | **수양버들** - 축 늘어진 가지를 드리운 강남 수변목 (봄 새싹, 가을 황록색) |
+| `spawnScholar` | `bool` | `true` | **회화나무 / 선비나무** - 중원 평야의 기품 있는 고목 (봄 새싹, 가을 갈색) |
+| `spawnShrubMagnolia` | `bool` | `true` | **목련 관목** - 숲 가장자리와 정원을 수놓는 목련 덤불 |
+| `spawnShrubRhododendron`| `bool`| `true` | **진달래 / 철쭉** - 봄철 분홍빛 꽃잎이 화사하게 만개하는 꽃덤불 |
+| **🌾 4. [수변 & 농경지 식생]** | | | **강변 습지 및 평야 논밭** |
+| `spawnShrubLotus` | `bool` | `true` | **연꽃 / 수생 식생** - 강남 수변, 연못, 습지대의 둥근 연잎과 연꽃 |
+| `spawnShrubRice` | `bool` | `true` | **벼 / 논 농경지 작물** - 중원 및 강남 평야의 비옥한 논밭 벼 이삭 |
+| `spawnShrubMillet` | `bool` | `true` | **기장 / 조 밭작물** - 북방 및 건조 평야의 거친 밭작물 |
+| **🌿 5. [지표 하층 관목 및 양치식물]** | | | **숲 바닥을 덮는 다양한 덤불 및 초본 식생** |
+| `spawnShrubPine` | `bool` | `true` | **솔관목** - 소나무 숲 바닥 침엽 관목 |
+| `spawnShrubFern` | `bool` | `true` | **왕고사리** - 온대 숲 바닥 양치식물 덤불 |
+| `spawnShrubScholar` | `bool` | `true` | **선비덤불** - 숲 가장자리 녹색 덤불 |
+| `spawnShrubConvallaria` | `bool`| `true` | **은방울꽃** - 지표 야생 야초 |
+| **🪵 6. [전장 고목 & 그루터기]** | | | **격전지의 비장한 흔적 (향후 전투 파괴 연출 핵심 에셋)** |
+| `spawnPineDead` | `bool` | `true` | **소나무 고사목** - 잎사귀 없이 앙상한 줄기와 가지만 남은 마른 뼈대 (Pine_Dead_M/O/S 3종) |
+| `spawnBrokenPine` | `bool` | `true` | **부러진 소나무** - 격전으로 꺾인 전장의 부러진 나무 (Pine_Broken_H/K/L/N 4종, 줄기+잔여 솔잎) |
+| `spawnBrokenScholar` | `bool` | `true` | **부러진 회화나무** - 전장에서 부러진 회화/선비나무 고목 (Scholar_Broken_A~D 4종) |
+| `spawnDeadCastanopsis` | `bool` | `true` | **앙상한 활엽 고사목** - 잎이 모두 떨어지고 마른 활엽 고목 뼈대 (Castanopsis_Dead_A~E 5종) |
+| `spawnJungleDead` | `bool` | `true` | **남만 정글 고사목** - 열대 덩굴과 이끼가 얽힌 밀림의 마른 고목 (Castanopsis_Jungle_Dead_A~C 3종) |
+| `spawnBambooStump` | `bool` | `true` | **대나무 밑동/군락** - 잘려나간 대나무 밑동 및 그루터기 군락 (Bamboo_Stump_A~D, Group_A~D 8종) |
+| `spawnStump` | `bool` | `true` | **거목 그루터기 & 싹튼 밑동** - 벌목/포격으로 잘려나간 거목 밑동 3종(Stump_A, B, D) 및 새순이 돋은 싹튼 밑동 1종(Stump_C) |
+| `spawnBrokenBranches` | `bool` | `true` | **부러진 나뭇가지 더미 & 잔가지** - 지표면에 나뒹구는 나뭇가지 잔해 4종(BrokenBranch_A~D) 및 지표 잔가지 파편 1종(Stump_E) |
+| `treeCount` | `int` | `27` | 스폰할 삼국지 토탈워 3D 나무 개수 |
+| `bushCount` | `int` | `48` | 스폰할 삼국지 토탈워 3D 관목/수풀 개수 |
 | `treeScaleMultiplier`| `float` | `0.28f` | 나무 스케일 (원본 35~45m -> 게임 내 약 10~13m 실전 크기) |
 | `bushScaleMultiplier`| `float` | `0.32f` | 관목 스케일 (원본 4m -> 게임 내 약 1.3m 관목 크기) |
 | `stealthDetectionRange`| `float`| `25.0f` | 숲 내부 매복 유닛의 기본 피탐지 거리 (단위: m) |
@@ -128,7 +211,7 @@ flowchart TD
 | `windSpreadMultiplier` | `float` | `2.5f` | 바람 방향 화재 전파 가속 배율 (순풍 최대 16m) |
 | `isForestRevealedByFire`| `bool` | `false` | 화재로 인한 숲 은폐(매복) 해제 여부 (연소율 40% 이상 시 자동 활성화) |
 | `burningTreesCount` | `int` | `8` | 숲 내에서 동시에 불타는 나무 수 (1 ~ 20그루) |
-| `flameScaleMultiplier` | `float` | `0.45f` | 개별 화염 파티클 크기 배율 (0.15 ~ 1.5, 나뭇가지/잎사귀 크기 1.6~2.2m에 최적화) |
+| `flameScaleMultiplier` | `float` | `0.45f` | 개별 화염 파티클 크기 배율 (0.15 ~ 1.5, 나뭇가지/잎사귀 크기 0.5~1.3m에 최적화) |
 
 ---
 
@@ -148,11 +231,30 @@ flowchart TD
   - 삼탈워 원본 BC7 DDS 텍스처(`3k_anim_fire_a_diffuse.dds`)를 1024x1024 무손실 텍스처로 추출 및 바인딩.
   - `frameOverTime`에 0부터 63까지 전구간 선형 순회 커브(`0f -> 63f`)를 바인딩하여 64개 프레임이 초당 약 30fps로 부드럽게 펄럭이며 회전.
   - `ParticleSystemRenderer`에 `UV`, `UV2`, `AnimBlend` 커스텀 버텍스 스트림을 주입하여 URP 크로스페이드 블렌딩(`_FLIPBOOKBLENDING_ON`) 완벽 구동.
-- **나뭇잎 형광 발광 박멸 및 디졸브/탄화 골격**:
-  - `TotalWarFoliageWind.shader`의 `burnRim` 두께를 `0.015`로 최소화하고 형광 발광을 억제하여 주황색 단풍잎 노출을 원천 차단.
-  - 화염 덩어리 아래에서 잎사귀가 자연스럽게 알파 디졸브로 타들어가 사라지고, 앙상하게 탄화된 검은색 나뭇가지 골격 실루엣만 남음.
+- **나뭇잎 3D 가지 클러스터링 & 숯 결 구멍 침식 디졸브 (Perforated Ash Dissolve)**:
+  - **선형 스캔라인 완전 차단**: Varyings에 `nointerpolation`을 부여하여 나뭇잎 카드 내부의 보간 띠를 원천 차단하고, Y축 선형 스캔(`heightGradient`)을 제거.
+  - **3차원 공간 가지 클러스터링(`branchClump`)**: 3D 공간 난류 노이즈를 통해 외곽 가지 뭉치, 중심 뭉치 등 가지 덩어리별로 입체적이고 불규칙하게 시차 연소.
+  - **숯 결 구멍 뚫림 침식(Perforated Ash Dissolve)**: 삼탈워 원본 숯 텍스처(`_CharredMap`)의 크랙 결(`crackNoise`)과 엽맥 고주파 노이즈(`pinholeNoise`)를 결합하여 잎사귀 표면에 불씨 구멍들이 숭숭 뚫리고 찢어지며 바스러지듯 소멸.
+  - **화염 덩어리 볼륨 & 자욱한 연기 구름**: 불꽃 크기를 2배 확대(0.85~1.75m)하여 점 분산감을 없애고 수관 전체를 감싸는 화염 덩어리를 구축하고, 연기 크기(2.0~4.8m)와 팽창률(2.2배) 및 농도를 강화하여 짙은 전쟁터 훈연 대기 완성.
+  - **시네마틱 카메라 후처리 연동**: 메인 카메라의 URP Post Processing과 SMAA를 켜고, ACES Tonemapping(형광 쨍함 억제), Soft Bloom(대기 산란), Color Adjustments를 적용하여 삼탈워 인게임 영상의 차분하고 현실적인 화염 비주얼 완성.
 
-### 2. 바람결 연쇄 화재 전파 공식 (Wind-Driven Wildfire Propagation Math)
+### 2. 삼탈워 수목 체적 및 수종별 개별 화재 스케일링 (Vegetation Fire Individualization Math)
+삼국지 토탈워 본편 인게임에서 나무마다 불과 연기의 양이 다른 현상을 수학적/물리적으로 재현한 시스템:
+1. **수관 3차원 체적 비율 (Volume Factor)**:
+   - 기준 수관 크기: 반경 R_base = 2.5m, 높이 H_base = 5.0m
+   - vol = Clamp((R / 2.5)^2 * (H / 5.0), 0.35, 3.2)
+2. **수종별 물리/화재 특성 가중치**:
+   - **대나무 (Bamboo)**: 잎이 좁고 가벼움 -> `flameScale * 0.65`, `smokeScale * 0.55`, `burnDuration * 0.65` (아담한 불꽃/연기, 20~25초 빠른 전소).
+   - **소나무 (Pine)**: 송진으로 인한 맹렬한 불꽃 -> `flameScale * 1.15`, 불티 증가, 화염 지속적.
+   - **활엽수 (Castanopsis, Broadleaf)**: 넓은 잎사귀 층 -> `smokeScale * 1.30`, `burnDuration * 1.15` (짙고 웅장한 연기 구름, 최대 65초 연소).
+3. **개체 고유 수분(Moisture) 편차**:
+   - 나무 위치 해시 기반 고유 난수 moisture = Lerp(0.85, 1.25, randVal)
+   - 수분이 많은 개체는 짙은 연기 위주(`smokeScale = vol * moisture`), 건조한 개체는 화염 위주(`flameScale = sqrt(vol) * (2.05 - moisture)`)로 차등화.
+4. **연료량 비례 연소 지속 시간 (Burn Duration)**:
+   - Duration = 40.0s * vol^0.40 * TypeDuration * randVal (20.0초 ~ 65.0초 범위)
+   - 거목은 50~65초 동안 오랫동안 타며 웅장한 연기 기둥을 형성하고, 작은 나무는 20초 만에 빠르게 전소.
+
+### 3. 바람결 연쇄 화재 전파 공식 (Wind-Driven Wildfire Propagation Math)
 삼국지 토탈워 실제 데이터베이스 `kv_fire_values_tables`와 풍향 벡터를 결합한 전파 공식:
 - 인접 나무 벡터: `ToNeighbor = NeighborPos - SourcePos`
 - 유효 전파 거리 계산:
@@ -171,11 +273,25 @@ flowchart TD
 - 판정: `dist < (radius * 0.75)`인 경우, 사선이 숲의 75% 이상 핵심부를 관통하므로 시야가 완전히 차폐됩니다.
 - 단, 화재로 인해 `isForestRevealedByFire == true` 상태가 되면 사선 차폐 및 은폐가 영구 해제됩니다.
 
-### 4. 에디터 단축 조작법 (Controls)
-- **메뉴 상단 실행**:
-  - `MiniTotalWar -> 🔥 서쪽 숲 바람결 연쇄 화재 전파 개시`: 풍상측 나무 1~2그루에 착화 후 바람을 타고 숲 전체로 번져나가는 장관 연출.
-  - `MiniTotalWar -> 🔥 서쪽 숲 전면 화재 즉시 점화`: 숲의 주요 나무 8그루에 즉시 불길 점화.
-  - `MiniTotalWar -> 🧯 전장 화재 전면 진압`: 모든 화재 VFX 제거 및 수목 원상 복원.
+### 4. 에디터 단축 조작법 및 메뉴 구성 (Controls & Menu)
+- **메뉴 상단 실행 (`MiniTotalWar`)**:
+  - `🍂 사계절 설정`: 전장의 모든 숲과 환경 조명/안개 분위기를 원클릭으로 일괄 전환.
+    - `🌸 봄 (Spring)`: 매화나무 꽃잎 만개, 수양버들/회화나무 연두빛 새싹, 부드러운 봄 햇살.
+    - `☀️ 여름 (Summer)`: 짙고 푸른 한여름 녹음, 삼탈워 기본 정오의 찬란한 황금 백색광.
+    - `🍁 가을 (Autumn)`: 은행나무의 짙은 황금빛 수관, 단풍나무의 선홍빛 잎사귀, 따뜻하고 깊은 앰버 골드 햇살 및 황혼 연무.
+    - `❄️ 겨울 (Winter)`: 눈이 얹힌 설목 소나무, 창백한 겨울 잎사귀, 차갑고 시린 은빛 설경 햇살과 겨울 서리 안개.
+  - `☀️ 전장 환경 & 숲 하이어라키에 배치 (Bake Scene Environment)`: 환경 조명, 바람, 스카이박스 배치 및 현재 씬의 모든 숲 초목을 최신 3D 모델과 텍스처로 일괄 갱신.
+  - `🔥 전장 모든 숲 화재 점화 (Ignite All Forest Fires)`: 전장의 모든 활성 숲에 삼탈워 화재 파티클 즉각 점화.
+  - `🧯 전장 화재 전면 진압 (Extinguish All Fires)`: 전장의 모든 숲 화재를 즉각 진압하고 수목 상태를 건강한 상태로 복원.
+  - `🔥 삼탈워 화재·연기 VFX 에셋 및 머티리얼 빌드 (Build Fire VFX)`: 3K 복합 화염 및 연기/불티 파티클 에셋과 머티리얼 일괄 재생성.
+- **인스펙터 실시간 조작 (Inspector Realtime Tuning)**:
+  - `Current Season` 드롭다운 변경 시: 숲 오브젝트를 재스폰하지 않고 나뭇잎 머티리얼 텍스처만 실시간 1프레임 만에 교체(`RefreshVegetationMaterials()`).
+  - 우클릭 컨텍스트 메뉴: `🌸 봄 계절 적용`, `☀️ 여름 계절 적용`, `🍁 가을 계절 적용`, `❄️ 겨울 계절 적용`으로 즉시 변경 가능.
+- **3D 모델 서브메시 표준 규격 (Model Standard Specification)**:
+  - 모든 17종 거목 3D OBJ 모델은 유니티 표준화 파이프라인에 따라 다음과 같이 일괄 고정 배치됩니다:
+    - **Submesh 0 (Trunk)**: 나무 기둥 및 주 줄기 (불투명 수피 텍스처 바인딩, 알파 클리핑 차단, 전소 시 영구 숯 잔존)
+    - **Submesh 1 (Leaves)**: 나뭇가지 및 잎사귀 카드 (고해상도 잎/가지 텍스처 바인딩, 양면 렌더링 Cull Off, 알파 컷아웃 및 숯 결 구멍 침식 디졸브 적용)
+  - 은행나무, 종려야자 등 원본 RMV2의 서브메시 인덱스가 역전되어 있던 모델들도 모두 이 표준 규격으로 자동 재배열되어 나뭇잎 쐐기 깨짐 및 기둥 투명화 버그가 영구 차단됩니다.
 
 ---
 

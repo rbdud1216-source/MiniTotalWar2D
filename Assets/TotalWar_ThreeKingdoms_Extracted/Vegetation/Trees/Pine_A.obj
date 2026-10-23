@@ -1,11 +1,9 @@
-# Total War Three Kingdoms Converted Mesh (Accurate UV & Normals)
+# Total War Three Kingdoms Converted Mesh (Accurate UV & Normals & Standardized Submeshes)
 # Model: Pine_A
 # Skeleton: tree
 mtllib Pine_A.mtl
 o Pine_A
 g Trunk
-usemtl Trunk
-usemtl Trunk_Mat
 v -2.7070 15.2578 0.4404
 v -2.7285 15.2109 0.3315
 v -1.4668 17.0313 0.6655
@@ -7041,6 +7039,7 @@ vn 0.3420 0.6436 -0.6846
 vn 0.5630 0.0330 -0.8257
 vn 0.0633 -0.8599 0.5068
 vn -0.0254 -0.8179 0.5747
+usemtl Trunk_Mat
 f 1/1/1 2/2/2 3/3/3
 f 1/1/1 4/4/4 5/5/5
 f 5/5/5 2/2/2 1/1/1
@@ -9588,8 +9587,6 @@ f 2344/2344/2344 2341/2341/2341 2342/2342/2342
 f 2343/2343/2343 2345/2345/2345 2342/2342/2342
 f 2342/2342/2342 2345/2345/2345 2344/2344/2344
 g Leaves
-usemtl Leaves
-usemtl Leaves_Mat
 v -0.0329 18.6563 1.4902
 v -0.8174 19.4688 4.8555
 v 0.2661 19.9688 2.9395
@@ -36692,6 +36689,7 @@ vn 0.1301 -0.7832 -0.6079
 vn -0.6206 -0.7837 -0.0318
 vn 0.0387 -0.9985 -0.0331
 vn 0.8965 -0.3931 0.2048
+usemtl Leaves_Mat
 f 2346/2346/2346 2347/2347/2347 2348/2348/2348
 f 2349/2349/2349 2350/2350/2350 2351/2351/2351
 f 2349/2349/2349 2352/2352/2352 2350/2350/2350

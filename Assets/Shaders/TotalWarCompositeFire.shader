@@ -8,10 +8,11 @@ Shader "TotalWar/VFX/CompositeFlames"
         _TipsTex ("Tips Flame H (8x8 Flipbook)", 2D) = "white" {}
 
         [Header(HDR Color and Multipliers)]
-        [HDR] _CoreColor ("Core Flame A Color (HDR)", Color) = (2.8, 1.6, 0.7, 1.0)
-        [HDR] _OuterColor ("Outer Flame B Color (HDR)", Color) = (2.2, 0.95, 0.25, 0.95)
-        [HDR] _TipsColor ("Tips Flame H Color (HDR)", Color) = (1.8, 0.75, 0.18, 0.85)
-        _GlowIntensity ("Glow Intensity", Range(0.5, 3.0)) = 1.25
+        [HDR] _CoreColor ("Core Flame A Color (HDR)", Color) = (2.0, 1.45, 0.90, 0.95)
+        [HDR] _OuterColor ("Outer Flame B Color (HDR)", Color) = (1.50, 0.75, 0.22, 0.85)
+        [HDR] _TipsColor ("Tips Flame H Color (HDR)", Color) = (1.15, 0.50, 0.14, 0.75)
+        _GlowIntensity ("Glow Intensity", Range(0.5, 3.0)) = 0.90
+        _SoftFalloff ("Atmospheric Soft Falloff", Range(0.5, 2.5)) = 1.25
 
         [Header(Blending)]
         [Enum(UnityEngine.Rendering.BlendMode)] _SrcBlend ("Src Blend", Float) = 1 // One
@@ -80,6 +81,7 @@ Shader "TotalWar/VFX/CompositeFlames"
                 half4 _OuterColor;
                 half4 _TipsColor;
                 half _GlowIntensity;
+                half _SoftFalloff;
             CBUFFER_END
 
             Varyings vert(Attributes input)
@@ -131,12 +133,16 @@ Shader "TotalWar/VFX/CompositeFlames"
 
                 // [3중 복합 가산 및 볼륨 합성]
                 // 코어 중심부는 Additive 효과로 눈부시게 타오르고, 외곽은 볼륨감 있게 감싸줌
-                half3 finalRgb = (rgbA * alphaA * 1.4) + (rgbB * alphaB * 1.05) + (rgbH * alphaH * 0.85);
+                half3 finalRgb = (rgbA * alphaA * 1.35) + (rgbB * alphaB * 1.0) + (rgbH * alphaH * 0.75);
                 finalRgb *= input.color.rgb * _GlowIntensity;
 
-                half finalAlpha = saturate(alphaA * 1.25 + alphaB * 0.95 + alphaH * 0.75) * input.color.a;
+                half finalAlpha = saturate(alphaA * 1.2 + alphaB * 0.9 + alphaH * 0.7) * input.color.a;
 
-                // Pre-multiplied Alpha 출력: 밝은 코어는 빛나고 외곽은 투명하게 부드러운 블렌딩
+                // 부드러운 대기 감쇄 (Atmospheric Soft Diffusion)
+                // 칼날처럼 쨍하게 잘리는 경계를 연기처럼 부드럽게 감쇄시켜 현실적인 삼탈워 대기 화염 완성
+                finalAlpha = pow(finalAlpha, _SoftFalloff);
+
+                // Pre-multiplied Alpha 출력: 밝은 코어는 은은하게 빛나고 외곽은 연기처럼 자연스럽게 블렌딩
                 return half4(finalRgb * finalAlpha, finalAlpha);
             }
             ENDHLSL

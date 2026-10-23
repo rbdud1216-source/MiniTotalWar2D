@@ -4,7 +4,6 @@
 mtllib Convallaria_Shrub_A.mtl
 o Convallaria_Shrub_A
 g Leaves
-usemtl Leaves_Mat
 v -0.2749 0.4863 0.2827
 v -0.1042 -0.0117 0.0401
 v -0.6328 0.6021 0.0949
@@ -689,6 +688,7 @@ vn 0.1497 -0.9795 0.1344
 vn 0.1497 -0.9795 0.1344
 vn 0.1523 -0.9775 0.1462
 vn 0.1494 -0.9780 0.1464
+usemtl Leaves_Mat
 f 1/1/1 2/2/2 3/3/3
 f 2/2/2 4/4/4 3/3/3
 f 5/5/5 6/6/6 7/7/7
