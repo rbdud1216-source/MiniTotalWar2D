@@ -1,0 +1,15 @@
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\bin\Debug\net10.0\TwAnalyzer.exe
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\bin\Debug\net10.0\TwAnalyzer.deps.json
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\bin\Debug\net10.0\TwAnalyzer.runtimeconfig.json
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\bin\Debug\net10.0\TwAnalyzer.dll
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\bin\Debug\net10.0\TwAnalyzer.pdb
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\obj\Debug\net10.0\TwAnalyzer.GeneratedMSBuildEditorConfig.editorconfig
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\obj\Debug\net10.0\TwAnalyzer.AssemblyInfoInputs.cache
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\obj\Debug\net10.0\TwAnalyzer.AssemblyInfo.cs
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\obj\Debug\net10.0\TwAnalyzer.csproj.CoreCompileInputs.cache
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\obj\Debug\net10.0\TwAnalyzer.sourcelink.json
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\obj\Debug\net10.0\TwAnalyzer.dll
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\obj\Debug\net10.0\refint\TwAnalyzer.dll
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\obj\Debug\net10.0\TwAnalyzer.pdb
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\obj\Debug\net10.0\TwAnalyzer.genruntimeconfig.cache
+C:\unityProject\MiniTotalWar2D\scratch\TwAnalyzer\obj\Debug\net10.0\ref\TwAnalyzer.dll

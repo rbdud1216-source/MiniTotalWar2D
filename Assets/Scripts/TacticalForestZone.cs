@@ -17,29 +17,44 @@ public class TacticalForestZone : MonoBehaviour
 {
     public enum ZoneShape
     {
+        [InspectorName("원형 구역 (Circle)")]
         Circle, // 원형 숲 구역
+        [InspectorName("직사각형 구역 (Box)")]
         Box     // 직사각형 숲 구역
     }
 
     public enum ForestTheme
     {
+        [InspectorName("사용자 지정 조합 (Custom Selection)")]
         CustomSelection,    // 사용자 지정 (체크박스로 자유 조합)
+        [InspectorName("전체 혼합림 (Mixed Forest)")]
         Mixed,              // 전체 혼합림 (모든 수종 골고루 배치)
+        [InspectorName("남만 원시 밀림 (Nanman Jungle)")]
         NanmanJungle,       // 남만 밀림 (반얀트리, 바나나/코코넛 야자, 정글구실잣밤, 종려야자, 코끼리풀, 검고사리)
+        [InspectorName("강남 수변림 (Jiangnan Riverside)")]
         JiangnanRiverside,  // 강남 수변림 (수양버들, 대나무, 단풍나무, 연꽃, 벼 작물)
+        [InspectorName("중원 평야림 (Central Plains)")]
         CentralPlains,      // 중원 평야림 (은행나무, 회화나무, 매화나무, 목련나무, 기장/벼 농경지)
+        [InspectorName("황산 소나무림 (Huangshan Pine)")]
         HuangshanPine,      // 황산 소나무림 (황산소나무, 직립소나무 고산 침엽수림)
+        [InspectorName("대나무 군락지 (Bamboo Grove)")]
         BambooGrove,        // 울창한 대나무숲 (삼탈워 순수 대나무 군락지)
+        [InspectorName("울창한 활엽수림 (Castanopsis Wood)")]
         CastanopsisWood,    // 울창한 활엽수림 (남방/중원 넓은 잎 녹음)
+        [InspectorName("격전지 고목림 (Battlefield Ruins)")]
         BattlefieldRuins    // 격전지 고목림 (부러진 소나무, 앙상한 고사목, 그루터기)
     }
 
     public enum Season
     {
+        [InspectorName("여름 (Summer - 짙푸른 녹음)")]
         Summer, // 여름 (울창하고 짙은 녹음)
+        [InspectorName("봄 (Spring - 연두빛 새싹과 화사한 개화)")]
         Spring, // 봄 (연두빛 새싹과 화사한 매화/목련 개화)
+        [InspectorName("가을 (Autumn - 선홍빛 단풍과 황금빛 은행)")]
         Autumn, // 가을 (선홍빛 단풍과 황금빛 은행)
-        Winter  // 겨울 (하얗게 눈이 쌓인 설목)
+        [InspectorName("겨울 (Winter - 설경 및 앙상한 가지)")]
+        Winter  // 겨울 (하얗게 눈이 쌓인 설목 및 마른 가지)
     }
 
     // 전장 내 모든 활성 숲 구역 정적 레지스트리
@@ -238,6 +253,18 @@ public class TacticalForestZone : MonoBehaviour
     [Tooltip("숲을 가로지르는 사선 차폐(LoS Block) 활성화 여부")]
     public bool blockLineOfSight = true;
 
+    [Header("❄️ 겨울 적설 환경 설정 (Winter Snow Settings)")]
+    [Tooltip("겨울(Winter)일 때 눈이 내린 설경을 연출할지 여부\n- 체크 시: 삼탈워 설경 텍스처(_wi_) + 셰이더 프로시저럴 상향 적설 연출\n- 체크 해제 시: 눈이 오지 않은 삭막한 마른 겨울(_br_ 앙상한 가지) 연출\n※ 봄/여름/가을에는 눈 연출이 절대 나타나지 않습니다.")]
+    public bool enableWinterSnow = true;
+
+    [Tooltip("겨울철 눈 쌓임 강도 (0 = 눈 없음, 1 = 폭설)")]
+    [Range(0.0f, 1.0f)]
+    public float winterSnowAmount = 0.85f;
+
+    [Tooltip("겨울철 나뭇잎 눈 덮임 비율 (0 = 눈 없음, 0.55 = 수관 상단 윗면에만 소복이 적설, 1.0 = 나무 전체 잎사귀 덮임)")]
+    [Range(0.0f, 1.0f)]
+    public float leafSnowRatio = 0.55f;
+
     [Header("🔥 삼탈워 전장 화재 전파 시뮬레이션 (Wildfire Propagation)")]
     [Tooltip("화재 시뮬레이션 활성화 여부")]
     public bool enableFireVFX = false;
@@ -262,6 +289,42 @@ public class TacticalForestZone : MonoBehaviour
     [Range(0.15f, 1.5f)]
     public float flameScaleMultiplier = 0.45f;
 
+    [Tooltip("개별 연기 크기 / 볼륨 배율 (0.2 ~ 3.0, 기본값 1.0 = 삼탈워 표준 크기)")]
+    [Range(0.2f, 3.0f)]
+    public float smokeScaleMultiplier = 1.0f;
+
+    public enum SmokeVisualType
+    {
+        [InspectorName("🏮 삼탈워 원본 웜 차콜 훈연 (Warm Charcoal - 권장)")]
+        [Tooltip("삼국지 토탈워 본편 화재 원본 색상: 송진 및 유기물 연소의 따스한 흙빛 탄화 훈연 (R:0.28, G:0.20, B:0.14)")]
+        TotalWarWarmCharcoal,
+        [InspectorName("🌫️ 삼탈워 토탈 잿빛 훈연 (Total War Ash Gray)")]
+        [Tooltip("삼탈워 본편 텍스처 원본의 자연스러운 산불 잿빛 훈연 (R:0.48, G:0.44, B:0.40)")]
+        AshGray,
+        [InspectorName("⬛ 삼탈워 짙은 흑갈색 훈연 (Dark Brownish Soot)")]
+        [Tooltip("송진/오일 급격 연소로 인한 짙은 흑갈색 검댕 훈연 (R:0.18, G:0.15, B:0.14)")]
+        PitchBlack,
+        [InspectorName("🌲 수종별 지능형 자동 전환 (Species Adaptive)")]
+        [Tooltip("소나무/녹나무는 웜 차콜 훈연, 활엽수/대나무는 잿빛 훈연 자동 적용")]
+        SpeciesAdaptive,
+        [InspectorName("🎨 사용자 지정 색상 (Custom Color)")]
+        [Tooltip("인스펙터의 연기 시작/상공 색상 컬러 피커를 직접 설정 및 저장")]
+        CustomColor
+    }
+
+    [Tooltip("화재 연기 시각 유형 프리셋\n- TotalWarWarmCharcoal: 삼탈워 원본 웜 차콜 훈연 (권장)\n- AshGray: 토탈워 표준 은회색/잿빛 연기\n- PitchBlack: 송진/기름 연소 흑연\n- SpeciesAdaptive: 수종별 자동 적응\n- CustomColor: 사용자 지정 색상")]
+    public SmokeVisualType smokeVisualType = SmokeVisualType.TotalWarWarmCharcoal;
+
+    [Tooltip("연기 진하기 / 농도 배율 (0.1 = 매우 옅은 은은한 훈연, 0.75 = 삼탈워 표준 훈연, 1.0 = 아주 짙고 묵직한 연기)")]
+    [Range(0.1f, 1.0f)]
+    public float smokeDensity = 0.75f;
+
+    [Tooltip("연기 시작 색상 (나뭇잎 표면에서 막 피어오를 때의 연기 색상, 삼탈워 훈연 회갈색 기본값)")]
+    public Color smokeStartColor = new Color(0.62f, 0.56f, 0.50f, 1.0f);
+
+    [Tooltip("연기 상공 확산 색상 (하늘로 피어오르며 흩어질 때의 연기 색상, 삼탈워 잿빛 훈연 기본값)")]
+    public Color smokeEndColor = new Color(0.75f, 0.70f, 0.65f, 1.0f);
+
     // 생성된 초목 컨테이너
     private Transform vegetationRoot;
     private Transform fireVfxRoot;
@@ -280,6 +343,8 @@ public class TacticalForestZone : MonoBehaviour
         public float burnProgress = 0f;
         public float burnTimer = 0f;
         public float burnDuration = 40.0f;
+        public float typeFlameMult = 1.0f;
+        public float typeSmokeMult = 1.0f;
         public TotalWarFireVFXController fireController;
     }
 
@@ -295,10 +360,17 @@ public class TacticalForestZone : MonoBehaviour
     private static readonly Dictionary<string, Material> materialCache = new Dictionary<string, Material>();
 
     private Season lastSeason;
+    private bool lastWinterSnow = true;
+    private float lastWinterSnowAmount = 0.85f;
+    private float lastLeafSnowRatio = 0.55f;
 
     private void Awake()
     {
         lastSeason = currentSeason;
+        enableFireVFX = false; // 게임 시작 시 자동 화재 발생 방지
+        isForestRevealedByFire = false;
+        ClearFireVFX(); // 에디터 씬에 남아있던 잔여 화재 파티클 완전 파괴
+        ExtinguishFire(); // 탄화된 나뭇잎 100% 정상 녹색/설경으로 원상 복구
         InitTotalWarMaterials();
         SnapToTerrain();
     }
@@ -320,22 +392,161 @@ public class TacticalForestZone : MonoBehaviour
         {
             GenerateVegetation();
         }
-        else if (treeCombustionNodes.Count == 0)
+        else
         {
-            InitTreeCombustionNodes();
+            if (treeCombustionNodes.Count == 0)
+            {
+                InitTreeCombustionNodes();
+            }
+            RefreshVegetationMaterials();
         }
     }
 
     private void Update()
     {
-        if (currentSeason != lastSeason)
+        if (currentSeason != lastSeason || enableWinterSnow != lastWinterSnow ||
+            Mathf.Abs(winterSnowAmount - lastWinterSnowAmount) > 0.01f ||
+            Mathf.Abs(leafSnowRatio - lastLeafSnowRatio) > 0.01f)
         {
             lastSeason = currentSeason;
+            lastWinterSnow = enableWinterSnow;
+            lastWinterSnowAmount = winterSnowAmount;
+            lastLeafSnowRatio = leafSnowRatio;
             RefreshVegetationMaterials();
         }
 
         UpdateWildfireSimulation();
+
+#if UNITY_EDITOR
+        CheckCaptureFlag();
+#endif
     }
+
+#if UNITY_EDITOR
+    private void CheckCaptureFlag()
+    {
+        string flagPath = @"c:\unityProject\MiniTotalWar2D\scratch\trigger_capture.flag";
+        if (System.IO.File.Exists(flagPath))
+        {
+            try { System.IO.File.Delete(flagPath); } catch { }
+            PerformRuntimeFireAndSmokeCapture();
+        }
+    }
+
+    [ContextMenu("🔥 화재 및 연기 렌더링 캡처 (Capture Fire & Smoke)")]
+    public void PerformRuntimeFireAndSmokeCapture()
+    {
+        // 1. 최신 FoliageWind 셰이더 및 탄화 머티리얼 즉시 동기화
+        RefreshVegetationMaterials();
+
+        ClearFireVFX();
+        enableFireVFX = true;
+        SpawnFireVFX();
+
+        // 파티클 2.5초 시뮬레이션으로 연기와 화염이 만개한 상태 생성
+        var allPS = GetComponentsInChildren<ParticleSystem>(true);
+        foreach (var ps in allPS)
+        {
+            ps.Simulate(2.5f, true, true);
+        }
+
+        Transform targetTree = null;
+        var fireControllers = GetComponentsInChildren<TotalWarFireVFXController>(true);
+        if (fireControllers.Length > 0)
+        {
+            targetTree = fireControllers[0].transform;
+        }
+
+        if (targetTree == null)
+        {
+            Debug.LogWarning("[TacticalForestZone] 화재 대상을 찾을 수 없습니다.");
+            return;
+        }
+
+        string saveDir = @"C:\Users\PC\.gemini\antigravity-ide\brain\3cc4d2a0-2845-4b27-b568-d5053c4f194b\scratch";
+        System.IO.Directory.CreateDirectory(saveDir);
+
+        Vector3 pos = targetTree.position;
+
+        GameObject camObj = new GameObject("TempFireCam");
+        Camera cam = camObj.AddComponent<Camera>();
+        cam.clearFlags = CameraClearFlags.Skybox;
+        cam.nearClipPlane = 0.1f;
+        cam.farClipPlane = 1000f;
+        cam.fieldOfView = 50f;
+
+        int width = 1280;
+        int height = 960;
+        RenderTexture rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
+        rt.antiAliasing = 4;
+        cam.targetTexture = rt;
+
+        // --- 0. 겨울 설경 상태의 정상 나무 캡처 (winter_snow_trees_rendered.png) ---
+        camObj.transform.position = pos + new Vector3(3.0f, 6.0f, -14.0f);
+        camObj.transform.LookAt(pos + Vector3.up * 4.5f);
+        cam.Render();
+
+        RenderTexture.active = rt;
+        Texture2D screenShot = new Texture2D(width, height, TextureFormat.RGB24, false);
+        screenShot.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+        screenShot.Apply();
+        byte[] snowTreeBytes = screenShot.EncodeToPNG();
+        DestroyImmediate(screenShot);
+        System.IO.File.WriteAllBytes(System.IO.Path.Combine(saveDir, "winter_snow_trees_rendered.png"), snowTreeBytes);
+        System.IO.File.WriteAllBytes(@"c:\unityProject\MiniTotalWar2D\scratch\winter_snow_trees_rendered.png", snowTreeBytes);
+
+        // --- 1. 화재 및 연기 만개 상태 캡처 (fire_and_smoke_rendered.png) ---
+        camObj.transform.position = pos + new Vector3(6f, 12f, -20f);
+        camObj.transform.LookAt(pos + Vector3.up * 7.0f);
+        cam.Render();
+
+        screenShot = new Texture2D(width, height, TextureFormat.RGB24, false);
+        screenShot.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+        screenShot.Apply();
+        byte[] bytes = screenShot.EncodeToPNG();
+        DestroyImmediate(screenShot);
+
+        string savePath = System.IO.Path.Combine(saveDir, "fire_and_smoke_rendered.png");
+        System.IO.File.WriteAllBytes(savePath, bytes);
+        System.IO.File.WriteAllBytes(@"c:\unityProject\MiniTotalWar2D\scratch\fire_and_smoke_rendered.png", bytes);
+
+        // --- 2. 전소 완료된 숯 나무 상태 캡처 (charred_tree_rendered.png) ---
+        // 화염 파티클 끄고 _BurnProgress = 1.0 주입
+        ClearFireVFX();
+        MaterialPropertyBlock charredMpb = new MaterialPropertyBlock();
+        charredMpb.SetFloat(Shader.PropertyToID("_BurnProgress"), 1.0f);
+
+        var targetRenderers = targetTree.GetComponentsInChildren<Renderer>(true);
+        foreach (var r in targetRenderers)
+        {
+            if (r != null) r.SetPropertyBlock(charredMpb);
+        }
+
+        // 숯으로 탄화된 기둥과 가지 골격을 한눈에 보는 근접 각도
+        camObj.transform.position = pos + new Vector3(3.0f, 6.0f, -14.0f);
+        camObj.transform.LookAt(pos + Vector3.up * 4.5f);
+        cam.Render();
+
+        screenShot = new Texture2D(width, height, TextureFormat.RGB24, false);
+        screenShot.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+        screenShot.Apply();
+        byte[] charredBytes = screenShot.EncodeToPNG();
+        DestroyImmediate(screenShot);
+
+        cam.targetTexture = null;
+        RenderTexture.active = null;
+        DestroyImmediate(rt);
+        DestroyImmediate(camObj);
+
+        string charredSavePath = System.IO.Path.Combine(saveDir, "charred_tree_rendered.png");
+        System.IO.File.WriteAllBytes(charredSavePath, charredBytes);
+        System.IO.File.WriteAllBytes(@"c:\unityProject\MiniTotalWar2D\scratch\charred_tree_rendered.png", charredBytes);
+
+        Debug.Log($"<color=#00FF88><b>[TacticalForestZone] ❄️ 겨울 눈 나무 및 숯 나무 캡처 완료!</b></color>");
+
+        Debug.Log($"<color=#00FF88><b>[TacticalForestZone] 🔥 화재 및 숯 나무 캡처 완료: {charredSavePath}</b></color>");
+    }
+#endif
 
     private void OnValidate()
     {
@@ -347,12 +558,133 @@ public class TacticalForestZone : MonoBehaviour
 
         ApplyThemePreset();
 
-        if (currentSeason != lastSeason)
+        if (currentSeason != lastSeason || enableWinterSnow != lastWinterSnow ||
+            Mathf.Abs(winterSnowAmount - lastWinterSnowAmount) > 0.01f ||
+            Mathf.Abs(leafSnowRatio - lastLeafSnowRatio) > 0.01f)
         {
             lastSeason = currentSeason;
+            lastWinterSnow = enableWinterSnow;
+            lastWinterSnowAmount = winterSnowAmount;
+            lastLeafSnowRatio = leafSnowRatio;
             RefreshVegetationMaterials();
         }
+
+        if (smokeVisualType != lastSmokeVisualType)
+        {
+            lastSmokeVisualType = smokeVisualType;
+            if (smokeVisualType != SmokeVisualType.CustomColor)
+            {
+                ApplySmokeColorPreset(smokeVisualType);
+            }
+        }
+
+        bool colorChanged = (smokeStartColor != lastSmokeStartColor || smokeEndColor != lastSmokeEndColor);
+        if (colorChanged && smokeVisualType != SmokeVisualType.CustomColor)
+        {
+            smokeVisualType = SmokeVisualType.CustomColor;
+            lastSmokeVisualType = SmokeVisualType.CustomColor;
+        }
+
+        if (Mathf.Abs(smokeDensity - lastSmokeDensity) > 0.01f ||
+            Mathf.Abs(smokeScaleMultiplier - lastSmokeScaleMultiplier) > 0.01f ||
+            colorChanged)
+        {
+            lastSmokeDensity = smokeDensity;
+            lastSmokeScaleMultiplier = smokeScaleMultiplier;
+            lastSmokeStartColor = smokeStartColor;
+            lastSmokeEndColor = smokeEndColor;
+            RefreshActiveSmokeVisuals();
+        }
     }
+
+    private float lastSmokeDensity = 0.75f;
+    private float lastSmokeScaleMultiplier = 1.0f;
+    private SmokeVisualType lastSmokeVisualType = SmokeVisualType.TotalWarWarmCharcoal;
+    private Color lastSmokeStartColor = new Color(0.28f, 0.20f, 0.14f, 1.0f);
+    private Color lastSmokeEndColor = new Color(0.18f, 0.14f, 0.10f, 1.0f);
+
+    /// <summary>
+    /// 삼국지 토탈워 공식 연기 색상 프리셋 즉시 적용
+    /// </summary>
+    public void ApplySmokeColorPreset(SmokeVisualType type)
+    {
+        smokeVisualType = type;
+        switch (type)
+        {
+            case SmokeVisualType.TotalWarWarmCharcoal:
+            case SmokeVisualType.SpeciesAdaptive:
+                // [삼탈워 원본 훈연 회갈색] 삼탈워 영상 일치 볼륨 훈연 회갈색
+                smokeStartColor = new Color(0.62f, 0.56f, 0.50f, 1.0f);
+                smokeEndColor = new Color(0.75f, 0.70f, 0.65f, 1.0f);
+                break;
+            case SmokeVisualType.AshGray:
+                // [토탈워 표준 잿빛] 삼탈워 텍스처 원본 산불 잿빛 훈연
+                smokeStartColor = new Color(0.75f, 0.73f, 0.70f, 1.0f);
+                smokeEndColor = new Color(0.88f, 0.86f, 0.84f, 1.0f);
+                break;
+            case SmokeVisualType.PitchBlack:
+                // [삼탈워 짙은 흑갈색] 송진 급격 연소로 인한 짙은 검댕
+                smokeStartColor = new Color(0.35f, 0.32f, 0.30f, 1.0f);
+                smokeEndColor = new Color(0.48f, 0.44f, 0.42f, 1.0f);
+                break;
+            case SmokeVisualType.CustomColor:
+                break;
+        }
+
+        lastSmokeStartColor = smokeStartColor;
+        lastSmokeEndColor = smokeEndColor;
+        lastSmokeVisualType = smokeVisualType;
+
+        RefreshActiveSmokeVisuals();
+    }
+
+    /// <summary>
+    /// 현재 숲에서 활성화된 모든 연기 파티클의 크기, 진하기(농도) 및 색상 실시간 즉시 갱신
+    /// </summary>
+    public void RefreshActiveSmokeVisuals()
+    {
+        var allPS = GetComponentsInChildren<ParticleSystem>(true);
+        if (allPS == null || allPS.Length == 0) return;
+
+        float densityMult = Mathf.Clamp(smokeDensity, 0.1f, 1.0f);
+        float peakAlpha = Mathf.Clamp01(densityMult * 0.95f);
+        Color cStart = smokeStartColor;
+        Color cEnd = smokeEndColor;
+
+        foreach (var ps in allPS)
+        {
+            if (ps != null && ps.gameObject.name.Contains("VolumetricSmoke"))
+            {
+                var col = ps.colorOverLifetime;
+                if (col.enabled)
+                {
+                    Gradient grad = new Gradient();
+                    grad.SetKeys(
+                        new GradientColorKey[] { new GradientColorKey(cStart, 0f), new GradientColorKey(cEnd, 1f) },
+                        new GradientAlphaKey[] { 
+                            new GradientAlphaKey(0f, 0f), 
+                            new GradientAlphaKey(peakAlpha, 0.18f), 
+                            new GradientAlphaKey(peakAlpha * 0.65f, 0.65f), 
+                            new GradientAlphaKey(0f, 1f) 
+                        }
+                    );
+                    col.color = grad;
+                }
+
+                var main = ps.main;
+                main.startColor = new Color(cStart.r, cStart.g, cStart.b, peakAlpha);
+                main.startSize = new ParticleSystem.MinMaxCurve(0.85f * smokeScaleMultiplier, 1.65f * smokeScaleMultiplier);
+
+                var emission = ps.emission;
+                emission.rateOverTime = 16f * Mathf.Clamp(smokeScaleMultiplier, 0.5f, 2.5f) * Mathf.Lerp(0.85f, 1.35f, densityMult);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 이전 버전과의 호환용 래퍼
+    /// </summary>
+    public void RefreshActiveSmokeDensity() => RefreshActiveSmokeVisuals();
 
     /// <summary>
     /// 지역 테마 프리셋 설정에 따른 체크박스 동기화
@@ -535,8 +867,22 @@ public class TacticalForestZone : MonoBehaviour
     [ContextMenu("🍁 가을 계절 적용 (Autumn)")]
     public void SetSeasonAutumn() => SetSeason(Season.Autumn);
 
-    [ContextMenu("❄️ 겨울 계절 적용 (Winter)")]
-    public void SetSeasonWinter() => SetSeason(Season.Winter);
+    [ContextMenu("❄️ 눈 내린 겨울 적용 (Snowy Winter)")]
+    public void SetSeasonSnowyWinter()
+    {
+        enableWinterSnow = true;
+        winterSnowAmount = 0.85f;
+        SetSeason(Season.Winter);
+        Debug.Log($"<color=#00FFFF><b>[TacticalForestZone] ❄️ {gameObject.name}에 눈 내린 겨울 설경(Snowy Winter)이 적용되었습니다!</b></color>");
+    }
+
+    [ContextMenu("🍂 눈 안 온 마른 겨울 적용 (Dry Winter)")]
+    public void SetSeasonDryWinter()
+    {
+        enableWinterSnow = false;
+        SetSeason(Season.Winter);
+        Debug.Log($"<color=#FFD700><b>[TacticalForestZone] 🍂 {gameObject.name}에 눈이 오지 않은 삭막한 마른 겨울(Dry Winter)이 적용되었습니다!</b></color>");
+    }
 
     public void SetSeason(Season s)
     {
@@ -702,8 +1048,15 @@ public class TacticalForestZone : MonoBehaviour
         }
     }
 
+    [ContextMenu("❄️ 적설 상태 강제 동기화 (Force Refresh Snow)")]
     public void RefreshVegetationMaterials()
     {
+        materialCache.Clear();
+
+        if (vegetationRoot == null)
+        {
+            vegetationRoot = transform.Find("Vegetation_Container");
+        }
         if (vegetationRoot == null) return;
 
         for (int i = 0; i < vegetationRoot.childCount; i++)
@@ -719,6 +1072,37 @@ public class TacticalForestZone : MonoBehaviour
             else
             {
                 ApplyTreeMaterials(treeTransform.gameObject, objName);
+            }
+        }
+
+        // 오직 겨울(Winter)이고 enableWinterSnow가 켜져 있을 때만 눈 연출 활성화 (타 계절은 강제 0.0)
+        float effectiveSnow = (currentSeason == Season.Winter && enableWinterSnow) ? winterSnowAmount : 0f;
+        var renderers = vegetationRoot.GetComponentsInChildren<MeshRenderer>(true);
+        foreach (var mr in renderers)
+        {
+            if (mr == null) continue;
+            foreach (var m in mr.sharedMaterials)
+            {
+                if (m != null)
+                {
+                    if (m.HasProperty("_SnowAmount"))
+                    {
+                        m.SetFloat("_SnowAmount", effectiveSnow);
+                    }
+                    if (m.HasProperty("_LeafSnowRatio"))
+                    {
+                        m.SetFloat("_LeafSnowRatio", leafSnowRatio);
+                    }
+                    if (m.HasProperty("_SnowThreshold"))
+                    {
+                        m.SetFloat("_SnowThreshold", -0.15f);
+                    }
+                    if (m.HasProperty("_IsBamboo"))
+                    {
+                        bool isBambooMat = m.name.ToLower().Contains("bamboo");
+                        m.SetFloat("_IsBamboo", isBambooMat ? 1.0f : 0.0f);
+                    }
+                }
             }
         }
     }
@@ -739,7 +1123,7 @@ public class TacticalForestZone : MonoBehaviour
         }
     }
 
-    private void InitTreeCombustionNodes()
+    public void InitTreeCombustionNodes()
     {
         treeCombustionNodes.Clear();
         if (vegetationRoot == null)
@@ -802,7 +1186,9 @@ public class TacticalForestZone : MonoBehaviour
                 fireGauge = 0f,
                 burnProgress = 0f,
                 burnTimer = 0f,
-                burnDuration = duration
+                burnDuration = duration,
+                typeFlameMult = typeFlameMult,
+                typeSmokeMult = typeSmokeMult
             };
 
             treeCombustionNodes.Add(node);
@@ -929,8 +1315,8 @@ public class TacticalForestZone : MonoBehaviour
         float randVal = Mathf.Abs((node.transform.position.x * 7.13f + node.transform.position.z * 13.37f) % 1.0f);
         float moisture = Mathf.Lerp(0.85f, 1.25f, randVal);
 
-        float flameScale = Mathf.Sqrt(vol) * (2.05f - moisture) * flameScaleMultiplier;
-        float smokeScale = vol * moisture;
+        float flameScale = Mathf.Sqrt(vol) * (2.05f - moisture) * flameScaleMultiplier * node.typeFlameMult;
+        float smokeScale = vol * moisture * node.typeSmokeMult * smokeScaleMultiplier;
 
         GameObject fireInstance = CreateTreeFireInstance(
             leavesCenter,
@@ -957,7 +1343,11 @@ public class TacticalForestZone : MonoBehaviour
     public void ExtinguishFire()
     {
         enableFireVFX = false;
+        isForestRevealedByFire = false;
         ClearFireVFX();
+
+        MaterialPropertyBlock resetMpb = new MaterialPropertyBlock();
+        resetMpb.SetFloat(Shader.PropertyToID("_BurnProgress"), 0f);
 
         for (int i = 0; i < treeCombustionNodes.Count; i++)
         {
@@ -967,12 +1357,28 @@ public class TacticalForestZone : MonoBehaviour
             node.fireGauge = 0f;
             node.burnProgress = 0f;
             node.burnTimer = 0f;
+
             if (node.fireController != null)
             {
                 node.fireController.ResetFireState();
             }
+
+            // 모든 렌더러의 MaterialPropertyBlock _BurnProgress를 0.0으로 즉시 초기화하여 녹색 나뭇잎 복원
+            if (node.renderers != null)
+            {
+                for (int r = 0; r < node.renderers.Length; r++)
+                {
+                    if (node.renderers[r] != null)
+                    {
+                        node.renderers[r].SetPropertyBlock(resetMpb);
+                    }
+                }
+            }
         }
+
+        Debug.Log($"<color=#00FF88><b>[TacticalForestZone] 🧯 {gameObject.name}의 모든 화재가 완전히 진압되었으며, 나뭇잎과 은폐(스텔스)가 정상 복구되었습니다!</b></color>");
     }
+
 
     public void ClearFireVFX()
     {
@@ -988,6 +1394,28 @@ public class TacticalForestZone : MonoBehaviour
         {
             if (Application.isPlaying) Destroy(oldRoot.gameObject);
             else DestroyImmediate(oldRoot.gameObject);
+        }
+
+        // 나뭇잎(Leaves) 자식 등에 붙어있는 모든 잔여 화재 파티클/오브젝트 전수 검색 및 완전 파괴
+        string[] fireNames = new string[] {
+            "CompositeFlames_TotalWar", "VolumetricSmoke_TotalWar", "Rising_Embers_TotalWar",
+            "Fire_PointLight", "TotalWar_TreeFire", "Flames_Composite_TotalWar", "Smoke_Plume", "Embers_Sparks"
+        };
+
+        var allTransforms = GetComponentsInChildren<Transform>(true);
+        for (int i = allTransforms.Length - 1; i >= 0; i--)
+        {
+            var t = allTransforms[i];
+            if (t == null) continue;
+            for (int k = 0; k < fireNames.Length; k++)
+            {
+                if (t.gameObject.name.Contains(fireNames[k]))
+                {
+                    if (Application.isPlaying) Destroy(t.gameObject);
+                    else DestroyImmediate(t.gameObject);
+                    break;
+                }
+            }
         }
     }
 
@@ -1015,9 +1443,31 @@ public class TacticalForestZone : MonoBehaviour
             return (Vector3.zero, 2.5f, 5.0f);
 
         Transform treeTransform = treeObj.transform;
-        MeshFilter mf = treeObj.GetComponentInChildren<MeshFilter>();
-        Renderer ren = treeObj.GetComponentInChildren<Renderer>();
 
+        // 1. [핵심] 자식 렌더러 중 "Leaves" 또는 "Branch" 이름이 포함된 순수 나뭇잎 전용 렌더러 최우선 탐색
+        Renderer[] allRenderers = treeObj.GetComponentsInChildren<Renderer>(true);
+        Renderer leavesRen = null;
+        for (int i = 0; i < allRenderers.Length; i++)
+        {
+            string n = allRenderers[i].gameObject.name.ToLower();
+            if (n.Contains("leaves") || n.Contains("branch"))
+            {
+                leavesRen = allRenderers[i];
+                break;
+            }
+        }
+
+        if (leavesRen != null)
+        {
+            Bounds b = leavesRen.bounds;
+            Vector3 worldCenter = b.center; // 땅바닥이 아닌 순수 나뭇잎 수관 정중앙 (Y = 6~12m 상공)
+            float radius = Mathf.Max(b.extents.x, b.extents.z);
+            float height = b.size.y;
+            return (worldCenter, Mathf.Max(2.0f, radius), Mathf.Max(3.0f, height));
+        }
+
+        // 2. 단일 메쉬인 경우 Submesh 1(Leaves) 바운즈 탐색
+        MeshFilter mf = treeObj.GetComponentInChildren<MeshFilter>();
         if (mf != null && mf.sharedMesh != null && mf.sharedMesh.subMeshCount >= 2)
         {
             var submeshLeaves = mf.sharedMesh.GetSubMesh(1);
@@ -1029,18 +1479,23 @@ public class TacticalForestZone : MonoBehaviour
                 Vector3 worldExtents = Vector3.Scale(localBounds.extents, meshTrans.lossyScale);
                 float radius = Mathf.Max(Mathf.Abs(worldExtents.x), Mathf.Abs(worldExtents.z));
                 float height = Mathf.Abs(worldExtents.y) * 2f;
-                return (worldCenter, Mathf.Max(1.8f, radius), Mathf.Max(2.5f, height));
+                return (worldCenter, Mathf.Max(2.0f, radius), Mathf.Max(3.0f, height));
             }
         }
 
-        if (ren != null)
+        // 3. Fallback: 전체 렌더러 결합 바운즈의 상단 65% 지점 (절대 지면 밑동으로 가지 않음)
+        if (allRenderers.Length > 0)
         {
-            Bounds b = ren.bounds;
-            float leavesCenterY = b.min.y + b.size.y * 0.68f;
-            Vector3 worldCenter = new Vector3(b.center.x, leavesCenterY, b.center.z);
-            float radius = Mathf.Max(1.8f, Mathf.Max(b.extents.x, b.extents.z) * 0.9f);
-            float height = b.size.y * 0.55f;
-            return (worldCenter, radius, height);
+            Bounds combined = allRenderers[0].bounds;
+            for (int i = 1; i < allRenderers.Length; i++)
+            {
+                combined.Encapsulate(allRenderers[i].bounds);
+            }
+            float centerY = combined.min.y + combined.size.y * 0.68f;
+            Vector3 worldCenter = new Vector3(combined.center.x, centerY, combined.center.z);
+            float radius = Mathf.Max(combined.extents.x, combined.extents.z) * 0.90f;
+            float height = combined.size.y * 0.55f;
+            return (worldCenter, Mathf.Max(2.0f, radius), Mathf.Max(3.0f, height));
         }
 
         return (treeTransform.position + Vector3.up * 8.0f, 2.5f, 5.0f);
@@ -1059,48 +1514,106 @@ public class TacticalForestZone : MonoBehaviour
         GameObject fireGo = new GameObject("TotalWar_TreeFire");
         fireGo.transform.SetParent(parent, false);
         fireGo.transform.position = leavesPos;
+        fireGo.transform.rotation = Quaternion.identity;
 
-        MeshFilter targetMf = targetTree != null ? targetTree.GetComponentInChildren<MeshFilter>() : null;
-        Transform meshTrans = (targetMf != null) ? targetMf.transform : fireGo.transform;
+        Texture2D flameTex = null;
+        Texture2D smokeTex = null;
+        Texture2D emberTex = null;
+#if UNITY_EDITOR
+        string vfxTexPath = "Assets/TotalWar_ThreeKingdoms_Extracted/VFX/Textures/";
+        flameTex = AssetDatabase.LoadAssetAtPath<Texture2D>(vfxTexPath + "3k_anim_fire_a_diffuse.png")
+                ?? AssetDatabase.LoadAssetAtPath<Texture2D>(vfxTexPath + "totalwar_flame_particle.png");
+        smokeTex = AssetDatabase.LoadAssetAtPath<Texture2D>(vfxTexPath + "3k_anim_smoke_a_diffuse.png")
+                ?? AssetDatabase.LoadAssetAtPath<Texture2D>(vfxTexPath + "totalwar_smoke_particle.png");
+        emberTex = AssetDatabase.LoadAssetAtPath<Texture2D>(vfxTexPath + "totalwar_ember_particle.png");
+#endif
+        if (flameTex == null) flameTex = Resources.Load<Texture2D>("VFX/Textures/3k_anim_fire_a_diffuse");
+        if (smokeTex == null) smokeTex = Resources.Load<Texture2D>("VFX/Textures/3k_anim_smoke_a_diffuse");
+        Shader particleUnlit = Shader.Find("Universal Render Pipeline/Particles/Unlit") 
+                            ?? Shader.Find("Particles/Standard Unlit")
+                            ?? Shader.Find("Sprites/Default");
 
-        InitTotalWarMaterials();
-        Material finalFlamesMat = matCompositeFlames;
-        Material finalSmokeMat = matWispySmoke;
-        Material finalEmberMat = matTotalWarEmbers;
+        Material finalFlamesMat = CreateParticleMaterial(matCompositeFlames, flameTex, particleUnlit, new Color(2.0f, 1.35f, 0.45f, 1.0f), true);
+        Material finalSmokeMat = CreateParticleMaterial(matWispySmoke, smokeTex, particleUnlit, new Color(0.85f, 0.82f, 0.78f, 1.0f), false);
+        Material finalEmberMat = CreateParticleMaterial(matTotalWarEmbers, emberTex, particleUnlit, new Color(3.5f, 1.8f, 0.5f, 1f), true);
 
-        // Composite Flames
+        // 1. [삼국지 토탈워 본편 공식 메커니즘] 실제 나뭇잎 서브메시(Leaves) 표면 삼각형(Triangle) 직접 방출
+        MeshRenderer leavesRenderer = null;
+        MeshFilter leavesFilter = null;
+        if (targetTree != null)
+        {
+            var renderers = targetTree.GetComponentsInChildren<MeshRenderer>(true);
+            foreach (var r in renderers)
+            {
+                string rName = r.gameObject.name.ToLower();
+                if (rName.Contains("leave") || rName.Contains("leaf") || rName.Contains("branch"))
+                {
+                    leavesRenderer = r;
+                    leavesFilter = r.GetComponent<MeshFilter>();
+                    break;
+                }
+            }
+            if (leavesRenderer == null && renderers.Length > 0)
+            {
+                leavesRenderer = renderers[0];
+                leavesFilter = leavesRenderer.GetComponent<MeshFilter>();
+            }
+        }
+
+        Transform meshTrans = (leavesRenderer != null) ? leavesRenderer.transform : fireGo.transform;
+
+        // [핵심] 허공 구체가 아닌 나뭇잎 트랜스폼에 1:1로 밀착하여 메쉬 표면에서 직접 불꽃 방출
         GameObject flamesGo = new GameObject("CompositeFlames_TotalWar");
         flamesGo.transform.SetParent(meshTrans, false);
         flamesGo.transform.localPosition = Vector3.zero;
         flamesGo.transform.localRotation = Quaternion.identity;
+        flamesGo.transform.localScale = Vector3.one;
         ParticleSystem flamesPS = flamesGo.AddComponent<ParticleSystem>();
-        SetupCompositeFlamesPS(flamesPS, targetMf, finalFlamesMat, leavesRadius, flameScale);
+        SetupCompositeFlamesPS(flamesPS, leavesRadius, leavesHeight, finalFlamesMat, flameScale, leavesRenderer, leavesFilter);
 
-        // Volumetric Smoke
+        // 2. Volumetric Smoke (나뭇잎 상단에서 하늘로 확산 솟구치는 토탈워 정품 훈연 연기)
+        Color actualStartCol = smokeStartColor;
+        Color actualEndCol = smokeEndColor;
+        if (smokeVisualType == SmokeVisualType.SpeciesAdaptive && targetTree != null)
+        {
+            string treeName = targetTree.name.ToLower();
+            if (treeName.Contains("pine") || treeName.Contains("camphor"))
+            {
+                actualStartCol = new Color(0.28f, 0.20f, 0.14f, 1.0f);
+                actualEndCol = new Color(0.18f, 0.14f, 0.10f, 1.0f);
+            }
+            else
+            {
+                actualStartCol = new Color(0.48f, 0.44f, 0.40f, 1.0f);
+                actualEndCol = new Color(0.58f, 0.54f, 0.50f, 1.0f);
+            }
+        }
+
+        // [핵심 해결] 불이 나는 곳에서 연기가 함께 나오도록 나뭇잎 트랜스폼(meshTrans)에 1:1로 밀착
         GameObject smokeGo = new GameObject("VolumetricSmoke_TotalWar");
         smokeGo.transform.SetParent(meshTrans, false);
         smokeGo.transform.localPosition = Vector3.zero;
         smokeGo.transform.localRotation = Quaternion.identity;
+        smokeGo.transform.localScale = Vector3.one;
         ParticleSystem smokePS = smokeGo.AddComponent<ParticleSystem>();
-        SetupVolumetricSmokePS(smokePS, finalSmokeMat, leavesRadius, smokeScale);
+        SetupVolumetricSmokePS(smokePS, leavesRadius, leavesHeight, finalSmokeMat, smokeScale, actualStartCol, actualEndCol, leavesRenderer, leavesFilter, smokeDensity);
 
-        // Rising Embers
+        // 3. Rising Embers (나뭇잎 주변 비산 불티)
         GameObject embersGo = new GameObject("Rising_Embers_TotalWar");
-        embersGo.transform.SetParent(meshTrans, false);
-        embersGo.transform.localPosition = Vector3.zero;
-        embersGo.transform.localRotation = Quaternion.identity;
+        embersGo.transform.position = leavesPos;
+        embersGo.transform.SetParent(fireGo.transform, true);
         ParticleSystem embersPS = embersGo.AddComponent<ParticleSystem>();
         SetupEmbersPS(embersPS, finalEmberMat, leavesRadius, flameScale);
 
-        // Fire Light
+        // 4. Fire Point Light (나뭇잎과 지면을 따스하게 비추는 2200K 화재 광원)
         GameObject lightGo = new GameObject("Fire_PointLight");
-        lightGo.transform.SetParent(fireGo.transform, false);
-        lightGo.transform.localPosition = Vector3.zero;
+        lightGo.transform.position = leavesPos;
+        lightGo.transform.SetParent(fireGo.transform, true);
         Light fireLight = lightGo.AddComponent<Light>();
         fireLight.type = LightType.Point;
         fireLight.color = new Color(1.0f, 0.55f, 0.15f);
         fireLight.intensity = 3.2f * flameScale;
-        fireLight.range = Mathf.Max(12.0f, leavesRadius * 3.5f);
+        fireLight.range = Mathf.Max(14.0f, leavesRadius * 3.5f);
         fireLight.shadows = LightShadows.None;
 
         TotalWarFireVFXController controller = fireGo.AddComponent<TotalWarFireVFXController>();
@@ -1110,39 +1623,176 @@ public class TacticalForestZone : MonoBehaviour
         controller.RegisterSmokeParticle(smokePS);
         controller.RegisterEmbersParticle(embersPS);
 
+        // 즉시 재생 시작
+        flamesPS.Play();
+        smokePS.Play();
+        embersPS.Play();
+
         return fireGo;
     }
 
-    private static void SetupCompositeFlamesPS(ParticleSystem ps, MeshFilter targetMf, Material mat, float radius, float scale)
+    /// <summary>
+    /// URP Particle Unlit 투명 파이프라인 속성을 강제 설정하고 고해상도 텍스처를 보장하는 머티리얼 빌더
+    /// </summary>
+    private static Material CreateParticleMaterial(Material presetMat, Texture2D texture, Shader fallbackShader, Color color, bool isAdditive)
     {
-        var main = ps.main;
-        main.loop = true;
-        main.playOnAwake = true;
-        main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(1.6f, 2.8f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(0.12f, 0.35f);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.35f * scale, 0.70f * scale);
-        main.maxParticles = 250;
+        Material mat = null;
+        if (presetMat != null) mat = new Material(presetMat);
+        else if (fallbackShader != null) mat = new Material(fallbackShader);
 
-        var emission = ps.emission;
-        emission.enabled = true;
-        emission.rateOverTime = 65f * scale;
+        if (mat == null) return null;
 
-        var shape = ps.shape;
-        if (targetMf != null && targetMf.sharedMesh != null && targetMf.sharedMesh.subMeshCount >= 2)
+        if (texture != null)
         {
-            shape.enabled = true;
-            shape.shapeType = ParticleSystemShapeType.Mesh;
-            shape.mesh = targetMf.sharedMesh;
-            shape.useMeshMaterialIndex = true;
-            shape.meshMaterialIndex = 1; // Leaves
-            shape.meshShapeType = ParticleSystemMeshShapeType.Triangle;
+            mat.SetTexture("_BaseMap", texture);
+            mat.SetTexture("_MainTex", texture);
+        }
+
+        mat.SetColor("_BaseColor", color);
+        mat.SetColor("_Color", color);
+
+        mat.SetFloat("_Surface", 1.0f); // 투명 표면 (Transparent)
+        mat.SetFloat("_Blend", isAdditive ? 1.0f : 0.0f); // 1 = 가산 혼합(Additive), 0 = 알파 블렌드(Alpha Blend)
+        mat.SetInt("_SrcBlend", (int)(isAdditive ? UnityEngine.Rendering.BlendMode.One : UnityEngine.Rendering.BlendMode.SrcAlpha));
+        mat.SetInt("_DstBlend", (int)(isAdditive ? UnityEngine.Rendering.BlendMode.One : UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha));
+        mat.SetInt("_ZWrite", 0);
+        mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + (isAdditive ? 100 : 50);
+
+        mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        if (isAdditive)
+        {
+            mat.EnableKeyword("_SOFTPARTICLES_ON");
+            mat.SetFloat("_SoftParticlesEnabled", 1.0f);
+            mat.EnableKeyword("_BLENDMODE_ADD");
+            mat.DisableKeyword("_BLENDMODE_ALPHA");
+            mat.EnableKeyword("_FLIPBOOKBLENDING_ON");
+            mat.SetFloat("_FlipbookBlending", 1.0f);
+            mat.SetFloat("_FlipbookMode", 1.0f);
         }
         else
         {
-            shape.enabled = true;
+            // [연기 Smoke 핵심: 소프트 파티클 완전 비활성화 - 나뭇잎 교차 뎁스 페이딩 투명화 100% 방지]
+            mat.DisableKeyword("_SOFTPARTICLES_ON");
+            mat.SetFloat("_SoftParticlesEnabled", 0.0f);
+            mat.EnableKeyword("_BLENDMODE_ALPHA");
+            mat.DisableKeyword("_BLENDMODE_ADD");
+            mat.EnableKeyword("_FLIPBOOKBLENDING_ON");
+            mat.SetFloat("_FlipbookBlending", 1.0f);
+            mat.SetFloat("_FlipbookMode", 1.0f);
+        }
+
+        return mat;
+    }
+
+    private static void SetupCompositeFlamesPS(ParticleSystem ps, float radius, float height, Material mat, float scale, MeshRenderer leavesRenderer, MeshFilter leavesFilter)
+    {
+        // [오류 완전 차단] 수정 전 StopEmittingAndClear로 시스템 정지하여 duration 변경 오류 원천 방지
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        var main = ps.main;
+        main.duration = 1.0f;
+        main.loop = true;
+        main.playOnAwake = false;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        // 초당 24프레임 (24 FPS): 64프레임 / 24fps = 정확히 2.67초 주기
+        main.startLifetime = 2.67f;
+        // [삼탈워 REA 명세] 나뭇잎 표면 제자리 고정 (속도 0으로 잎사귀에 달라붙음)
+        main.startSpeed = 0f;
+        main.startSize = new ParticleSystem.MinMaxCurve(0.38f * scale, 0.72f * scale);
+        main.startRotation = new ParticleSystem.MinMaxCurve(-0.06f, 0.06f);
+        main.flipRotation = 0.5f;
+        main.gravityModifier = 0f;
+        main.startColor = Color.white;
+        main.maxParticles = 140;
+
+        var emission = ps.emission;
+        emission.enabled = true;
+        emission.rateOverTime = 36f * scale;
+
+        // [Git 검증 1:1 복원] 삼탈워 8x8 (64프레임) 플립북 24 FPS 실시간 춤추는 애니메이션
+        var tsa = ps.textureSheetAnimation;
+        tsa.enabled = true;
+        tsa.numTilesX = 8;
+        tsa.numTilesY = 8;
+        tsa.animation = ParticleSystemAnimationType.WholeSheet;
+        tsa.timeMode = ParticleSystemAnimationTimeMode.FPS;
+        tsa.fps = 24.0f; // 초당 24 FPS 끊김 없는 재생
+        AnimationCurve frameCurve = new AnimationCurve();
+        frameCurve.AddKey(0f, 0f);
+        frameCurve.AddKey(1f, 1f); // 0.0f ~ 1.0f 정규화 커브
+        tsa.frameOverTime = new ParticleSystem.MinMaxCurve(1f, frameCurve);
+        tsa.startFrame = new ParticleSystem.MinMaxCurve(0f, 0.15f); // 파티클별 위상 분산
+        tsa.cycleCount = 1;
+
+        var noise = ps.noise;
+        noise.enabled = false;
+        var sol = ps.sizeOverLifetime;
+        sol.enabled = false;
+
+        var col = ps.colorOverLifetime;
+        col.enabled = true;
+        Gradient grad = new Gradient();
+        grad.SetKeys(
+            new GradientColorKey[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+            new GradientAlphaKey[] { 
+                new GradientAlphaKey(0f, 0f), 
+                new GradientAlphaKey(1.0f, 0.08f), 
+                new GradientAlphaKey(1.0f, 0.85f), 
+                new GradientAlphaKey(0f, 1f) 
+            }
+        );
+        col.color = grad;
+
+        // [핵심: 나뭇잎 메쉬 표면 삼각형(Triangle) 직접 방출 - 허공 화재 100% 박멸]
+        var shape = ps.shape;
+        shape.enabled = true;
+        shape.normalOffset = 0.18f;
+        bool shapeBound = false;
+
+        if (leavesRenderer != null)
+        {
+            shape.shapeType = ParticleSystemShapeType.MeshRenderer;
+            shape.meshRenderer = leavesRenderer;
+            shape.meshShapeType = ParticleSystemMeshShapeType.Triangle;
+            shape.useMeshColors = false;
+
+            if (leavesFilter != null && leavesFilter.sharedMesh != null && leavesFilter.sharedMesh.subMeshCount >= 2)
+            {
+                shape.useMeshMaterialIndex = true;
+                shape.meshMaterialIndex = 1; // Submesh 1 = 나뭇잎(Leaves)
+            }
+            else
+            {
+                shape.useMeshMaterialIndex = false;
+                shape.meshMaterialIndex = 0;
+            }
+            shapeBound = true;
+        }
+        else if (leavesFilter != null && leavesFilter.sharedMesh != null)
+        {
+            shape.shapeType = ParticleSystemShapeType.Mesh;
+            shape.mesh = leavesFilter.sharedMesh;
+            shape.meshShapeType = ParticleSystemMeshShapeType.Triangle;
+            shape.useMeshColors = false;
+
+            if (leavesFilter.sharedMesh.subMeshCount >= 2)
+            {
+                shape.useMeshMaterialIndex = true;
+                shape.meshMaterialIndex = 1;
+            }
+            else
+            {
+                shape.useMeshMaterialIndex = false;
+                shape.meshMaterialIndex = 0;
+            }
+            shapeBound = true;
+        }
+
+        if (!shapeBound)
+        {
             shape.shapeType = ParticleSystemShapeType.Sphere;
-            shape.radius = Mathf.Max(1.5f, radius * 0.85f);
+            shape.radius = Mathf.Max(1.6f, radius * 0.85f);
+            shape.position = Vector3.zero;
         }
 
         var psr = ps.GetComponent<ParticleSystemRenderer>();
@@ -1160,44 +1810,181 @@ public class TacticalForestZone : MonoBehaviour
         });
     }
 
-    private static void SetupVolumetricSmokePS(ParticleSystem ps, Material mat, float radius, float scale)
+    private static void SetupVolumetricSmokePS(
+        ParticleSystem ps, 
+        float radius, 
+        float height, 
+        Material mat, 
+        float scale, 
+        Color startCol,
+        Color endCol,
+        MeshRenderer leavesRenderer = null, 
+        MeshFilter leavesFilter = null,
+        float density = 0.75f)
     {
+        // [오류 완전 차단] 수정 전 StopEmittingAndClear로 시스템 정지하여 duration 변경 오류 원천 방지
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
         var main = ps.main;
+        main.duration = 1.0f;
         main.loop = true;
-        main.playOnAwake = true;
+        main.playOnAwake = false;
         main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(4.5f, 7.5f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(0.20f, 0.65f);
-        main.startSize = new ParticleSystem.MinMaxCurve(1.5f * scale, 3.2f * scale);
-        main.startColor = new Color(0.25f, 0.22f, 0.20f, 0.65f);
-        main.maxParticles = 120;
+        // [삼탈워 영상 일치화] 대기 중에 오래 머물러 거대 구름이 되지 않도록 2.2초~3.2초 후 자연 소멸
+        main.startLifetime = new ParticleSystem.MinMaxCurve(2.2f, 3.2f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.8f, 1.6f);
+
+        // [삼탈워 영상 일치화] 나뭇가지/화염 크기 및 사용자 설정 scale 정밀 비례
+        main.startSize = new ParticleSystem.MinMaxCurve(0.85f * scale, 1.65f * scale);
+        main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+        main.gravityModifier = -0.07f; // 상공으로 스멀스멀 피어오르는 부드러운 부력
+
+        // [연기 농도 / 진하기 배율 적용: 0.1(매우 연함) ~ 0.75(기본) ~ 1.0(아주 진함)]
+        float densityMult = Mathf.Clamp(density, 0.1f, 1.0f);
+        float peakAlpha = Mathf.Clamp01(densityMult * 0.95f);
+
+        main.startColor = new Color(startCol.r, startCol.g, startCol.b, peakAlpha);
+        main.maxParticles = (int)(60 * Mathf.Lerp(0.8f, 1.4f, densityMult));
 
         var emission = ps.emission;
         emission.enabled = true;
-        emission.rateOverTime = 16f * scale;
+        emission.rateOverTime = 16f * Mathf.Clamp(scale, 0.5f, 2.5f) * Mathf.Lerp(0.85f, 1.35f, densityMult);
 
+        // [삼국지 토탈워 본편 공식 8x8 플립북 연기 실시간 애니메이션]
+        var tsa = ps.textureSheetAnimation;
+        tsa.enabled = true;
+        tsa.numTilesX = 8;
+        tsa.numTilesY = 8;
+        tsa.animation = ParticleSystemAnimationType.WholeSheet;
+        tsa.timeMode = ParticleSystemAnimationTimeMode.Lifetime;
+        AnimationCurve frameCurve = new AnimationCurve();
+        frameCurve.AddKey(0f, 0f);
+        frameCurve.AddKey(1f, 1f);
+        tsa.frameOverTime = new ParticleSystem.MinMaxCurve(1f, frameCurve);
+        tsa.startFrame = new ParticleSystem.MinMaxCurve(0f, 0.25f);
+        tsa.cycleCount = 1;
+
+        var rot = ps.rotationOverLifetime;
+        rot.enabled = true;
+        rot.z = new ParticleSystem.MinMaxCurve(-0.20f, 0.20f);
+
+        // [삼탈워 공식] 볼륨 훈연 일렁임 노이즈 모듈
+        var noise = ps.noise;
+        noise.enabled = true;
+        noise.strength = 0.25f;
+        noise.frequency = 0.35f;
+        noise.scrollSpeed = 0.60f;
+        noise.damping = true;
+
+        // [삼탈워 영상 일치화] 과도한 팽창 억제 (1.45배만 자연스럽게 확산)
+        var sol = ps.sizeOverLifetime;
+        sol.enabled = true;
+        AnimationCurve sizeCurve = new AnimationCurve();
+        sizeCurve.AddKey(0f, 0.85f);
+        sizeCurve.AddKey(0.40f, 1.15f);
+        sizeCurve.AddKey(1f, 1.45f);
+        sol.size = new ParticleSystem.MinMaxCurve(1f, sizeCurve);
+
+        // [삼탈워 영상 일치화: 은은하게 투과되는 반투명 훈연 그라디언트]
+        var col = ps.colorOverLifetime;
+        col.enabled = true;
+        Gradient grad = new Gradient();
+        grad.SetKeys(
+            new GradientColorKey[] { 
+                new GradientColorKey(startCol, 0f), 
+                new GradientColorKey(endCol, 1f) 
+            },
+            new GradientAlphaKey[] { 
+                new GradientAlphaKey(0f, 0f), 
+                new GradientAlphaKey(peakAlpha, 0.15f), // 15% 시점에서 은은한 반투명 피크!
+                new GradientAlphaKey(peakAlpha * 0.60f, 0.65f), // 65% 시점에서 서서히 흩어짐
+                new GradientAlphaKey(0f, 1f)        // 소멸 시 자연스러운 페이드아웃
+            }
+        );
+        col.color = grad;
+
+        // [핵심 해결: 불이 나는 곳에서 연기가 함께 발생하도록 나뭇잎 메쉬 표면 삼각형(Triangle) 직접 방출]
         var shape = ps.shape;
         shape.enabled = true;
-        shape.shapeType = ParticleSystemShapeType.Sphere;
-        shape.radius = radius * 0.9f;
+        shape.normalOffset = 0.22f; // 나뭇잎 표면에서 위로 살짝 방출
+        bool shapeBound = false;
+
+        if (leavesRenderer != null)
+        {
+            shape.shapeType = ParticleSystemShapeType.MeshRenderer;
+            shape.meshRenderer = leavesRenderer;
+            shape.meshShapeType = ParticleSystemMeshShapeType.Triangle;
+            shape.useMeshColors = false;
+
+            if (leavesFilter != null && leavesFilter.sharedMesh != null && leavesFilter.sharedMesh.subMeshCount >= 2)
+            {
+                shape.useMeshMaterialIndex = true;
+                shape.meshMaterialIndex = 1; // Submesh 1 = 나뭇잎(Leaves)
+            }
+            else
+            {
+                shape.useMeshMaterialIndex = false;
+                shape.meshMaterialIndex = 0;
+            }
+            shapeBound = true;
+        }
+        else if (leavesFilter != null && leavesFilter.sharedMesh != null)
+        {
+            shape.shapeType = ParticleSystemShapeType.Mesh;
+            shape.mesh = leavesFilter.sharedMesh;
+            shape.meshShapeType = ParticleSystemMeshShapeType.Triangle;
+            shape.useMeshColors = false;
+
+            if (leavesFilter.sharedMesh.subMeshCount >= 2)
+            {
+                shape.useMeshMaterialIndex = true;
+                shape.meshMaterialIndex = 1;
+            }
+            else
+            {
+                shape.useMeshMaterialIndex = false;
+                shape.meshMaterialIndex = 0;
+            }
+            shapeBound = true;
+        }
+
+        if (!shapeBound)
+        {
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = Mathf.Max(1.4f, radius * 0.75f);
+            shape.position = Vector3.zero;
+        }
 
         var psr = ps.GetComponent<ParticleSystemRenderer>();
         psr.material = mat;
         psr.renderMode = ParticleSystemRenderMode.Billboard;
         psr.alignment = ParticleSystemRenderSpace.View;
-        psr.sortMode = ParticleSystemSortMode.OldestInFront;
+        psr.sortMode = ParticleSystemSortMode.Distance;
+        psr.SetActiveVertexStreams(new List<ParticleSystemVertexStream> {
+            ParticleSystemVertexStream.Position,
+            ParticleSystemVertexStream.Normal,
+            ParticleSystemVertexStream.Color,
+            ParticleSystemVertexStream.UV,
+            ParticleSystemVertexStream.UV2,
+            ParticleSystemVertexStream.AnimBlend
+        });
     }
 
     private static void SetupEmbersPS(ParticleSystem ps, Material mat, float radius, float scale)
     {
+        // [오류 완전 차단] 수정 전 StopEmittingAndClear로 시스템 정지하여 duration 변경 오류 원천 방지
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
         var main = ps.main;
+        main.duration = 1.0f;
         main.loop = true;
-        main.playOnAwake = true;
+        main.playOnAwake = false;
         main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(2.0f, 4.0f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(0.5f, 1.8f);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.08f * scale, 0.22f * scale);
+        main.startLifetime = new ParticleSystem.MinMaxCurve(2.0f, 3.8f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.8f, 2.2f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.06f * scale, 0.16f * scale);
         main.startColor = new Color(1.0f, 0.65f, 0.2f, 0.9f);
+        main.gravityModifier = -0.15f; // 하늘로 솟구치는 불티
         main.maxParticles = 80;
 
         var emission = ps.emission;
@@ -1207,11 +1994,19 @@ public class TacticalForestZone : MonoBehaviour
         var shape = ps.shape;
         shape.enabled = true;
         shape.shapeType = ParticleSystemShapeType.Sphere;
-        shape.radius = radius * 0.8f;
+        shape.radius = Mathf.Max(1.6f, radius * 0.9f);
+
+        var sizeOverLifetime = ps.sizeOverLifetime;
+        sizeOverLifetime.enabled = true;
+        AnimationCurve curve = new AnimationCurve();
+        curve.AddKey(0f, 1f);
+        curve.AddKey(1f, 0.1f);
+        sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, curve);
 
         var psr = ps.GetComponent<ParticleSystemRenderer>();
         psr.material = mat;
         psr.renderMode = ParticleSystemRenderMode.Billboard;
+        psr.alignment = ParticleSystemRenderSpace.View;
     }
 
     private List<GameObject> LoadTreeModels()
@@ -1441,7 +2236,7 @@ public class TacticalForestZone : MonoBehaviour
         {
             Shader smokeShader = Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Particles/Standard Unlit");
             matWispySmoke = new Material(smokeShader) { name = "RuntimeFallback_WispySmoke" };
-            matWispySmoke.SetColor("_BaseColor", new Color(0.25f, 0.22f, 0.20f, 0.65f));
+            matWispySmoke.SetColor("_BaseColor", new Color(0.85f, 0.83f, 0.80f, 1.0f));
         }
         if (matTotalWarEmbers == null)
         {
@@ -1466,12 +2261,18 @@ public class TacticalForestZone : MonoBehaviour
         // 수종별 전용 머티리얼 준비
         Material trunkMat = null;
         Material leavesMat = null;
-        Material extraMat1 = null; // aerial roots or twigs
-        Material extraMat2 = null; // shrub or flower
+        Material extraMat1 = null; // 기근(공기뿌리) 또는 잔가지 전용 머티리얼
+        Material extraMat2 = null; // 관목 또는 꽃잎 전용 머티리얼
+
+        bool isWinter = (currentSeason == Season.Winter);
+        bool isSnowyWinter = isWinter && enableWinterSnow && (winterSnowAmount > 0.001f);
+        bool isDryWinter = isWinter && !isSnowyWinter;
 
         if (nameLower.Contains("bamboo"))
         {
             trunkMat = GetOrCreateMaterialExact("bamboo_trunk_base_colour", "bamboo_trunk_normal", false, false);
+            // 삼탈워 원본 고증: 대나무는 사계절 상록수로서 별도의 겨울 텍스처(tree_bamboo_wi_base_colour)가 존재하지 않으며,
+            // 사계절 내내 bamboo_leaf_base_colour 정품 텍스처를 온전히 사용하고 동적 FoliageWind 셰이더를 통해 눈을 얹음
             leavesMat = GetOrCreateMaterialExact("bamboo_leaf_base_colour", "bamboo_leaf_normal", true, true);
         }
         else if (nameLower.Contains("huangshan"))
@@ -1492,8 +2293,8 @@ public class TacticalForestZone : MonoBehaviour
         else if (nameLower.Contains("pine"))
         {
             trunkMat = GetOrCreateMaterialExact("pine_trunk_base_colour", "pine_trunk_normal", false, false);
-            string pineLeaf = (currentSeason == Season.Winter) ? "tree_pine_wi_base_colour" : "tree_pine_su_base_colour";
-            leavesMat = GetOrCreateMaterialExact(pineLeaf, null, true, true);
+            string pineLeaf = isSnowyWinter ? "tree_pine_wi_base_colour" : "tree_pine_su_base_colour";
+            leavesMat = GetOrCreateMaterialExact(pineLeaf, "pine_normal", true, true);
         }
         else if (nameLower.Contains("camphor"))
         {
@@ -1542,7 +2343,7 @@ public class TacticalForestZone : MonoBehaviour
         {
             string seasonKey = (currentSeason == Season.Spring) ? "tree_magnolia_sp_base_colour" :
                               ((currentSeason == Season.Autumn) ? "tree_magnolia_au_base_colour" :
-                              ((currentSeason == Season.Winter) ? "tree_magnolia_wi_base_colour" : "tree_magnolia_su_base_colour"));
+                              (isSnowyWinter ? "tree_magnolia_wi_base_colour" : "tree_magnolia_su_base_colour"));
             leavesMat = GetOrCreateMaterialExact(seasonKey, "tree_magnolia_normal", true, true);
             trunkMat = leavesMat;
         }
@@ -1554,18 +2355,30 @@ public class TacticalForestZone : MonoBehaviour
         }
         else if (nameLower.Contains("ginkgo"))
         {
-            trunkMat = GetOrCreateMaterialExact("tree_ginko_trunk_base_colour", null, false, false);
-            leavesMat = GetOrCreateMaterialExact("tree_ginko_leaves_base_colour", null, true, true);
+            trunkMat = GetOrCreateMaterialExact("tree_ginko_trunk_base_colour", "tree_ginko_trunk_normal", false, false);
+            string ginkgoLeaf = (currentSeason == Season.Autumn) ? "tree_ginko_leaves_au_base_colour" :
+                               (isSnowyWinter ? "tree_ginko_leaves_wi_base_colour" :
+                               (isDryWinter ? "tree_ginko_leaves_br_base_colour" :
+                               ((currentSeason == Season.Summer) ? "tree_ginko_leaves_su_base_colour" : "tree_ginko_leaves_base_colour")));
+            leavesMat = GetOrCreateMaterialExact(ginkgoLeaf, "tree_ginko_leaves_normal", true, true);
         }
         else if (nameLower.Contains("maple"))
         {
-            trunkMat = GetOrCreateMaterialExact("tree_maple_bark_base_colour", null, false, false);
-            leavesMat = GetOrCreateMaterialExact("tree_maple_leaves_base_colour", null, true, true);
+            trunkMat = GetOrCreateMaterialExact("tree_maple_bark_base_colour", "tree_maple_bark_normal", false, false);
+            string mapleLeaf = (currentSeason == Season.Autumn) ? "tree_maple_leaves_au_base_colour" :
+                              (isSnowyWinter ? "tree_maple_leaves_wi_base_colour" :
+                              (isDryWinter ? "tree_maple_leaves_br_base_colour" :
+                              ((currentSeason == Season.Summer) ? "tree_maple_leaves_su_base_colour" : "tree_maple_leaves_base_colour")));
+            leavesMat = GetOrCreateMaterialExact(mapleLeaf, "tree_maple_leaves_normal", true, true);
         }
         else if (nameLower.Contains("willow"))
         {
-            trunkMat = GetOrCreateMaterialExact("willow_trunk_base_colour", null, false, false);
-            leavesMat = GetOrCreateMaterialExact("willow_leaves_base_colour", null, true, true);
+            trunkMat = GetOrCreateMaterialExact("willow_trunk_base_colour", "willow_trunk_normal", false, false);
+            string willowLeaf = (currentSeason == Season.Spring) ? "willow_leaves_sp_base_colour" :
+                               ((currentSeason == Season.Autumn) ? "willow_leaves_au_base_colour" :
+                               (isSnowyWinter ? "willow_leaves_wi_base_colour" :
+                               (isDryWinter ? "willow_leaves_br_base_colour" : "willow_leaves_su_base_colour")));
+            leavesMat = GetOrCreateMaterialExact(willowLeaf, "willow_leaves_normal", true, true);
         }
         else if (nameLower.Contains("scholar_broken"))
         {
@@ -1767,10 +2580,10 @@ public class TacticalForestZone : MonoBehaviour
             return cached;
         }
 
-        // 쉐이더 탐색: URP Foliage Wind 우선 적용, 차선 URP Lit
+        // 쉐이더 탐색: URP Foliage Wind 우선 적용, 차선 URP Lit (줄기와 나뭇잎 모두 FoliageWind 셰이더를 우선 적용하여 숯 탄화 완벽 구현)
         Shader foliageShader = Shader.Find("Universal Render Pipeline/TotalWarFoliageWind");
         Shader litShader = Shader.Find("Universal Render Pipeline/Lit");
-        Shader targetShader = (isLeaves && foliageShader != null) ? foliageShader : (litShader != null ? litShader : Shader.Find("Standard"));
+        Shader targetShader = (foliageShader != null) ? foliageShader : (litShader != null ? litShader : Shader.Find("Standard"));
 
         Material mat = new Material(targetShader);
         mat.name = cacheKey;
@@ -1782,11 +2595,23 @@ public class TacticalForestZone : MonoBehaviour
 #if UNITY_EDITOR
         string albedoPath = $"{texDir}{baseColourFileName}.dds";
         albedo = AssetDatabase.LoadAssetAtPath<Texture2D>(albedoPath);
+        if (albedo == null)
+        {
+            albedo = AssetDatabase.LoadAssetAtPath<Texture2D>($"{texDir}{baseColourFileName}.png");
+        }
+        if (albedo == null)
+        {
+            Debug.LogWarning($"[TacticalForestZone] 식생 텍스처 '{baseColourFileName}'를 찾을 수 없습니다! ({albedoPath})");
+        }
 
         if (!string.IsNullOrEmpty(normalFileName))
         {
             string normalPath = $"{texDir}{normalFileName}.dds";
             normal = AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath);
+            if (normal == null)
+            {
+                normal = AssetDatabase.LoadAssetAtPath<Texture2D>($"{texDir}{normalFileName}.png");
+            }
         }
 #endif
 
@@ -1811,6 +2636,8 @@ public class TacticalForestZone : MonoBehaviour
             mat.EnableKeyword("_ALPHATEST_ON");
             mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.AlphaTest;
             mat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off); // 나뭇잎 양면 렌더링
+            mat.SetFloat("_WindMultiplier", 1.0f);
+            mat.SetFloat("_LeafFlutter", 0.8f);
         }
         else
         {
@@ -1819,7 +2646,39 @@ public class TacticalForestZone : MonoBehaviour
             mat.DisableKeyword("_ALPHATEST_ON");
             mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
             mat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Back);
+            mat.SetFloat("_WindMultiplier", 0.04f); // 기둥은 지면에 단단히 고정 (바람에 펄럭이지 않음)
+            mat.SetFloat("_LeafFlutter", 0.0f);    // 나뭇잎 떨림 없음
         }
+
+        // 오직 겨울(Winter)이고 enableWinterSnow가 켜져 있을 때만 눈 연출 활성화 (타 계절은 강제 0.0)
+        if (mat.HasProperty("_SnowAmount"))
+        {
+            float effectiveSnow = (currentSeason == Season.Winter && enableWinterSnow) ? winterSnowAmount : 0f;
+            mat.SetFloat("_SnowAmount", effectiveSnow);
+        }
+        if (mat.HasProperty("_LeafSnowRatio"))
+        {
+            mat.SetFloat("_LeafSnowRatio", leafSnowRatio);
+        }
+        if (mat.HasProperty("_SnowThreshold"))
+        {
+            // 삼탈워 원본 기준: 나뭇잎은 상단 윗면(0.20)에만 서리, 기둥은 수직면 배제하고 완만한 상단 가지(0.72)에만 얇은 눈선
+            mat.SetFloat("_SnowThreshold", isCutout ? 0.20f : 0.72f);
+        }
+        if (mat.HasProperty("_IsBamboo"))
+        {
+            bool isBambooMat = baseColourFileName.ToLower().Contains("bamboo");
+            mat.SetFloat("_IsBamboo", isBambooMat ? 1.0f : 0.0f);
+        }
+
+        // 삼탈워 원본 탄화(Charred) 텍스처 연결 (줄기와 나뭇잎 모두에 바인딩하여 전소 시 칠흑 같은 숯으로 변모)
+#if UNITY_EDITOR
+        Texture2D charred = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/TotalWar_ThreeKingdoms_Extracted/VFX/Textures/3k_cityprop_mines_wood_ashes_base_colour.png");
+        if (charred != null && mat.HasProperty("_CharredMap"))
+        {
+            mat.SetTexture("_CharredMap", charred);
+        }
+#endif
 
         materialCache[cacheKey] = mat;
         return mat;

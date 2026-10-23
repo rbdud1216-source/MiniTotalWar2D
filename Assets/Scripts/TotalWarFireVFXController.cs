@@ -118,7 +118,8 @@ public class TotalWarFireVFXController : MonoBehaviour
     {
         if (ps == null) return;
         psSmoke = ps;
-        initialSmokeRate = ps.emission.rateOverTime.constant;
+        float rate = ps.emission.rateOverTime.constant;
+        initialSmokeRate = (rate > 1f) ? rate : 22f;
     }
 
     /// <summary>
@@ -128,7 +129,8 @@ public class TotalWarFireVFXController : MonoBehaviour
     {
         if (ps == null) return;
         psEmbers = ps;
-        initialEmbersRate = ps.emission.rateOverTime.constant;
+        float rate = ps.emission.rateOverTime.constant;
+        initialEmbersRate = (rate > 1f) ? rate : 22f;
     }
 
     private void InitComponents()
@@ -147,13 +149,16 @@ public class TotalWarFireVFXController : MonoBehaviour
             {
                 if (psFlames == null) psFlames = ps;
                 psFlamesList.Add(ps);
-                initialFlamesRates.Add(ps.emission.rateOverTime.constant);
-                initialFlamesRate = ps.emission.rateOverTime.constant;
+                float rate = ps.emission.rateOverTime.constant;
+                float validRate = (rate > 1f) ? rate : 42f;
+                initialFlamesRates.Add(validRate);
+                initialFlamesRate = validRate;
             }
             else if (psName.Contains("smoke"))
             {
                 psSmoke = ps;
-                initialSmokeRate = ps.emission.rateOverTime.constant;
+                float rate = ps.emission.rateOverTime.constant;
+                initialSmokeRate = (rate > 1f) ? rate : 22f;
             }
             else if (psName.Contains("ground"))
             {
@@ -367,7 +372,7 @@ public class TotalWarFireVFXController : MonoBehaviour
         if (psSmoke != null)
         {
             var emission = psSmoke.emission;
-            if (burnProgress >= 0.90f)
+            if (burnProgress >= 0.92f)
             {
                 // 완전 전소 완료 시 연기 완전 차단 및 정지
                 emission.rateOverTime = 0f;
@@ -376,24 +381,24 @@ public class TotalWarFireVFXController : MonoBehaviour
             else if (burnProgress >= 0.68f)
             {
                 // 앙상하게 탄 숯가지만 남은 단계: 실낱같이 가느다랗게 피어오르는 미세 잔여 훈연
-                float remain = 1.0f - ((burnProgress - 0.68f) / 0.22f);
-                emission.rateOverTime = Mathf.Max(0.5f, 2.0f * remain);
+                float remain = 1.0f - ((burnProgress - 0.68f) / 0.24f);
+                emission.rateOverTime = Mathf.Max(2.0f, 6.0f * remain);
             }
             else if (burnProgress >= 0.50f)
             {
                 // 나뭇잎 소진에 따라 연기 발생량이 서서히 잦아듦
                 float decay = 1.0f - ((burnProgress - 0.50f) / 0.18f);
-                emission.rateOverTime = Mathf.Lerp(2.0f, initialSmokeRate * 1.25f, decay);
+                emission.rateOverTime = Mathf.Lerp(6.0f, initialSmokeRate * 1.35f, decay);
             }
             else if (burnProgress >= 0.10f)
             {
-                // 불길 확산 및 절정 단계: 풍성한 훈연 구름
-                emission.rateOverTime = initialSmokeRate * 1.25f;
+                // 불길 확산 및 절정 단계: 풍성하고 묵직한 훈연 구름
+                emission.rateOverTime = Mathf.Max(30f, initialSmokeRate * 1.5f);
             }
             else
             {
-                // [착화 전 훈연 및 초기 발화 단계]: 불은 없거나 작은데 연기부터 뭉게뭉게 피어오름!
-                emission.rateOverTime = initialSmokeRate * 0.95f;
+                // [착화 전 훈연 및 초기 발화 단계]: 불은 작거나 없어도 짙은 연기부터 뭉게뭉게 피어오름!
+                emission.rateOverTime = Mathf.Max(24f, initialSmokeRate * 1.2f);
             }
         }
 

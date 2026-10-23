@@ -133,17 +133,12 @@ Shader "TotalWar/VFX/CompositeFlames"
 
                 // [3중 복합 가산 및 볼륨 합성]
                 // 코어 중심부는 Additive 효과로 눈부시게 타오르고, 외곽은 볼륨감 있게 감싸줌
-                half3 finalRgb = (rgbA * alphaA * 1.35) + (rgbB * alphaB * 1.0) + (rgbH * alphaH * 0.75);
-                finalRgb *= input.color.rgb * _GlowIntensity;
+                half3 emissiveFire = (rgbA * 1.35 + rgbB * 1.0 + rgbH * 0.75) * input.color.rgb * _GlowIntensity;
+                half flameAlpha = saturate(alphaA * 1.1 + alphaB * 0.9 + alphaH * 0.7) * input.color.a;
+                flameAlpha = pow(flameAlpha, _SoftFalloff);
 
-                half finalAlpha = saturate(alphaA * 1.2 + alphaB * 0.9 + alphaH * 0.7) * input.color.a;
-
-                // 부드러운 대기 감쇄 (Atmospheric Soft Diffusion)
-                // 칼날처럼 쨍하게 잘리는 경계를 연기처럼 부드럽게 감쇄시켜 현실적인 삼탈워 대기 화염 완성
-                finalAlpha = pow(finalAlpha, _SoftFalloff);
-
-                // Pre-multiplied Alpha 출력: 밝은 코어는 은은하게 빛나고 외곽은 연기처럼 자연스럽게 블렌딩
-                return half4(finalRgb * finalAlpha, finalAlpha);
+                // Pre-multiplied Alpha 출력 (One / OneMinusSrcAlpha): 밝은 코어는 눈부시게 빛나고 외곽은 부드럽게 대기 합성
+                return half4(emissiveFire * flameAlpha, flameAlpha);
             }
             ENDHLSL
         }
