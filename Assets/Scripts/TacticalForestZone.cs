@@ -61,6 +61,34 @@ public class TacticalForestZone : MonoBehaviour
     private static readonly List<TacticalForestZone> activeZones = new List<TacticalForestZone>();
     public static IReadOnlyList<TacticalForestZone> ActiveZones => activeZones;
 
+    /// <summary>
+    /// 특정 월드 좌표가 전장 내 활성화된 임의의 숲 구역 내부인지 판정
+    /// </summary>
+    public static bool IsPointInAnyForest(Vector3 worldPos)
+    {
+        if (activeZones == null || activeZones.Count == 0) return false;
+        for (int i = 0; i < activeZones.Count; i++)
+        {
+            var zone = activeZones[i];
+            if (zone == null) continue;
+            Vector3 center = zone.transform.position;
+            if (zone.shape == ZoneShape.Circle)
+            {
+                float dx = worldPos.x - center.x;
+                float dz = worldPos.z - center.z;
+                if (dx * dx + dz * dz <= zone.radius * zone.radius) return true;
+            }
+            else
+            {
+                float hx = zone.boxSize.x * 0.5f;
+                float hz = zone.boxSize.y * 0.5f;
+                Vector3 local = zone.transform.InverseTransformPoint(worldPos);
+                if (Mathf.Abs(local.x) <= hx && Mathf.Abs(local.z) <= hz) return true;
+            }
+        }
+        return false;
+    }
+
     [Header("🌲 숲 구역 형태 및 테마 프리셋")]
     [Tooltip("숲 구역 형태 (원형 또는 직사각형)")]
     public ZoneShape shape = ZoneShape.Circle;
@@ -1330,6 +1358,52 @@ public class TacticalForestZone : MonoBehaviour
         );
 
         node.fireController = fireInstance.GetComponent<TotalWarFireVFXController>();
+
+        // 나무가 발화할 때 나무 밑동의 개별 풀포기에도 불씨가 옮겨붙도록 양방향 연동
+        if (MiniTotalWar.TacticalGrassRenderer.Instance != null)
+        {
+            MiniTotalWar.TacticalGrassRenderer.Instance.IgnitePlantAt(node.transform.position, 3.2f);
+        }
+    }
+
+    /// <summary>
+    /// 🔥 들불(풀포기/부시 화재)이나 불화살이 특정 좌표에 닿았을 때, 반경 내 가장 가까운 개별 수목 노드에 불을 옮겨붙입니다.
+    /// </summary>
+    public bool IgniteAt(Vector3 worldPos, float searchRadius = 6.5f)
+    {
+        if (treeCombustionNodes == null || treeCombustionNodes.Count == 0)
+        {
+            InitTreeCombustionNodes();
+        }
+        if (treeCombustionNodes.Count == 0) return false;
+
+        enableFireVFX = true;
+
+        TreeCombustionNode closestNode = null;
+        float minSq = searchRadius * searchRadius;
+
+        for (int i = 0; i < treeCombustionNodes.Count; i++)
+        {
+            var node = treeCombustionNodes[i];
+            if (node == null || node.transform == null) continue;
+            if (node.state == TreeCombustionState.Burning || node.state == TreeCombustionState.Charred) continue;
+
+            float dx = node.transform.position.x - worldPos.x;
+            float dz = node.transform.position.z - worldPos.z;
+            float dSq = dx * dx + dz * dz;
+            if (dSq <= minSq)
+            {
+                minSq = dSq;
+                closestNode = node;
+            }
+        }
+
+        if (closestNode != null)
+        {
+            IgniteTreeNode(closestNode);
+            return true;
+        }
+        return false;
     }
 
     [ContextMenu("🔥 숲 화재 점화 연출 (Ignite Forest Fire)")]
@@ -1382,6 +1456,16 @@ public class TacticalForestZone : MonoBehaviour
 
     public void ClearFireVFX()
     {
+        // 🧯 [핵심 버그 수정] 첫 프레임이라도 공중에 불티/연기가 뿜어져 나오지 않도록 모든 파티클 시스템 즉시 정지 및 버퍼 소거
+        var allPS = GetComponentsInChildren<ParticleSystem>(true);
+        for (int p = 0; p < allPS.Length; p++)
+        {
+            if (allPS[p] != null)
+            {
+                allPS[p].Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            }
+        }
+
         if (fireVfxRoot != null)
         {
             if (Application.isPlaying) Destroy(fireVfxRoot.gameObject);
@@ -1574,7 +1658,17 @@ public class TacticalForestZone : MonoBehaviour
         // 2. Volumetric Smoke (나뭇잎 상단에서 하늘로 확산 솟구치는 토탈워 정품 훈연 연기)
         Color actualStartCol = smokeStartColor;
         Color actualEndCol = smokeEndColor;
-        if (smokeVisualType == SmokeVisualType.SpeciesAdaptive && targetTree != null)
+        float actualDensity = smokeDensity;
+
+        // 🍂 [사계절 환경 물리 연동]: 잔디/부시와 동일하게 사계절 기후에 맞추어 연기 색상 및 밀도 자동 동기화
+        if (TacticalGrassRenderer.Instance != null && TacticalGrassRenderer.Instance.enableSeasonalFireSimulation)
+        {
+            var sParams = TacticalGrassRenderer.Instance.GetSeasonalFireParameters();
+            actualStartCol = sParams.smokeStartCol;
+            actualEndCol = sParams.smokeEndCol;
+            actualDensity = Mathf.Clamp(smokeDensity * sParams.smokeRateMult, 0.4f, 2.5f);
+        }
+        else if (smokeVisualType == SmokeVisualType.SpeciesAdaptive && targetTree != null)
         {
             string treeName = targetTree.name.ToLower();
             if (treeName.Contains("pine") || treeName.Contains("camphor"))
@@ -1596,7 +1690,7 @@ public class TacticalForestZone : MonoBehaviour
         smokeGo.transform.localRotation = Quaternion.identity;
         smokeGo.transform.localScale = Vector3.one;
         ParticleSystem smokePS = smokeGo.AddComponent<ParticleSystem>();
-        SetupVolumetricSmokePS(smokePS, leavesRadius, leavesHeight, finalSmokeMat, smokeScale, actualStartCol, actualEndCol, leavesRenderer, leavesFilter, smokeDensity);
+        SetupVolumetricSmokePS(smokePS, leavesRadius, leavesHeight, finalSmokeMat, smokeScale, actualStartCol, actualEndCol, leavesRenderer, leavesFilter, actualDensity);
 
         // 3. Rising Embers (나뭇잎 주변 비산 불티)
         GameObject embersGo = new GameObject("Rising_Embers_TotalWar");
@@ -1690,7 +1784,6 @@ public class TacticalForestZone : MonoBehaviour
         ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 
         var main = ps.main;
-        main.duration = 1.0f;
         main.loop = true;
         main.playOnAwake = false;
         main.simulationSpace = ParticleSystemSimulationSpace.World;
@@ -1826,7 +1919,6 @@ public class TacticalForestZone : MonoBehaviour
         ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 
         var main = ps.main;
-        main.duration = 1.0f;
         main.loop = true;
         main.playOnAwake = false;
         main.simulationSpace = ParticleSystemSimulationSpace.World;
@@ -1976,7 +2068,6 @@ public class TacticalForestZone : MonoBehaviour
         ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 
         var main = ps.main;
-        main.duration = 1.0f;
         main.loop = true;
         main.playOnAwake = false;
         main.simulationSpace = ParticleSystemSimulationSpace.World;
@@ -2195,6 +2286,17 @@ public class TacticalForestZone : MonoBehaviour
     private void AddTreeModelIfValid(List<GameObject> list, string path)
     {
 #if UNITY_EDITOR
+        if (path.Contains("/Trees/"))
+        {
+            string baseName = System.IO.Path.GetFileNameWithoutExtension(path);
+            string prefabPath = $"Assets/Settings/Vegetation/TreePrefabs/{baseName}_Prefab.prefab";
+            GameObject prefabGo = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            if (prefabGo != null)
+            {
+                list.Add(prefabGo);
+                return;
+            }
+        }
         GameObject go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
         if (go != null) list.Add(go);
 #endif
@@ -2246,7 +2348,17 @@ public class TacticalForestZone : MonoBehaviour
         }
     }
 
-        /// <summary>
+    public void ApplyTreeMaterialsPublic(GameObject treeObj, string modelName)
+    {
+        ApplyTreeMaterials(treeObj, modelName);
+    }
+
+    public void ApplyShrubMaterialsPublic(GameObject shrubObj, string modelName)
+    {
+        ApplyShrubMaterials(shrubObj, modelName);
+    }
+
+    /// <summary>
     /// 수종별 자식 메쉬(Trunk, Leaves, Roots 등) 1:1 완벽 텍스처 및 머티리얼 바인딩
     /// OBJ 임포트 특성상 루트 아래에 'Trunk'와 'Leaves' 자식 오브젝트가 독립 분리되므로
     /// GetComponentsInChildren로 모든 자식 렌더러를 탐색하여 각각 정확한 전용 머티리얼을 바인딩합니다.
@@ -2572,6 +2684,75 @@ public class TacticalForestZone : MonoBehaviour
         }
     }
 
+    private static readonly string[] TreeTextureSearchDirs = new string[]
+    {
+        "Assets/TotalWar_ThreeKingdoms_Extracted/Vegetation/Textures/",
+        "Assets/TotalWar_ThreeKingdoms_Extracted/Vegetation/Textures/Trunks/",
+        "Assets/TotalWar_ThreeKingdoms_Extracted/Vegetation/Textures/Branches_Leaves/",
+        "Assets/TotalWar_ThreeKingdoms_Extracted/Vegetation/Textures/Seasons/Spring/",
+        "Assets/TotalWar_ThreeKingdoms_Extracted/Vegetation/Textures/Seasons/Summer/",
+        "Assets/TotalWar_ThreeKingdoms_Extracted/Vegetation/Textures/Seasons/Autumn/",
+        "Assets/TotalWar_ThreeKingdoms_Extracted/Vegetation/Textures/Seasons/Winter/"
+    };
+
+#if UNITY_EDITOR
+    private static Texture2D LoadVegetationTextureSmart(string baseNameWithoutExt, bool isNormalMap, bool isCutoutAlpha)
+    {
+        if (string.IsNullOrEmpty(baseNameWithoutExt)) return null;
+        string cleanName = System.IO.Path.GetFileNameWithoutExtension(baseNameWithoutExt);
+
+        // 1순위: 무손실 변환된 PNG 텍스처 전수 탐색
+        string foundPath = null;
+        for (int i = 0; i < TreeTextureSearchDirs.Length; i++)
+        {
+            string candidate = TreeTextureSearchDirs[i] + cleanName + ".png";
+            if (System.IO.File.Exists(candidate))
+            {
+                foundPath = candidate;
+                break;
+            }
+        }
+
+        // 2순위: DDS 폴백 탐색
+        if (foundPath == null)
+        {
+            for (int i = 0; i < TreeTextureSearchDirs.Length; i++)
+            {
+                string candidate = TreeTextureSearchDirs[i] + cleanName + ".dds";
+                if (System.IO.File.Exists(candidate))
+                {
+                    foundPath = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (foundPath == null) return null;
+
+        if (foundPath.EndsWith(".png"))
+        {
+            TextureImporter ti = AssetImporter.GetAtPath(foundPath) as TextureImporter;
+            if (ti != null)
+            {
+                bool changed = false;
+                if (isNormalMap && ti.textureType != TextureImporterType.NormalMap)
+                {
+                    ti.textureType = TextureImporterType.NormalMap;
+                    changed = true;
+                }
+                else if (!isNormalMap && isCutoutAlpha && !ti.alphaIsTransparency)
+                {
+                    ti.alphaIsTransparency = true;
+                    changed = true;
+                }
+                if (changed) ti.SaveAndReimport();
+            }
+        }
+
+        return AssetDatabase.LoadAssetAtPath<Texture2D>(foundPath);
+    }
+#endif
+
     private Material GetOrCreateMaterialExact(string baseColourFileName, string normalFileName, bool isLeaves, bool isCutout)
     {
         string cacheKey = $"{baseColourFileName}_{(isCutout ? "Cutout" : "Opaque")}";
@@ -2580,38 +2761,43 @@ public class TacticalForestZone : MonoBehaviour
             return cached;
         }
 
+        string persistentMatDir = "Assets/Settings/Vegetation/TreeMaterials";
+        string persistentMatPath = $"{persistentMatDir}/{cacheKey}.mat";
+
         // 쉐이더 탐색: URP Foliage Wind 우선 적용, 차선 URP Lit (줄기와 나뭇잎 모두 FoliageWind 셰이더를 우선 적용하여 숯 탄화 완벽 구현)
         Shader foliageShader = Shader.Find("Universal Render Pipeline/TotalWarFoliageWind");
         Shader litShader = Shader.Find("Universal Render Pipeline/Lit");
         Shader targetShader = (foliageShader != null) ? foliageShader : (litShader != null ? litShader : Shader.Find("Standard"));
 
-        Material mat = new Material(targetShader);
-        mat.name = cacheKey;
+        Material mat = null;
+#if UNITY_EDITOR
+        mat = AssetDatabase.LoadAssetAtPath<Material>(persistentMatPath);
+#endif
+        bool isNewAsset = false;
+        if (mat == null)
+        {
+            mat = new Material(targetShader);
+            mat.name = cacheKey;
+            isNewAsset = true;
+        }
+        else if (mat.shader != targetShader && targetShader != null)
+        {
+            mat.shader = targetShader;
+        }
 
-        string texDir = "Assets/TotalWar_ThreeKingdoms_Extracted/Vegetation/Textures/";
         Texture2D albedo = null;
         Texture2D normal = null;
 
 #if UNITY_EDITOR
-        string albedoPath = $"{texDir}{baseColourFileName}.dds";
-        albedo = AssetDatabase.LoadAssetAtPath<Texture2D>(albedoPath);
+        albedo = LoadVegetationTextureSmart(baseColourFileName, false, isCutout);
         if (albedo == null)
         {
-            albedo = AssetDatabase.LoadAssetAtPath<Texture2D>($"{texDir}{baseColourFileName}.png");
-        }
-        if (albedo == null)
-        {
-            Debug.LogWarning($"[TacticalForestZone] 식생 텍스처 '{baseColourFileName}'를 찾을 수 없습니다! ({albedoPath})");
+            Debug.LogWarning($"[TacticalForestZone] 식생 텍스처 '{baseColourFileName}'를 찾을 수 없습니다!");
         }
 
         if (!string.IsNullOrEmpty(normalFileName))
         {
-            string normalPath = $"{texDir}{normalFileName}.dds";
-            normal = AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath);
-            if (normal == null)
-            {
-                normal = AssetDatabase.LoadAssetAtPath<Texture2D>($"{texDir}{normalFileName}.png");
-            }
+            normal = LoadVegetationTextureSmart(normalFileName, true, false);
         }
 #endif
 
@@ -2649,6 +2835,7 @@ public class TacticalForestZone : MonoBehaviour
             mat.SetFloat("_WindMultiplier", 0.04f); // 기둥은 지면에 단단히 고정 (바람에 펄럭이지 않음)
             mat.SetFloat("_LeafFlutter", 0.0f);    // 나뭇잎 떨림 없음
         }
+        mat.enableInstancing = true;
 
         // 오직 겨울(Winter)이고 enableWinterSnow가 켜져 있을 때만 눈 연출 활성화 (타 계절은 강제 0.0)
         if (mat.HasProperty("_SnowAmount"))
@@ -2677,6 +2864,23 @@ public class TacticalForestZone : MonoBehaviour
         if (charred != null && mat.HasProperty("_CharredMap"))
         {
             mat.SetTexture("_CharredMap", charred);
+        }
+
+        if (isNewAsset)
+        {
+            try
+            {
+                if (!System.IO.Directory.Exists(persistentMatDir))
+                {
+                    System.IO.Directory.CreateDirectory(persistentMatDir);
+                }
+                AssetDatabase.CreateAsset(mat, persistentMatPath);
+            }
+            catch { }
+        }
+        else
+        {
+            EditorUtility.SetDirty(mat);
         }
 #endif
 

@@ -390,6 +390,9 @@ public class UnitJobSimulationManager : MonoBehaviour
                 bool isRunning = (u.mySquad != null) ? u.mySquad.isRunning : u.isRunning;
                 float defaultSpeed = (u.mySquad != null) ? u.mySquad.targetSpeed : (u.isRunning ? u.runSpeed : u.walkSpeed);
                 if (defaultSpeed <= 0f) defaultSpeed = (u.mySquad == null) ? 1.2f : 1.0f;
+                // 🌾 [식생 지형 저항 및 군사 도로 연동 (TotalWar Frictional Drag)]
+                float initDrag = (MiniTotalWar.TacticalGrassRenderer.Instance != null) ? MiniTotalWar.TacticalGrassRenderer.Instance.GetFoliageResistance(u.transform.position) : 1.0f;
+                defaultSpeed *= initDrag;
                 float defaultAccel = isRunning ? 8.0f : 5.0f;
 
                 UnitJobData data = new UnitJobData
@@ -706,7 +709,10 @@ public class UnitJobSimulationManager : MonoBehaviour
             // ⚡ [R] 걷기/달리기 속도 및 가속도 실시간 동기화 (시스템 엔진 정상화)
             bool isRunning = (u.mySquad != null) ? u.mySquad.isRunning : u.isRunning;
             float targetSpd = (u.mySquad != null) ? u.mySquad.targetSpeed : (u.isRunning ? u.runSpeed : u.walkSpeed);
-            data.moveSpeed = (targetSpd > 0f) ? targetSpd : (isRunning ? 2.8f : 1.2f);
+            float baseSpd = (targetSpd > 0f) ? targetSpd : (isRunning ? 2.8f : 1.2f);
+            // 🌾 [식생 지형 저항 및 군사 도로 연동 (TotalWar Frictional Drag)]
+            float foliageDrag = (MiniTotalWar.TacticalGrassRenderer.Instance != null) ? MiniTotalWar.TacticalGrassRenderer.Instance.GetFoliageResistance(u.transform.position) : 1.0f;
+            data.moveSpeed = baseSpd * foliageDrag;
             data.acceleration = isRunning ? 8.0f : 5.0f;
             data.alignToSlope = u.alignToSlope ? 1 : 0;
             data.groundYOffset = (u.groundYOffset > 0.01f) ? u.groundYOffset : 0.39f;

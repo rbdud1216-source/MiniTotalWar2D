@@ -1,0 +1,26 @@
+{
+    "mapName": "Game2",
+    "saveTimestamp": "2026-11-06 17:21:17",
+    "terrainPosition": {
+        "x": -1000.0,
+        "y": 0.0,
+        "z": -1000.0
+    },
+    "terrainSize": {
+        "x": 2000.0,
+        "y": 200.0,
+        "z": 2000.0
+    },
+    "chunkSize": 32.0,
+    "sampleSpacing": 1.600000023841858,
+    "totalChunkCount": 2976,
+    "totalInstanceCount": 332843,
+    "prototypeNames": [
+        "[0] 🌾 온대 순수 잔디 다방향 군락",
+        "[1] 🌸 분홍 꽃망울 다방향 군락 (Photo 1)",
+        "[2] 💜 연보라 꽃송이 다방향 군락 (Photo 2)",
+        "[3] 🧡 주황 꽃이삭 다방향 군락 (Photo 3)",
+        "[4] 🌱 중원 온대 봄 지피 군락",
+        "[5] 🌿 중원 온대 여름 지피 군락"
+    ]
+}

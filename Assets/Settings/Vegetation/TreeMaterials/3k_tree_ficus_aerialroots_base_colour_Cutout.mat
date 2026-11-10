@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 3k_tree_ficus_aerialroots_base_colour_Cutout
+  m_Shader: {fileID: 4800000, guid: afc7fda305b78c648a46ecb7e8dd5267, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords:
+  - _ALPHATEST_ON
+  - _NORMALMAP
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 1
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: 2450
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _BaseMap:
+        m_Texture: {fileID: 2800000, guid: 6552bbafea239da488e3bddb4410b05f, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _BumpMap:
+        m_Texture: {fileID: 2800000, guid: 33b7efbf0e2e7d843ac8b4edace1c5ce, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _CharredMap:
+        m_Texture: {fileID: 2800000, guid: f62e6adf7fd123f409bf197fa51167fa, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MainTex:
+        m_Texture: {fileID: 2800000, guid: 6552bbafea239da488e3bddb4410b05f, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _AlphaClip: 1
+    - _BumpScale: 1.2
+    - _BurnProgress: 0
+    - _CharredTile: 3
+    - _Cull: 0
+    - _Cutoff: 0.35
+    - _EnableNormalMap: 1
+    - _IsBamboo: 0
+    - _IsShrubGrass: 0
+    - _LeafFlutter: 0.8
+    - _LeafSnowRatio: 0.55
+    - _Metallic: 0
+    - _Smoothness: 0.2
+    - _SnowAmount: 0
+    - _SnowThreshold: 0.2
+    - _TrampleAmount: 0
+    - _WindMultiplier: 1
+    m_Colors:
+    - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
+    - _CharredColor: {r: 0.34999996, g: 0.31999996, b: 0.29999998, a: 1}
+    - _EmberGlowColor: {r: 3.5000002, g: 0.9, b: 0.14999998, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

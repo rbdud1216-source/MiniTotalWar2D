@@ -1740,10 +1740,11 @@ public class Squad : MonoBehaviour
                             mov.TargetRotation = rotation * slot.localRotation;
 
                             // [수정] AttackMove 시 돌격 속도 4.8m/s 적용 (단, 궁병이 탄약이 남아 전술 진격 중이면 제식/구보 속도 유지, 단 강제백병전이면 4.8m/s 돌격)
-                            if (cmdState == UnitCommandState.AttackMove)
-                                mov.MoveSpeed = (IsRangedSquad && HasAmmo && !isForcedMeleeCharge) ? (isRunning ? runSpeed : walkSpeed) : 4.8f;
-                            else
-                                mov.MoveSpeed = targetSpeed > 0 ? targetSpeed : 1.0f;
+                            float baseSpd1 = (cmdState == UnitCommandState.AttackMove)
+                                ? ((IsRangedSquad && HasAmmo && !isForcedMeleeCharge) ? (isRunning ? runSpeed : walkSpeed) : 4.8f)
+                                : (targetSpeed > 0 ? targetSpeed : 1.0f);
+                            float foliageDrag1 = (MiniTotalWar.TacticalGrassRenderer.Instance != null) ? MiniTotalWar.TacticalGrassRenderer.Instance.GetFoliageResistance(targetPos) : 1.0f;
+                            mov.MoveSpeed = baseSpd1 * foliageDrag1;
 
                             combat.CurrentState = (int)cmdState;
                             combat.IsForcedMelee = isForcedMeleeCharge ? 1 : 0;
@@ -1789,10 +1790,11 @@ public class Squad : MonoBehaviour
                     mov.TargetRotation = rotation * slot.localRotation;
 
                     // [수정] AttackMove 시 돌격 속도 4.8m/s 적용 (단, 궁병이 탄약이 남아 전술 진격 중이면 제식/구보 속도 유지, 단 강제백병전이면 4.8m/s 돌격)
-                    if (cmdState == UnitCommandState.AttackMove)
-                        mov.MoveSpeed = (IsRangedSquad && HasAmmo && !isForcedMeleeCharge) ? (isRunning ? runSpeed : walkSpeed) : 4.8f;
-                    else
-                        mov.MoveSpeed = targetSpeed > 0 ? targetSpeed : 1.0f;
+                    float baseSpd2 = (cmdState == UnitCommandState.AttackMove)
+                        ? ((IsRangedSquad && HasAmmo && !isForcedMeleeCharge) ? (isRunning ? runSpeed : walkSpeed) : 4.8f)
+                        : (targetSpeed > 0 ? targetSpeed : 1.0f);
+                    float foliageDrag2 = (MiniTotalWar.TacticalGrassRenderer.Instance != null) ? MiniTotalWar.TacticalGrassRenderer.Instance.GetFoliageResistance(targetPos) : 1.0f;
+                    mov.MoveSpeed = baseSpd2 * foliageDrag2;
 
                     combat.CurrentState = (int)cmdState;
                     combat.IsForcedMelee = isForcedMeleeCharge ? 1 : 0;

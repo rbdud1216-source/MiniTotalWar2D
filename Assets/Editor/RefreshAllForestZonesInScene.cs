@@ -28,8 +28,5 @@ public static class RefreshAllForestZonesInScene
         }
 
         Debug.Log($"<color=#00FF88><b>[RefreshAllForestZones] ✅ 씬 내 {zones.Length}개 숲 구역 초목 재생성 및 머티리얼 바인딩 완료!</b></color>");
-        DebugCurrentForestSceneMaterials.RunDebug();
-        CaptureSceneScreenshot.CaptureBrokenPine();
-        CaptureSceneScreenshot.CaptureStump();
     }
 }

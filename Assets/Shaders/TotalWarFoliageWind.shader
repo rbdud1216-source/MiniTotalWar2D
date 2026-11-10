@@ -2,43 +2,45 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
 {
     Properties
     {
-        [Header(Base Texture)]
-        _BaseMap ("Albedo Map", 2D) = "white" {}
-        [HideInInspector] _MainTex ("BaseMap (RGB)", 2D) = "white" {}
-        _BaseColor ("Base Color Tint", Color) = (1, 1, 1, 1)
+        [Header(Base_Texture)]
+        _BaseMap ("기본 알베도 텍스처", 2D) = "white" {}
+        [HideInInspector] _MainTex ("기본 텍스처 (RGB)", 2D) = "white" {}
+        _BaseColor ("기본 색조 조절 (틴트)", Color) = (1, 1, 1, 1)
 
-        [Header(Alpha Cutout)]
-        [Toggle(_ALPHATEST_ON)] _AlphaClip ("Enable Alpha Cutout", Float) = 1.0
-        _Cutoff ("Alpha Cutoff", Range(0.0, 1.0)) = 0.40
+        [Header(Alpha_Cutout)]
+        [Toggle(_ALPHATEST_ON)] _AlphaClip ("알파 컷아웃 활성화", Float) = 1.0
+        _Cutoff ("알파 컷오프 임계값", Range(0.0, 1.0)) = 0.40
 
-        [Header(Normal Map)]
-        [Toggle(_NORMALMAP)] _EnableNormalMap ("Enable Normal Map", Float) = 1.0
-        [NoScaleOffset] _BumpMap ("Normal Map", 2D) = "bump" {}
-        _BumpScale ("Normal Scale", Range(0.0, 2.0)) = 1.2
+        [Header(Normal_Map)]
+        [Toggle(_NORMALMAP)] _EnableNormalMap ("노멀 맵 활성화", Float) = 1.0
+        [NoScaleOffset] _BumpMap ("법선 굴곡 텍스처 (노멀)", 2D) = "bump" {}
+        _BumpScale ("노멀 굴곡 강도 배율", Range(0.0, 2.0)) = 1.2
 
-        [Header(Surface Properties)]
-        _Smoothness ("Smoothness", Range(0.0, 1.0)) = 0.20
-        _Metallic ("Metallic", Range(0.0, 1.0)) = 0.0
-        _Cull ("Culling Mode (0=Both, 2=Back)", Float) = 0.0
+        [Header(Surface_Properties)]
+        _Smoothness ("표면 매끄러움 (광택)", Range(0.0, 1.0)) = 0.20
+        _Metallic ("금속성 (메탈릭)", Range(0.0, 1.0)) = 0.0
+        _Cull ("렌더링 면 모드 (0: 양면, 2: 단면)", Float) = 0.0
 
-        [Header(Wind Wave Animation)]
-        _WindMultiplier ("Wind Sway Multiplier", Range(0.0, 3.0)) = 1.0
-        _LeafFlutter ("Leaf Flutter Strength", Range(0.0, 2.0)) = 0.8
+        [Header(Wind_Animation)]
+        _WindMultiplier ("바람 흔들림 강도 배율", Range(0.0, 3.0)) = 1.0
+        _LeafFlutter ("잎사귀 펄럭임 세기", Range(0.0, 2.0)) = 0.8
 
-        [Header(Fire and Charred Burning)]
-        _BurnProgress ("Burn Progress (0=Normal, 1=Charred Ash)", Range(0.0, 1.0)) = 0.0
-        _CharredMap ("Charred Ash Texture", 2D) = "gray" {}
-        _CharredTile ("Charred Texture Tiling", Float) = 3.0
-        _CharredColor ("Charred Ash Color", Color) = (0.35, 0.32, 0.30, 1.0)
-        _EmberGlowColor ("Ember Glow Color", Color) = (3.5, 0.9, 0.15, 1.0)
+        [Header(Fire_Burning)]
+        _BurnProgress ("연소 탄화 진행도", Range(0.0, 1.0)) = 0.0
+        _CharredMap ("숯 탄화 텍스처", 2D) = "gray" {}
+        _CharredTile ("숯 텍스처 타일링", Float) = 3.0
+        _CharredColor ("숯 탄화 색상", Color) = (0.35, 0.32, 0.30, 1.0)
+        _EmberGlowColor ("연소 불씨 발광 색상", Color) = (3.5, 0.9, 0.15, 1.0)
 
-        [Header(Winter Snow Accumulation)]
-        _SnowAmount ("Snow Accumulation (0=None, 1=Heavy)", Range(0.0, 1.0)) = 0.0
-        _LeafSnowRatio ("Leaf Snow Ratio (0=None, 1=All)", Range(0.0, 1.0)) = 0.55
-        _SnowThreshold ("Snow Angle Threshold", Range(-1.0, 1.0)) = -0.15
-        _SnowColor ("Snow Color", Color) = (0.95, 0.98, 1.0, 1.0)
-        _IsBamboo ("Is Bamboo Foliage (0=Pine/Others, 1=Bamboo)", Float) = 0.0
+        [Header(Winter_Snow)]
+        _SnowAmount ("전역 적설량 비율", Range(0.0, 1.0)) = 0.0
+        _LeafSnowRatio ("잎사귀 눈 덮임 비율", Range(0.0, 1.0)) = 0.55
+        _SnowThreshold ("눈 쌓임 경사각 임계치", Range(-1.0, 1.0)) = -0.15
+        _IsBamboo ("대나무 식생 플래그 (0: 일반수목, 1: 대나무)", Float) = 0.0
+        _IsShrubGrass ("관목/풀 플래그 (0: 수목, 1: 부시/풀)", Float) = 0.0
+        _TrampleAmount ("유닛 짓밟힘 눕힘 강도", Range(0.0, 1.0)) = 0.0
     }
+
 
     SubShader
     {
@@ -111,6 +113,8 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 float _SnowThreshold;
                 half4 _SnowColor;
                 float _IsBamboo;
+                float _IsShrubGrass;
+                float _TrampleAmount;
             CBUFFER_END
 
             UNITY_INSTANCING_BUFFER_START(Props)
@@ -144,18 +148,25 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 float windTime = _TotalWarWindVector.w;
 
                 // 2. 밑동 완전 고정 및 외팔보(Cantilever Beam) 2차 굽힘 공식
-                // 밑동(Y <= 2.0m)은 변위 0.0000으로 절대 지면에서 미끄러지거나 걷지 않음
-                float rawY = max(0.0, input.positionOS.y - 2.0);
-                float normY = saturate(rawY / 30.0); // 0(밑동) ~ 1(수관부 상단)
-                float stemBendFactor = normY * normY; // 2차 포물선: 밑동은 고정, 상단 가지만 부드럽게 휨
+                float rawY;
+                float normY;
+                if (_IsShrubGrass > 0.5)
+                {
+                    rawY = max(0.0, input.positionOS.y);
+                    normY = saturate(rawY / 2.2);
+                }
+                else
+                {
+                    rawY = max(0.0, input.positionOS.y - 2.0);
+                    normY = saturate(rawY / 30.0);
+                }
+                float stemBendFactor = normY * normY; // 2차 포물선
 
                 // 3. 줄기 메인 스웨이 (완만한 거대 파동, 월드 진폭 5~10cm 제어)
                 float stemPhase = windTime * 0.9 + dot(worldPos.xz, float2(0.03, 0.025));
                 float stemWave = sin(stemPhase) * (0.06 * windStrength);
 
                 // 4. 나뭇잎/잔가지 바람결 진행 파동 (Traveling Wave & Directional Flutter)
-                // - 원점 중심 구형 좌표 대신 월드 바람 진행축(windTravelAxis)을 사용하여 바람이 파도처럼 숲을 훑고 지나가도록 구현
-                // - 노멀(Normal) 방향 팽창을 원천 배제하여 '원형 동심원 팽창' 및 '그림자 경계 교차로 인한 밝아짐/어두워짐 점멸' 완전 해결
                 float windTravelAxis = dot(worldPos.xz, normWindDir);
                 float leafNoise = dot(input.positionOS.xyz, float3(1.2, 2.4, 1.6));
                 float leafPhase = windTime * 3.8 + windTravelAxis * 0.65 + leafNoise;
@@ -169,17 +180,33 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 // 줄기 굽힘 변위 (Stem Sway)
                 float3 stemDisp = objWindDir * (stemWave * stemBendFactor * _WindMultiplier);
 
-                // 나뭇잎 바람결 변위: 바람 진행 방향(70%) + 횡방향 탄성 살랑임(25%) + 풍압 하강(5%)
+                // 나뭇잎 바람결 변위
                 float3 leafDir = objWindDir * 0.70 + objWindCross * (cos(leafPhase * 0.75) * 0.25) - float3(0.0, 0.06, 0.0);
                 float3 leafDisp = leafDir * (leafWave * saturate(normY + 0.12) * _WindMultiplier);
 
                 float3 totalDisp = stemDisp + leafDisp;
 
-                // 과도한 왜곡 방지 안전 클램프 (최대 0.18m 이내)
-                float dispLen = length(totalDisp);
-                if (dispLen > 0.18)
+                // 🌿 풀/관목 전용: 화재 시 열기 오그라듦(Vertex Shrinking) & 짓밟힘(Trample)
+                if (_IsShrubGrass > 0.5)
                 {
-                    totalDisp = totalDisp * (0.18 / dispLen);
+                    float burnVal = UNITY_ACCESS_INSTANCED_PROP(Props, _BurnProgress);
+                    float shrink = saturate(burnVal * 1.25);
+                    totalDisp.y -= shrink * 0.45;
+                    totalDisp.xz *= (1.0 - shrink * 0.55);
+
+                    if (_TrampleAmount > 0.01)
+                    {
+                        totalDisp.y -= _TrampleAmount * 0.35 * normY;
+                        totalDisp.xz += objWindDir * (_TrampleAmount * 0.25 * normY);
+                    }
+                }
+
+                // 과도한 왜곡 방지 안전 클램프
+                float maxAllowed = (_IsShrubGrass > 0.5) ? 0.35 : 0.18;
+                float dispLen = length(totalDisp);
+                if (dispLen > maxAllowed)
+                {
+                    totalDisp = totalDisp * (maxAllowed / dispLen);
                 }
 
                 float3 displacedPosOS = input.positionOS.xyz + totalDisp;
@@ -194,14 +221,18 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 output.fogFactor = ComputeFogFactor(vertexInput.positionCS.z);
 
                 // 나뭇잎 카드(클러스터)별 고유 시드 계산
-                // 로컬 좌표를 3.5m 단위로 퀀타이즈하여 같은 잎 카드 내 버텍스는 동일한 해시 시드를 공유
                 float3 leafCell = floor(input.positionOS.xyz * 3.5);
                 output.leafPhaseNoise = frac(sin(dot(leafCell, float3(12.9898, 78.233, 45.164))) * 43758.5453);
 
-                // 식생 나뭇잎 실제 높이 범위(12.0m 최하단 가지 ~ 46.0m 최상단 수관 꼭대기) 0.0~1.0 완전 선형 매핑
-                // 이를 통해 나뭇잎 높이에 따른 점진적 적설/해빙 그라데이션이 나무 전체 수관에 완벽하게 펼쳐짐
-                float leafNormY = saturate((input.positionOS.y - 12.0) / 34.0);
-                output.heightNorm = leafNormY;
+                // 높이 매핑
+                if (_IsShrubGrass > 0.5)
+                {
+                    output.heightNorm = normY;
+                }
+                else
+                {
+                    output.heightNorm = saturate((input.positionOS.y - 12.0) / 34.0);
+                }
 
                 return output;
             }
@@ -345,9 +376,10 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                     // 개별 나뭇잎의 로컬 연소 진행도 (0.0: 완전 정상 녹색잎 -> 1.0: 완전 전소 소멸)
                     float localProgress = saturate((burnProg + effectiveOffset - 0.03) / 0.52);
 
-                    if (localProgress >= 0.96)
+                    float maxClipProgress = (_IsShrubGrass > 0.5) ? 0.82 : 0.96;
+                    if (localProgress >= maxClipProgress)
                     {
-                        clip(-1.0); // 완전히 타서 재가 된 잎 소멸
+                        clip(-1.0); // 완전히 타서 재가 된 잎 소멸 (풀은 줄기 없이 완전 소멸)
                     }
 
                     // --- 1단계: 고온 열기 화선 (Combustion Wave Front - 주황/앰버 달아오름) ---
@@ -381,6 +413,22 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 }
 
                 half currentAlpha = albedo.a * _BaseColor.a;
+
+                // 🌿 [칼자국 및 공중 파편 완전 제거: UV 경계 소프트 테이퍼링 (Tip & Edge Feathering)]
+                if (_IsShrubGrass > 0.5)
+                {
+                    // 1. 상단 수평 칼자국(V = 1.000 아틀라스 상단 경계 절단) 방지:
+                    // 텍스처 윗변 모서리에 닿기 전(0.960 ~ 0.995 구간) 알파를 부드럽게 감쇄시켜 잎끝이 자연스럽게 뾰족 소멸
+                    half topFade = saturate((0.996 - input.uv.y) / 0.038);
+                    topFade = topFade * topFade * (3.0 - 2.0 * topFade); // 부드러운 smoothstep 커브
+
+                    // 2. 외곽 공중 부스러기 파편(U = 0.000, 1.000 아틀라스 경계 텍셀 침범) 방지:
+                    half uFade = saturate((input.uv.x - 0.004) / 0.016) * saturate((0.996 - input.uv.x) / 0.016);
+                    uFade = uFade * uFade * (3.0 - 2.0 * uFade);
+
+                    currentAlpha *= (topFade * uFade);
+                }
+
                 clip(currentAlpha - dynamicCutoff);
             #else
                 // [줄기/기둥(Trunk) 점진적 숯 탄화 (Gradual Carbonization / Charring)]
@@ -593,6 +641,14 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 }
 
                 half alpha = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv).a * _BaseColor.a;
+
+                // 🌿 [칼자국 및 공중 파편 그림자 방지]
+                half topFade = saturate((0.996 - input.uv.y) / 0.038);
+                topFade = topFade * topFade * (3.0 - 2.0 * topFade);
+                half uFade = saturate((input.uv.x - 0.004) / 0.016) * saturate((0.996 - input.uv.x) / 0.016);
+                uFade = uFade * uFade * (3.0 - 2.0 * uFade);
+                alpha *= (topFade * uFade);
+
                 clip(alpha - dynamicCutoff);
             #endif
 

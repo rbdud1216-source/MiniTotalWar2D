@@ -1,0 +1,270 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 34f80ae7da82fbc42a6ba484363651f8, type: 3}
+  m_Name: Cold_Theme
+  m_EditorClassIdentifier: 
+  climate: 4
+  summerGrassLayer: {fileID: 11400000, guid: 0cbb01b61ed524a48a119d81aa262fed, type: 2}
+  autumnGrassLayer: {fileID: 11400000, guid: 795e383430200a14bb52726e97a0e7f4, type: 2}
+  winterGrassLayer: {fileID: 11400000, guid: 59b98ca43f27d8c4a89d4058d2a962e5, type: 2}
+  forestFloorLayer: {fileID: 11400000, guid: 73f0b5ac607c28d4696a6dd09a1de66a, type: 2}
+  cliffRockLayer: {fileID: 11400000, guid: c997c17aa360cb749a27932fe3bdfcce, type: 2}
+  dirtRoadLayer: {fileID: 11400000, guid: d1685375fd84e62439c572449faa4657, type: 2}
+  detailGrassConfigs:
+  - grassPrefab: {fileID: 100000, guid: a31e0084e4651c44eb233883bb47bc25, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 0b9cadbbc1078cb46a6c3506c868411c, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: c09b2c55f9578f047b192ddff6a7d8be, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 899fd9bbc01d40d48a477f73b4ada0ce, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 33d92c73b6ee2c64b9e8b94f9f983d38, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: cfd1e0231fc383348a06794502d2d475, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 9e31cb551740f0e44b55945176321a9f, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 075d61224321dc54a81affd7c93a056a, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 39bec5e9ab4932d45a68060e7fc4cb65, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: cdb4d6423237a924f8177c900912e4c5, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 5b79770f12d41724dbdaa999d1ef55f9, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: c5d17576ceda5b444b6870b62bd38e1e, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 91160369b3812764ebc860262bce09c2, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 21f83429c6bf4fe48b5d3985ebd3c0e1, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 40b16cd269db93e409a6d4cc2e965df0, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: effd6f5f20a5ebd4ea5a6a8918d8630c, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 07aee9eb1b8054445aceceeda512bc1e, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 10affe5d66fd08347a4d216fd349568a, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: ee4e533d7d76fc14595c7a23f18ba176, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: f84239bcdad9bdc4d9f510a17063947f, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 2a8ce430eb685334491ebebc7d59ccbb, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 964a8b1987c657445bdbb05feea877ce, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 799488bb0ab2bc3429b3308afef41019, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 9749463e0ccd9f840a283c8681817563, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: b9c07d580d8308945a450aebd76162e1, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: cc894348cf15f7543ba2532f835c4341, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 94010c0da452fe149b6b48c78eb5b128, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 9bde1c10bca76d24a9479573c52df0fc, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 6dd059b0acf814d4fb983f10ade2ffe5, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 927fd5531e58a3d4eb51e985980518c9, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 580e005ea2203754c9f7e7348b7cf745, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: fca0b121cb476c14f80244be9dc93dba, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: fc07326a0e1b7cc40bbee731c62da73d, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 6111e239690c268469168bf0f5a577ff, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: bac0316ec7fe2a843a380a451cefb935, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: e2d141ddbac46264d8bbacdd6b5751b9, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 99793c28942158a4aa406de0d2b6426e, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 5666be6b6b9a0b642b2af02171f84ed2, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: 4798cea1ffd938447bf37f6686afccf0, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: cb37b9639188f424989eb308de4b7a85, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  - grassPrefab: {fileID: 100000, guid: a82fa7f9e5d67dc478a49f179bdf9510, type: 3}
+    dryGrassPrefab: {fileID: 0}
+    densityFactor: 1
+    widthRange: {x: 0.85, y: 1.35}
+    heightRange: {x: 0.8, y: 1.4}
+    alignToGround: 0.5
+  detailDistance: 120
+  detailDensity: 0.75

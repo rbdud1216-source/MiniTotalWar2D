@@ -1,6 +1,4 @@
-$wshell = New-Object -ComObject WScript.Shell
-Get-Process -Name "Unity*" | ForEach-Object {
-    Write-Host "Activating PID: $($_.Id) - $($_.ProcessName)"
-    $wshell.AppActivate($_.Id)
-}
+$wshell = New-Object -ComObject wscript.shell
+$success = $wshell.AppActivate("MiniTotalWar2D")
+Write-Host "AppActivate MiniTotalWar2D: $success"
 Start-Sleep -Seconds 2

@@ -10,6 +10,12 @@ public class FPSCounterHUD : MonoBehaviour
 {
     public static FPSCounterHUD Instance { get; private set; }
 
+    /// <summary>
+    /// 🎮 [F12 디버그 모드 활성 상태]
+    /// F12 키를 눌러 디버그 HUD가 켜져 있을 때만 인게임 디버그 단축키(B키 들불 착화 등)가 작동합니다.
+    /// </summary>
+    public static bool IsDebugModeActive => (Instance != null && Instance.showHUD);
+
     [Header("성능 모니터링 HUD 설정")]
     [KoreanLabel("HUD 표시 활성화", "게임 화면 상단에 FPS, 프레임타임, 유닛 수를 표시할지 여부입니다.")]
     public bool showHUD = false;
@@ -254,6 +260,23 @@ public class FPSCounterHUD : MonoBehaviour
         bool isFullVision = (VisionDetectionManager.Instance != null && VisionDetectionManager.Instance.isFullVisionDebug);
         string visionStatus = isFullVision ? "<color=#00FFFF>전체 시야(맵핵)</color>" : "<color=#AAAAAA>정상 시야(은폐 적용)</color>";
         GUILayout.Label($"👁️ 전술 시야: {visionStatus}", statStyle);
+
+        GUILayout.EndVertical();
+        GUILayout.EndArea();
+
+        // 🛠️ 디버그 단축키 안내 패널 (F12 활성 시에만 표시)
+        float dbgY = margin + height + 6f;
+        float dbgHeight = 115f;
+        Rect dbgRect = new Rect(margin, dbgY, width, dbgHeight);
+        GUILayout.BeginArea(dbgRect, boxStyle);
+        GUILayout.BeginVertical();
+
+        GUILayout.Label("🛠️ DEBUG SHORTCUTS", headerStyle);
+        GUILayout.Space(2);
+        GUILayout.Label("<color=#FF9900>[B]</color> 또는 <color=#FF9900>[Ctrl+클릭]</color> : 마우스 위치 식생 착화 (풀·부시·수목)", statStyle);
+        GUILayout.Label("<color=#00FFFF>[F12]</color> : 디버그 HUD & 맵핵 토글", statStyle);
+        GUILayout.Label("<color=#AAFFAA>[Shift + ~]</color> : 선택 부대 해체", statStyle);
+        GUILayout.Label("<color=#FFFF77>[Space]</color> : 이동 경로/진형 미리보기", statStyle);
 
         GUILayout.EndVertical();
         GUILayout.EndArea();

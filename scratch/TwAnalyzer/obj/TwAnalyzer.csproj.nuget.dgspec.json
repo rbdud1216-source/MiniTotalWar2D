@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\unityProject\\MiniTotalWar2D\\scratch\\TwAnalyzer\\TwAnalyzer.csproj": {}
+    "c:\\unityProject\\MiniTotalWar2D\\scratch\\TwAnalyzer\\TwAnalyzer.csproj": {}
   },
   "projects": {
-    "C:\\unityProject\\MiniTotalWar2D\\scratch\\TwAnalyzer\\TwAnalyzer.csproj": {
+    "c:\\unityProject\\MiniTotalWar2D\\scratch\\TwAnalyzer\\TwAnalyzer.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\unityProject\\MiniTotalWar2D\\scratch\\TwAnalyzer\\TwAnalyzer.csproj",
+        "projectUniqueName": "c:\\unityProject\\MiniTotalWar2D\\scratch\\TwAnalyzer\\TwAnalyzer.csproj",
         "projectName": "TwAnalyzer",
-        "projectPath": "C:\\unityProject\\MiniTotalWar2D\\scratch\\TwAnalyzer\\TwAnalyzer.csproj",
+        "projectPath": "c:\\unityProject\\MiniTotalWar2D\\scratch\\TwAnalyzer\\TwAnalyzer.csproj",
         "packagesPath": "C:\\Users\\PC\\.nuget\\packages\\",
-        "outputPath": "C:\\unityProject\\MiniTotalWar2D\\scratch\\TwAnalyzer\\obj\\",
+        "outputPath": "c:\\unityProject\\MiniTotalWar2D\\scratch\\TwAnalyzer\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\PC\\AppData\\Roaming\\NuGet\\NuGet.Config"

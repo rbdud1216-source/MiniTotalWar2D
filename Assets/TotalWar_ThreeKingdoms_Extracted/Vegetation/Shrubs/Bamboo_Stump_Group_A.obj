@@ -3,8 +3,8 @@
 # Skeleton: tree
 mtllib Bamboo_Stump_Group_A.mtl
 o Bamboo_Stump_Group_A
-g Trunk
-usemtl Trunk_Mat
+g Leaves
+usemtl Leaves_Mat
 v -0.2281 1.7852 -0.0385
 v -0.2076 1.7871 -0.0836
 v -0.2102 1.8154 -0.0828

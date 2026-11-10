@@ -1,9 +1,10 @@
-# Total War Three Kingdoms Pure Stump Mesh
+# Total War Three Kingdoms Converted Mesh
 # Model: Stump_A
+# Skeleton: tree
 mtllib Stump_A.mtl
 o Stump_A
-g Trunk
-usemtl Trunk_Mat
+g Leaves
+usemtl Leaves_Mat
 v 0.6904 -0.1881 0.7632
 v 0.8413 -0.1890 0.1373
 v 0.7173 0.6772 -0.0822

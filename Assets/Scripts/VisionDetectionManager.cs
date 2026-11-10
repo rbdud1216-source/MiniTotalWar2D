@@ -136,8 +136,11 @@ public class VisionDetectionManager : MonoBehaviour
             Squad s = allSquads[i];
             if (s == null || s.MemberCount <= 0) continue;
 
-            // 🌲 전술 숲 영역 내 진입 여부 실시간 갱신
-            s.isHiddenInForest = TacticalForestZone.IsPositionInForest(s.GetVisualCenter());
+            // 🌲 전술 숲 영역 및 🌾 전장 빽빽한 수풀/고사리 은신 영역 실시간 갱신
+            Vector3 centerPos = s.GetVisualCenter();
+            bool inForest = TacticalForestZone.IsPositionInForest(centerPos);
+            bool inDeepGrass = TacticalGrassRenderer.Instance != null && TacticalGrassRenderer.Instance.IsPositionInDeepStealth(centerPos);
+            s.isHiddenInForest = inForest || inDeepGrass;
 
             if (s.isPlayer)
             {

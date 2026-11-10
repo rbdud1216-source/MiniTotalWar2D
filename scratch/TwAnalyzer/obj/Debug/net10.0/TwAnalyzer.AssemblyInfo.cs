@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TwAnalyzer")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f473786b6ec12f0d0276fd62a56dcbef1297b5eb")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5e9eec6aba074cee149da99edb38cfa31b0ab45d")]
 [assembly: System.Reflection.AssemblyProductAttribute("TwAnalyzer")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TwAnalyzer")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

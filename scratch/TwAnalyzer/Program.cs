@@ -1,59 +1,79 @@
 using System;
 using System.IO;
-using System.Globalization;
+using System.Text;
+using System.Collections.Generic;
 
-class CheckLeavesY
+class ScanVegetation
 {
+    class PackEntry
+    {
+        public string Path;
+        public int Size;
+        public byte Compressed;
+        public long Offset;
+    }
+
     static void Main()
     {
-        string[] testModels = new[] { "Pine_A.obj", "Huangshan_Pine_A.obj", "Pine_Broken_H.obj", "Pine_Broken_K.obj" };
-        string baseDir = @"c:\unityProject\MiniTotalWar2D\Assets\TotalWar_ThreeKingdoms_Extracted\Vegetation\Trees";
+        string twDir = @"C:\Program Files (x86)\Steam\steamapps\common\Total War THREE KINGDOMS\data";
+        string packPath = Path.Combine(twDir, "terrain.pack");
 
-        foreach (var m in testModels)
+        using (var fs = File.OpenRead(packPath))
+        using (var br = new BinaryReader(fs))
         {
-            string path = Path.Combine(baseDir, m);
-            if (!File.Exists(path)) continue;
+            br.ReadBytes(16);
+            int fileCount = br.ReadInt32();
+            int indexSize = br.ReadInt32();
+            br.ReadInt32();
 
-            float minY = float.MaxValue, maxY = float.MinValue;
-            bool inLeaves = false;
-            int leafCount = 0;
-
-            // In OBJ files, let's see how groups/materials are organized
-            var lines = File.ReadAllLines(path);
-            for (int i = 0; i < lines.Length; i++)
+            List<PackEntry> entries = new List<PackEntry>();
+            for (int i = 0; i < fileCount; i++)
             {
-                var line = lines[i];
-                if (line.StartsWith("usemtl ") || line.StartsWith("g ") || line.StartsWith("o "))
-                {
-                    if (line.Contains("leave", StringComparison.OrdinalIgnoreCase) ||
-                        line.Contains("leaf", StringComparison.OrdinalIgnoreCase) ||
-                        line.Contains("sub1", StringComparison.OrdinalIgnoreCase) ||
-                        line.Contains("subobject 1", StringComparison.OrdinalIgnoreCase))
-                    {
-                        inLeaves = true;
-                    }
-                }
+                int size = br.ReadInt32();
+                byte comp = br.ReadByte();
+                List<byte> strBytes = new List<byte>();
+                byte b;
+                while ((b = br.ReadByte()) != 0) strBytes.Add(b);
+                string path = Encoding.UTF8.GetString(strBytes.ToArray());
+                entries.Add(new PackEntry { Path = path, Size = size, Compressed = comp });
             }
 
-            // Let's inspect the entire vertex distribution
-            int totalV = 0;
-            float sumY = 0;
-            foreach (var line in lines)
+            long currentOffset = fs.Position;
+            foreach (var e in entries)
             {
-                if (line.StartsWith("v "))
-                {
-                    var p = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    if (float.TryParse(p[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float y))
-                    {
-                        if (y < minY) minY = y;
-                        if (y > maxY) maxY = y;
-                        sumY += y;
-                        totalV++;
-                    }
-                }
+                e.Offset = currentOffset;
+                currentOffset += e.Size;
             }
 
-            Console.WriteLine($"{m}: Total Vertices: {totalV}, MinY: {minY:F2}, MaxY: {maxY:F2}, AvgY: {sumY/totalV:F2}");
+            // Inspect some grass models
+            foreach (var e in entries)
+            {
+                if (e.Path.Contains(@"terrain\vegetation\battle\grass\ard_grass0_1.rigid_model_v2"))
+                {
+                    fs.Seek(e.Offset, SeekOrigin.Begin);
+                    byte[] data = br.ReadBytes(e.Size);
+                    string magic = Encoding.ASCII.GetString(data, 0, 4);
+                    ushort lodCount = BitConverter.ToUInt16(data, 8);
+                    string skeleton = Encoding.UTF8.GetString(data, 12, 128).Trim('\0');
+                    Console.WriteLine($"Grass Model: {e.Path}");
+                    Console.WriteLine($"Magic: {magic}, Size: {e.Size}, LOD Count: {lodCount}, Skeleton: '{skeleton}'");
+
+                    int lod0MeshCount = BitConverter.ToInt32(data, 140);
+                    Console.WriteLine($"LOD0 Mesh Count: {lod0MeshCount}");
+
+                    int cur = 140 + 28 * lodCount;
+                    ushort matType = BitConverter.ToUInt16(data, cur);
+                    int sectionSize = BitConverter.ToInt32(data, cur + 4);
+                    int vOffset = BitConverter.ToInt32(data, cur + 8);
+                    int vCount = BitConverter.ToInt32(data, cur + 12);
+                    int iOffset = BitConverter.ToInt32(data, cur + 16);
+                    int iCount = BitConverter.ToInt32(data, cur + 20);
+                    Console.WriteLine($"MatType: {matType}, VCount: {vCount}, ICount: {iCount}");
+                    break;
+                }
+            }
         }
     }
+
 }
+

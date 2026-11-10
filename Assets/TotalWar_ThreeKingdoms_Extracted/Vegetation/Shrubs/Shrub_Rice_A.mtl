@@ -1,7 +1,21 @@
-# MTL file for Shrub_Rice_A
-newmtl Leaves
-Kd 1 1 1
-d 1
+# Material file for Shrub_Rice_A
+newmtl Trunk_Mat
+Ka 1.0 1.0 1.0
+Kd 1.0 1.0 1.0
+Ks 0.0 0.0 0.0
+d 1.0
+illum 2
+
 newmtl Leaves_Mat
-Kd 1 1 1
-d 1
+Ka 1.0 1.0 1.0
+Kd 1.0 1.0 1.0
+Ks 0.0 0.0 0.0
+d 1.0
+illum 2
+
+newmtl Twigs_Mat
+Ka 1.0 1.0 1.0
+Kd 1.0 1.0 1.0
+Ks 0.0 0.0 0.0
+d 1.0
+illum 2

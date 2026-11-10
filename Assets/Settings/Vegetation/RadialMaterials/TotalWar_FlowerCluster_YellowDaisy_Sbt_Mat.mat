@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: TotalWar_FlowerCluster_YellowDaisy_Sbt_Mat
+  m_Shader: {fileID: 4800000, guid: 2e5fbfccad10f574f84777fa7e551825, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 1
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _BaseMap:
+        m_Texture: {fileID: 2800000, guid: f9ff3221f78189d48bcdaa12c9f72cf3, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _BumpMap:
+        m_Texture: {fileID: 2800000, guid: 2a6ff2d2b61c3f3478fc80daf1343b80, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MainTex:
+        m_Texture: {fileID: 2800000, guid: f9ff3221f78189d48bcdaa12c9f72cf3, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _Cull: 0
+    - _Cutoff: 0.18
+    - _EdgeBleedCrop: 0.002
+    - _FadeEndDistance: 450
+    - _FadeStartDistance: 150
+    - _LeafFlutter: 0.25
+    - _Metallic: 0
+    - _Smoothness: 0.05
+    - _TipFadeEnd: 0.999
+    - _TipFadeStart: 0.992
+    - _WindFrequency: 1.6
+    - _WindMultiplier: 0.35
+    m_Colors:
+    - _BaseColor: {r: 1.04, g: 1.06, b: 1.02, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

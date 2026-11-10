@@ -236,7 +236,16 @@ namespace MiniTotalWar.ECS
                             // 3. 이동 속도 및 가속도 동기화 (실제 변경 시에만 SetComponentData 호출)
                             var mov = entityManager.GetComponentData<UnitMovementData>(e);
                             bool isEngaged = (combat.CurrentState == 2 || combat.CurrentState == 3);
-                            float desiredSpeed = isEngaged ? mov.MoveSpeed : syncInfo.Speed;
+                            float baseSpeed = isEngaged ? mov.MoveSpeed : syncInfo.Speed;
+
+                            // 🌾 [식생 지형 저항 및 군사 도로 연동 (TotalWar Frictional Drag System)]
+                            // 군사 도로망 위는 1.0f(표준 속도 유지), 관목/키 큰 수풀은 0.68x~0.72x 감속, 짓밟힌 풀은 0.92x, 불탄 재는 1.0f
+                            float foliageDrag = 1.0f;
+                            if (TacticalGrassRenderer.Instance != null)
+                            {
+                                foliageDrag = TacticalGrassRenderer.Instance.GetFoliageResistance(mov.Position);
+                            }
+                            float desiredSpeed = baseSpeed * foliageDrag;
                             float desiredAccel = syncInfo.Acceleration;
 
                             if (math.abs(mov.MoveSpeed - desiredSpeed) > 0.001f || math.abs(mov.Acceleration - desiredAccel) > 0.001f)
