@@ -57,7 +57,7 @@ Material:
     - _Metallic: 0
     - _Smoothness: 0.2
     - _SnowAmount: 0
-    - _SnowThreshold: 0.2
+    - _SnowThreshold: -0.15
     - _TrampleAmount: 0
     - _WindMultiplier: 1
     m_Colors:

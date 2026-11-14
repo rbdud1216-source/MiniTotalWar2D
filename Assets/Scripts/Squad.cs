@@ -2251,15 +2251,37 @@ public class Squad : MonoBehaviour
     private bool wasEngagedInCombat = false;
     private float postCombatReformTimer = 0f;
 
+    [Header("🛠️ 디버그 트레이스 (성능 영향 - 기본 비활성화)")]
+    [Tooltip("타겟 해제 시 전체 스택 트레이스를 콘솔에 기록 (프레임 저하 유발)")]
+    public bool enableTargetNullStackTrace = false;
+    [Tooltip("포위망 슬롯 디버그 선을 Scene 뷰에 표시")]
+    public bool enableEnvelopmentDebugLines = false;
+
+    private static Unity.Entities.World _cachedEcsPosQueryWorld;
+    private static Unity.Entities.EntityQuery _cachedEcsPosQuery;
+
+    private static Unity.Entities.EntityQuery GetOrCreateEcsPosQuery(Unity.Entities.World world, Unity.Entities.EntityManager em)
+    {
+        if (_cachedEcsPosQueryWorld != world || !_cachedEcsPosQueryWorld.IsCreated)
+        {
+            _cachedEcsPosQueryWorld = world;
+            _cachedEcsPosQuery = em.CreateEntityQuery(
+                typeof(MiniTotalWar.ECS.UnitEntityTag),
+                typeof(MiniTotalWar.ECS.UnitMovementData)
+            );
+        }
+        return _cachedEcsPosQuery;
+    }
+
     [SerializeField] private Squad _currentTargetSquad = null;
     public Squad currentTargetSquad
     {
         get => _currentTargetSquad;
         set
         {
-            if (_currentTargetSquad != null && value == null)
+            if (enableTargetNullStackTrace && _currentTargetSquad != null && value == null)
             {
-                Debug.LogError($"[TARGET NULL DETECTED] Squad: {name}, OldTarget: {_currentTargetSquad.name}\n{System.Environment.StackTrace}");
+                Debug.LogWarning($"[TARGET NULL DETECTED] Squad: {name}, OldTarget: {_currentTargetSquad.name}\n{System.Environment.StackTrace}");
             }
             _currentTargetSquad = value;
         }
@@ -2291,7 +2313,10 @@ public class Squad : MonoBehaviour
         }
 
         UpdatePathLine();
-        DrawEnvelopmentDebugLines();
+        if (enableEnvelopmentDebugLines)
+        {
+            DrawEnvelopmentDebugLines();
+        }
     }
 
     private void DrawEnvelopmentDebugLines()
@@ -3037,10 +3062,7 @@ public class Squad : MonoBehaviour
             if (world != null && world.IsCreated)
             {
                 var em = world.EntityManager;
-                var query = em.CreateEntityQuery(
-                    typeof(MiniTotalWar.ECS.UnitEntityTag),
-                    typeof(MiniTotalWar.ECS.UnitMovementData)
-                );
+                var query = GetOrCreateEcsPosQuery(world, em);
                 using (var entities = query.ToEntityArray(Unity.Collections.Allocator.Temp))
                 {
                     int enemySquadId = enemySquad.GetInstanceID();
@@ -3763,10 +3785,7 @@ public class Squad : MonoBehaviour
         if (world != null && world.IsCreated)
         {
             var em = world.EntityManager;
-            var query = em.CreateEntityQuery(
-                typeof(MiniTotalWar.ECS.UnitEntityTag),
-                typeof(MiniTotalWar.ECS.UnitMovementData)
-            );
+            var query = GetOrCreateEcsPosQuery(world, em);
 
             using (var tags = query.ToComponentDataArray<MiniTotalWar.ECS.UnitEntityTag>(Unity.Collections.Allocator.Temp))
             using (var movs = query.ToComponentDataArray<MiniTotalWar.ECS.UnitMovementData>(Unity.Collections.Allocator.Temp))

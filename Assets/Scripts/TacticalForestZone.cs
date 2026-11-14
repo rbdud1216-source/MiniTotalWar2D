@@ -699,12 +699,19 @@ public class TacticalForestZone : MonoBehaviour
                     col.color = grad;
                 }
 
+                float rateScale = Mathf.Clamp(smokeScaleMultiplier, 0.15f, 2.5f);
+                float newRate = 16f * rateScale * Mathf.Lerp(0.35f, 1.35f, densityMult);
+
                 var main = ps.main;
                 main.startColor = new Color(cStart.r, cStart.g, cStart.b, peakAlpha);
                 main.startSize = new ParticleSystem.MinMaxCurve(0.85f * smokeScaleMultiplier, 1.65f * smokeScaleMultiplier);
+                main.maxParticles = Mathf.Max(8, Mathf.RoundToInt(60f * Mathf.Clamp(smokeScaleMultiplier, 0.2f, 2.0f) * Mathf.Lerp(0.4f, 1.4f, densityMult)));
 
                 var emission = ps.emission;
-                emission.rateOverTime = 16f * Mathf.Clamp(smokeScaleMultiplier, 0.5f, 2.5f) * Mathf.Lerp(0.85f, 1.35f, densityMult);
+                emission.rateOverTime = newRate;
+
+                var vfxCtrl = ps.GetComponentInParent<TotalWarFireVFXController>();
+                if (vfxCtrl != null) vfxCtrl.UpdateSmokeBaseRate(newRate);
             }
         }
     }
@@ -1936,11 +1943,12 @@ public class TacticalForestZone : MonoBehaviour
         float peakAlpha = Mathf.Clamp01(densityMult * 0.95f);
 
         main.startColor = new Color(startCol.r, startCol.g, startCol.b, peakAlpha);
-        main.maxParticles = (int)(60 * Mathf.Lerp(0.8f, 1.4f, densityMult));
+        main.maxParticles = Mathf.Max(8, Mathf.RoundToInt(60f * Mathf.Clamp(scale, 0.2f, 2.0f) * Mathf.Lerp(0.4f, 1.4f, densityMult)));
 
         var emission = ps.emission;
         emission.enabled = true;
-        emission.rateOverTime = 16f * Mathf.Clamp(scale, 0.5f, 2.5f) * Mathf.Lerp(0.85f, 1.35f, densityMult);
+        float rateScale = Mathf.Clamp(scale, 0.15f, 2.5f);
+        emission.rateOverTime = 16f * rateScale * Mathf.Lerp(0.35f, 1.35f, densityMult);
 
         // [삼국지 토탈워 본편 공식 8x8 플립북 연기 실시간 애니메이션]
         var tsa = ps.textureSheetAnimation;

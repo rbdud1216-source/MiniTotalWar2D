@@ -54,7 +54,7 @@ Shader "Universal Render Pipeline/TotalWarRadialGrassLOD"
             #pragma vertex vert
             #pragma fragment frag
 
-            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile _ _SHADOWS_SOFT
             #pragma multi_compile_fog
             #pragma multi_compile_instancing
@@ -79,6 +79,7 @@ Shader "Universal Render Pipeline/TotalWarRadialGrassLOD"
                 float2 uv : TEXCOORD2;
                 float distanceToCam : TEXCOORD3;
                 float fogFactor : TEXCOORD4;
+                float heightNorm : TEXCOORD5;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -144,10 +145,11 @@ Shader "Universal Render Pipeline/TotalWarRadialGrassLOD"
 
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
 
-                // 카메라 거리 계산
+                // 카메라 거리 및 뿌리 차폐(AO)용 높이 정규화 계산
                 float3 camPos = GetCameraPositionWS();
                 output.distanceToCam = distance(finalWorldPos, camPos);
                 output.fogFactor = ComputeFogFactor(output.positionCS.z);
+                output.heightNorm = heightNorm;
 
                 return output;
             }
@@ -216,37 +218,43 @@ Shader "Universal Render Pipeline/TotalWarRadialGrassLOD"
                     }
                 }
 
-                // 4. ☀️ [핵심: 절대 검게 타지 않는 찬란한 삼국지 전장 라이팅]
+                // 4. ☀️ [자연스러운 지형 통합 라이팅 + 실시간 그림자 감쇠 + 뿌리 차폐(AO)]
                 float3 normalWS = normalize(input.normalWS);
                 if (dot(normalWS, normalWS) < 0.1) normalWS = float3(0.0, 1.0, 0.0);
 
-                // URP 공식 주 광원(Directional Light) 가져오기
-                Light mainLight = GetMainLight();
+                // URP 캐스케이드 그림자 좌표 샘플링 (산맥/성벽/나무 그림자 속에서는 풀도 함께 어두워져 발광 현상 제거)
+                float4 shadowCoord = TransformWorldToShadowCoord(input.positionWS);
+                Light mainLight = GetMainLight(shadowCoord);
                 half3 lightDir = mainLight.direction;
                 if (dot(lightDir, lightDir) < 0.001) lightDir = normalize(half3(0.35, 0.85, 0.35));
 
                 half3 lightCol = mainLight.color;
-                if (dot(lightCol, lightCol) < 0.001) lightCol = half3(1.15, 1.10, 0.98); // 따뜻한 주광
+                if (dot(lightCol, lightCol) < 0.001) lightCol = half3(1.0, 0.96, 0.88);
+                half lightAtten = mainLight.distanceAttenuation * mainLight.shadowAttenuation;
 
-                // 하프 램버트(Half-Lambert) 기반 풍성한 수광 (역광/탑뷰에서도 잎사귀가 화사하게 살아남)
+                // 완만한 랩(Wrapped) 램버트 수광 + 그림자 감쇠 적용
                 float NdotL = saturate(dot(normalWS, lightDir));
-                float halfLambert = NdotL * 0.5 + 0.5;
+                float wrappedDiffuse = saturate(NdotL * 0.55 + 0.45);
+                float transmission = saturate(dot(-normalWS, lightDir) * 0.4 + 0.25) * 0.22;
+                float directFactor = (wrappedDiffuse * 0.68 + transmission) * lightAtten;
 
-                // 양방향 잎사귀 투과광(Translucency)
-                float transmission = saturate(dot(-normalWS, lightDir) * 0.5 + 0.5) * 0.4;
-                float totalDirect = halfLambert * 0.85 + transmission * 0.35;
-
-                // 대지 반사광 + 창공 환경광 (Ambient)
-                half3 skyColor = half3(0.55, 0.65, 0.78);
-                half3 groundColor = half3(0.30, 0.42, 0.25);
-                half3 envAmbient = lerp(groundColor, skyColor, saturate(normalWS.y * 0.5 + 0.5)) * 0.75;
-
-                // URP 구면 조화 조명(SH Light) 결합
+                // 지형 환경광 (SH 라이트 우선, 보조 환경광은 과도한 형광 방지를 위해 톤 다운)
+                half3 skyColor = half3(0.36, 0.42, 0.48);
+                half3 groundColor = half3(0.22, 0.24, 0.17);
+                half3 fallbackAmbient = lerp(groundColor, skyColor, saturate(normalWS.y * 0.5 + 0.5));
                 half3 shLight = SampleSH(normalWS);
-                if (dot(shLight, shLight) > 0.01) envAmbient = max(envAmbient, shLight);
+                half3 envAmbient = (dot(shLight, shLight) > 0.005) ? lerp(fallbackAmbient, shLight, 0.72) : fallbackAmbient;
 
-                half3 diffuse = albedo.rgb * lightCol * totalDirect;
-                half3 ambient = albedo.rgb * envAmbient;
+                // 월드 좌표 기반 미세 군락 색조 변조 (단일 풀색의 단조로움 완화)
+                float patchNoise = sin(input.positionWS.x * 0.11 + input.positionWS.z * 0.07) * cos(input.positionWS.z * 0.13 - input.positionWS.x * 0.05);
+                half3 naturalTint = lerp(half3(0.88, 0.90, 0.82), half3(1.04, 0.98, 0.88), saturate(patchNoise * 0.5 + 0.5));
+
+                // 지면 밀착 뿌리 AO: 풀 밑동은 어둡고 잎끝으로 갈수록 밝아져 바닥과의 괴리감 제거
+                half rootAO = lerp(0.54, 1.0, saturate(input.heightNorm));
+
+                half3 tintedAlbedo = albedo.rgb * naturalTint * rootAO;
+                half3 diffuse = tintedAlbedo * lightCol * directFactor;
+                half3 ambient = tintedAlbedo * envAmbient * 0.85;
 
                 half3 finalColor = diffuse + ambient;
                 finalColor = MixFog(finalColor, input.fogFactor);

@@ -74,9 +74,10 @@ TacticalGrassRenderer Master Architecture
 | `ForceRenderCamera` | 외부 캡처/시네마틱 카메라를 강제 주입하여 즉시 인스턴싱 렌더링을 구동하는 수동 호출 API | [TacticalGrassRenderer.cs#L630-L634](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TacticalGrassRenderer.cs#L630-L634) |
 | `GetOrCreateClean3DTuftMesh` | 5m 원시 패치 OBJ에서 외곽 거미줄 잎사귀를 100% 버리고 중심 피벗(0,0)의 가장 꼿꼿한 단 1개의 주 풀포기만 엄선 추출하여 기저부 Y=0 및 직립 정렬 후 `_Clean3DTuft.asset`으로 영구 저장하는 알고리즘 | [TacticalGrassRenderer.cs#L1169-L1412](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TacticalGrassRenderer.cs#L1169-L1412) |
 | `GetOrCreateGroundedTuftMesh` | 8m 광역 평판 메쉬 내부의 서브 풀포기 군집을 분리하고 중심부 최저 Y를 검출해 Y=0.000m 지면에 정규화하는 접지 알고리즘 | [TacticalGrassRenderer.cs#L903-L1165](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TacticalGrassRenderer.cs#L903-L1165) |
-| `EnsureDefaultPrototypes` | 기획서 표준 8대 프로토타입(하층 지피 70%, 꽃 군락 15%, 상층 3D 정제 풀포기 15%, 지면 밀착 예외 2종)을 자동 검증 및 정합 바인딩하는 초기화 엔진 | [TacticalGrassRenderer.cs#L1474-L1673](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TacticalGrassRenderer.cs#L1474-L1673) |
-| `CalculateSlopeGroundedTransform` | 중심점 + 4방위 5점 지형 높이 샘플링, 식물 기립력 보장(경사면 노멀 정렬 최대 0.35f 캡), 경사각 비례 미세 침하로 지면 밀착 및 거꾸로 서는 현상 방지 | [TacticalGrassRenderer.cs#L2070-L2130](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TacticalGrassRenderer.cs#L2070-L2130) |
-| `BakeFoliageData` | 터레인 스플랫맵 분석 + 도로/하천/바위 배제 + 황금각 나선 1.6m 지피 융단 및 표준 8대 식생 청크 인스턴스 영구 생성 | [TacticalGrassRenderer.cs#L1992-L2338](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TacticalGrassRenderer.cs#L1992-L2338) |
+| `EnsureDefaultPrototypes` | 표준 9대 프로토타입(하층 지피 + 가을 건조 잔디 + 야생화 군락 + 상층 3D 풀포기/갈대 2종 + 고사리) 자동 검증 및 `ResolveRefinedAssetMesh` 정제 메쉬·계절 머터리얼 바인딩 | [TacticalGrassRenderer.cs#L1481-L1710](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TacticalGrassRenderer.cs#L1481-L1710) |
+| `ResolveRefinedAssetMesh` | 누락된 계절별 `.asset` 이름을 마스터 정제 메쉬(`Clump`/`Plume`/`Spike`/`Sword`/`Royal`/`LotusCluster`) 및 계절 머터리얼로 자동 해석·복구 | [TacticalGrassRenderer.cs#L1715-L1750](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TacticalGrassRenderer.cs#L1715-L1750) |
+| `CalculateSlopeGroundedTransform` | 중심점 + 4방위 5점 지형 높이 샘플링, 식물 기립력 보장(경사면 노멀 정렬 최대 0.35f 캡), 경사각 비례 미세 침하로 지면 밀착 및 거꾸로 서는 현상 방지 | [TacticalGrassRenderer.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TacticalGrassRenderer.cs) |
+| `BakeFoliageData` | 터레인 스플랫맵 분석 + 셀 중심 무작위 지터(`±0.44 * sampleSpacing`) + 2단 펄린 노이즈 군락(`patchDensity`/`SmoothStep`) 기반 다종 유기적 식생 청크 생성 | [TacticalGrassRenderer.cs#L2153-L2400](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TacticalGrassRenderer.cs#L2153-L2400) |
 | `SaveFoliageDataToDisk` | `Assets/Settings/Vegetation/Data/[MapName]/` 하위에 Manifest.json 및 Chunks.bytes 바이너리 영구 저장 | [TacticalGrassRenderer.cs#L2344-L2443](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TacticalGrassRenderer.cs#L2344-L2443) |
 | `LoadFoliageDataFromDisk` | 디스크의 `FoliageChunks.bytes` 파일에서 0.01초 만에 식생 데이터 복원 및 델타 적용 | [TacticalGrassRenderer.cs#L2449-L2561](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TacticalGrassRenderer.cs#L2449-L2561) |
 | `RenderGrassBatchesForCamera` | 카메라 거리/줌인 실시간 감지 및 `DrawMeshInstanced` 고속 렌더링 루프 | [TacticalGrassRenderer.cs#L2620-L2710](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TacticalGrassRenderer.cs#L2620-L2710) |
@@ -178,19 +179,20 @@ flowchart TD
    - 추출된 주 포기의 최하단 Y(`minY`)를 0.000m 지면으로 시프트.
    - 전체 수평 직경을 0.35m~0.40m로 클램핑하여 단정하고 정갈한 3D 메쉬 완성.
 
-### 5.2 황금각 나선 분산 (Golden Angle Spiral Dispersion)
-바둑판 격자 줄무늬를 소거하고 유기적인 자연 잔디 융단을 형성하기 위해 1개 샘플링 지점당 3개의 풀포기를 황금각(137.5077도)으로 분산 배치:
+### 5.2 유기적 펄린 군락 & 지터 황금각 분산 (Organic Perlin Cluster & Jittered Golden Angle)
+기계적인 `1.6m` 바둑판 격자 줄무늬를 없애고 자연 군락을 형성하기 위해 셀 중심 무작위 지터(`±0.44 * sampleSpacing`), 2단 펄린 노이즈 군락 밀도(`patchDensity`) 및 `SmoothStep` 가장자리 페이드를 결합한 뒤 1~4포기를 가변 분산 배치:
 
 ```
-tuftCount = 3
-cellRadius = 0.45 * sampleSpacing (1.6m 기준 0.72m)
+jitterX/Z = (Random(-0.44, 0.44)) * sampleSpacing
+patchDensity = Clamp01(0.65 * PerlinMacro + 0.35 * PerlinMicro)
+grassWeight *= SmoothStep(0.18, 0.55, patchDensity)
+tuftCount = Lerp(1, 4, patchDensity) + jitterCount (가변 포기 수)
+cellRadius = 0.68 * sampleSpacing
 
 for i = 0 to tuftCount - 1:
-    angle = (i * 137.5077도) + perlinAngleOffset
-    radius = cellRadius * sqrt((i + 0.5) / tuftCount)
-    offset.x = cos(angle) * radius
-    offset.z = sin(angle) * radius
-    tuftPos = gridCenter + offset
+    angle = baseRandomAngle + (i * 137.5077도) + perlinAngleOffset
+    radius = cellRadius * sqrt((i + 0.5) / tuftCount) * Random(0.75, 1.15)
+    tuftPos = jitteredCellCenter + (cos(angle), sin(angle)) * radius
 ```
 
 ### 5.3 식생 높이·밀도 차등형 은폐 지수 계산 공식
@@ -238,16 +240,16 @@ switch (chunkState):
 ## 🔗 6. 다른 스크립트와의 연동 관계 (Dependencies & Pipeline)
 
 1. **[TotalWarTerrainManager.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarTerrainManager.cs)**:
-   - 터레인 생성 및 식생 파이프라인 관리자. `defaultGrassSpacing = 1.6f` 및 `TotalWarRadialGrassLOD` 셰이더 프로퍼티 동기화 연동.
+   - 터레인 생성 및 식생 파이프라인 관리자. `defaultGrassSpacing = 1.6f` 및 `TotalWarRadialGrassLOD` 셰이더(URP `TransformWorldToShadowCoord` 그림자 감쇠, 하부 앰비언트 오클루전 `rootAO`, 패치 색조 변조 포함) 동기화 연동.
 2. **[RadialGrassConfig.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/RadialGrassConfig.cs)**:
-   - 중원/남만/서북 등 지역별 식생 팩 구성 데이터. `Pack_CentralPlains20()`에서 8대 표준 프로토타입 메쉬 에셋 및 비율을 정의하여 렌더러에 공급.
+   - 중원/남만/서북 등 지역별 식생 팩 구성 데이터. `Pack_CentralPlains20()`에서 정제 마스터 메쉬(`Clump`, `Plume`, `Spike`, `Sword`, `Royal`) 및 가을 건조 잔디 조합을 정의하여 렌더러에 공급.
 3. **[TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs)**:
    - `TotalWarRoadSpline.IsOnAnyRoad(pos)`를 호출하여 도로망 내부의 풀을 100% 클리어링.
    - 도로 위 통행 유닛에게는 식생 저항 0%(1.0배 표준 속도)와 은신 불가 판정 적용.
 4. **[VisionDetectionManager.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/VisionDetectionManager.cs)**:
    - `TacticalGrassRenderer.Instance.IsPositionInDeepStealth(pos)`를 호출하여 키 큰 수풀/관목 군락 진입 시 `s.isHiddenInForest`로 직결, 적 15m~25m 초근접 시에만 발각되는 완전 은신 구현.
 5. **[SquadECSSimulationBridge.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/ECS/SquadECSSimulationBridge.cs)**:
-   - 순수 ECS 모드 매 프레임 동기화 루프에서 `GetFoliageResistance(mov.Position)`를 호출하여 유닛 이동 속도에 실시간 합성.
+   - 순수 ECS 모드 동기화 루프에서 4프레임 분산으로 `GetFoliageResistance(mov.Position)`를 샘플링하고, `SquadSyncInfo.EngagedSpeed`와 `Speed`를 분리해 교전 중 속도 붕괴 없이 식생 저항을 합성.
 6. **[UnitJobSimulationManager.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/UnitJobSimulationManager.cs)**:
    - C# 잡 시뮬레이션 모드 유닛 이동 속도에 `GetFoliageResistance(u.transform.position)`를 실시간 반영.
 7. **[Squad.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Squad.cs)**:

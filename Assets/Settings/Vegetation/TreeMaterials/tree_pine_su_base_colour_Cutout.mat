@@ -53,11 +53,11 @@ Material:
     - _IsBamboo: 0
     - _IsShrubGrass: 0
     - _LeafFlutter: 0.8
-    - _LeafSnowRatio: 0.55
+    - _LeafSnowRatio: 0.667
     - _Metallic: 0
     - _Smoothness: 0.2
     - _SnowAmount: 0
-    - _SnowThreshold: 0.2
+    - _SnowThreshold: -0.15
     - _TrampleAmount: 0
     - _WindMultiplier: 1
     m_Colors:

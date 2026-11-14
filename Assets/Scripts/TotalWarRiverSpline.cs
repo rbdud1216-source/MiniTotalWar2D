@@ -67,9 +67,95 @@ public class TotalWarRiverSpline : MonoBehaviour
     private static readonly List<TotalWarRiverSpline> activeRivers = new List<TotalWarRiverSpline>();
     public static IReadOnlyList<TotalWarRiverSpline> ActiveRivers => activeRivers;
 
+    // ⚡ [O(1) 공간 캐시]: 매 프레임 GetFoliageResistance 호출 시 List<Vector3> 힙 할당 방지
+    private readonly List<Vector3> _cachedWorldPoints = new List<Vector3>(64);
+    private float _cacheMinX, _cacheMaxX, _cacheMinZ, _cacheMaxZ;
+    private float _cachedHalfWidth;
+    private bool _isSplineCacheDirty = true;
+    private Vector3 _cachedTransformPos;
+    private Quaternion _cachedTransformRot;
+    private Vector3 _cachedTransformScale;
+    private int _cachedWaypointCount = -1;
+    private int _cachedResolution = -1;
+
+    /// <summary>
+    /// 스플라인 월드 좌표 및 경계 상자(AABB) 캐시 무효화
+    /// </summary>
+    public void InvalidateSplineCache()
+    {
+        _isSplineCacheDirty = true;
+    }
+
+    private void EnsureSplineCache()
+    {
+        int wpCount = (waypoints != null) ? waypoints.Count : 0;
+        bool transformChanged = transform.position != _cachedTransformPos
+            || transform.rotation != _cachedTransformRot
+            || transform.lossyScale != _cachedTransformScale;
+
+        if (!_isSplineCacheDirty
+            && !transformChanged
+            && _cachedWaypointCount == wpCount
+            && _cachedResolution == resolutionPerSegment
+            && Mathf.Approximately(_cachedHalfWidth, riverWidth * 0.5f))
+        {
+            return;
+        }
+
+        _cachedWorldPoints.Clear();
+        _cacheMinX = float.MaxValue;
+        _cacheMaxX = float.MinValue;
+        _cacheMinZ = float.MaxValue;
+        _cacheMaxZ = float.MinValue;
+
+        if (waypoints != null && wpCount >= 2)
+        {
+            for (int i = 0; i < wpCount - 1; i++)
+            {
+                Vector3 p0 = (i == 0) ? waypoints[i] : waypoints[i - 1];
+                Vector3 p1 = waypoints[i];
+                Vector3 p2 = waypoints[i + 1];
+                Vector3 p3 = (i + 2 < wpCount) ? waypoints[i + 2] : p2;
+
+                for (int step = 0; step < resolutionPerSegment; step++)
+                {
+                    float t = (float)step / resolutionPerSegment;
+                    Vector3 wp = transform.TransformPoint(EvaluateCatmullRom(p0, p1, p2, p3, t));
+                    _cachedWorldPoints.Add(wp);
+                    if (wp.x < _cacheMinX) _cacheMinX = wp.x;
+                    if (wp.x > _cacheMaxX) _cacheMaxX = wp.x;
+                    if (wp.z < _cacheMinZ) _cacheMinZ = wp.z;
+                    if (wp.z > _cacheMaxZ) _cacheMaxZ = wp.z;
+                }
+            }
+
+            Vector3 lastWp = transform.TransformPoint(waypoints[wpCount - 1]);
+            _cachedWorldPoints.Add(lastWp);
+            if (lastWp.x < _cacheMinX) _cacheMinX = lastWp.x;
+            if (lastWp.x > _cacheMaxX) _cacheMaxX = lastWp.x;
+            if (lastWp.z < _cacheMinZ) _cacheMinZ = lastWp.z;
+            if (lastWp.z > _cacheMaxZ) _cacheMaxZ = lastWp.z;
+        }
+
+        float halfWidth = riverWidth * 0.5f;
+        _cacheMinX -= halfWidth;
+        _cacheMaxX += halfWidth;
+        _cacheMinZ -= halfWidth;
+        _cacheMaxZ += halfWidth;
+        _cachedHalfWidth = halfWidth;
+
+        _cachedTransformPos = transform.position;
+        _cachedTransformRot = transform.rotation;
+        _cachedTransformScale = transform.lossyScale;
+        _cachedWaypointCount = wpCount;
+        _cachedResolution = resolutionPerSegment;
+        _isSplineCacheDirty = false;
+    }
+
     private void OnEnable()
     {
         if (!activeRivers.Contains(this)) activeRivers.Add(this);
+        InvalidateSplineCache();
     }
 
     private void OnDisable()
@@ -78,35 +164,52 @@ public class TotalWarRiverSpline : MonoBehaviour
     }
 
     /// <summary>
-    /// 특정 월드 좌표가 하천 수면 영역 내부(강폭 및 수면 높이 범위)에 진입했는지 여부 정밀 판정
+    /// 특정 월드 좌표가 하천 수면 영역 내부(강폭 및 수면 높이 범위)에 진입했는지 여부 정밀 판정 (Zero-Allocation)
     /// - 🌊 [Y축 높이 검사]: 공중(다리 위/화살 투사체) 및 지하 판정 완전 배제
     /// </summary>
     public bool Contains(Vector3 worldPos)
     {
-        List<Vector3> worldPoints = SampleSplinePointsWorld();
-        if (worldPoints.Count < 2) return false;
+        EnsureSplineCache();
+        if (_cachedWorldPoints.Count < 2) return false;
 
-        float halfWidth = riverWidth * 0.5f;
-        Vector3 cellPos = new Vector3(worldPos.x, 0f, worldPos.z);
-
-        float minDist = float.MaxValue;
-        Vector3 closestPt = Vector3.zero;
-
-        for (int i = 0; i < worldPoints.Count - 1; i++)
+        // 1단계: O(1) AABB 빠른 배제
+        if (worldPos.x < _cacheMinX || worldPos.x > _cacheMaxX || worldPos.z < _cacheMinZ || worldPos.z > _cacheMaxZ)
         {
-            Vector3 pA = worldPoints[i];
-            Vector3 pB = worldPoints[i + 1];
-            Vector3 proj = ClosestPointOnSegmentXZ(cellPos, pA, pB, out float dist);
-            if (dist < minDist)
+            return false;
+        }
+
+        float minDistSqr = float.MaxValue;
+        float closestY = 0f;
+        float px = worldPos.x;
+        float pz = worldPos.z;
+
+        int count = _cachedWorldPoints.Count;
+        for (int i = 0; i < count - 1; i++)
+        {
+            Vector3 pA = _cachedWorldPoints[i];
+            Vector3 pB = _cachedWorldPoints[i + 1];
+
+            float abX = pB.x - pA.x;
+            float abZ = pB.z - pA.z;
+            float lenSq = abX * abX + abZ * abZ;
+            float t = (lenSq > 1e-6f) ? Mathf.Clamp01(((px - pA.x) * abX + (pz - pA.z) * abZ) / lenSq) : 0f;
+
+            float projX = pA.x + abX * t;
+            float projZ = pA.z + abZ * t;
+            float dx = px - projX;
+            float dz = pz - projZ;
+            float distSqr = dx * dx + dz * dz;
+
+            if (distSqr < minDistSqr)
             {
-                minDist = dist;
-                closestPt = proj;
+                minDistSqr = distSqr;
+                closestY = pA.y + (pB.y - pA.y) * t;
             }
         }
 
-        if (minDist <= halfWidth)
+        if (minDistSqr <= (_cachedHalfWidth * _cachedHalfWidth))
         {
-            float surfaceY = closestPt.y + surfaceYOffset;
+            float surfaceY = closestY + surfaceYOffset;
             float minY = surfaceY - riverDepth - 0.5f;
             float maxY = surfaceY + 0.6f;
 
@@ -142,6 +245,7 @@ public class TotalWarRiverSpline : MonoBehaviour
 
     private void OnValidate()
     {
+        InvalidateSplineCache();
         EnforceLevelTransform();
         if (waypoints == null || waypoints.Count < 2)
         {
@@ -350,6 +454,7 @@ public class TotalWarRiverSpline : MonoBehaviour
         mesh.RecalculateBounds();
 
         riverMeshFilter.sharedMesh = mesh;
+        InvalidateSplineCache();
     }
 
     private static float maxTiling(float val) => Mathf.Max(1f, val);

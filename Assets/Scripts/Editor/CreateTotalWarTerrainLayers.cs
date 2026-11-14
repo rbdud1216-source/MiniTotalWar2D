@@ -190,6 +190,9 @@ namespace MiniTotalWar.Editor
                 EditorUtility.SetDirty(ter);
             }
 
+            // 🛣️ 지형 재도색 시 기존 건설된 도로 스플랫맵과 잔디 배제 상태 자동 재적용(보존)
+            TotalWarRoadSpline.RepaintAllActiveRoadSplatmaps();
+
             SceneView.RepaintAll();
             Debug.Log($"<color=#00FF88><b>[TotalWarTerrainLayers] 🌍 삼탈워 {palette} 5색 지형 레이어 장착 및 복합 절차적 페인팅 완료!</b></color>");
 

@@ -61,18 +61,15 @@ TotalWar Battlefield Road System
 
 | Key (메서드 / 구조체 / 클래스) | Value (역할 및 세부 기술 명세) | 소스 줄 번호 링크 |
 | :--- | :--- | :--- |
-| `TotalWarRoadSpline` | 군사 도로망 스플라인, 3D 메쉬 생성 및 지형 평탄화 총괄 컴포넌트 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L23-L70) |
-| `RoadSurfaceType` | 도로 표면 재질 열거형 (`ClimateSync` 기후 동기화 기본, `Gravel` 군용 자갈길, `Dirt` 야전 흙길) | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L23-L31) |
-| `SyncWithTerrainClimate` | 현재 터레인의 기후 테마(Temperate, Arid, Cold, Nanman 등) dirtRoadLayer를 감지하여 메쉬 Albedo/Normal/타일링/도색 슬롯을 1:1 일체화 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L496-L585) |
-| `SetSurfaceType` | 인스펙터 토글 툴바 클릭 시 도로 표면 재질(기후 연동/자갈길/흙길)을 원클릭으로 즉각 전환 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L587-L650) |
-| `GetCurrentClimateInfo` | 에디터 인스펙터에 현재 연동된 기후 테마 이름 및 dirtRoadLayer 슬롯 정보 실시간 반환 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L662-L675) |
-| `GenerateRoadMesh` | 지형 표면을 따라 흐르는 3D 도로 리본 메쉬(Ribbon Mesh) 실시간 생성 및 렌더링 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L225-L330) |
-| `SampleSplinePointsWorld` | Catmull-Rom 알고리즘을 통한 부드러운 도로 곡선 월드 좌표 샘플링 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L150-L165) |
-| `CarveAndPaintRoad` | AABB 국소 그리드 가속 지형 자동 평탄화 + 황토길 도색 + 잔디 배제 일괄 실행 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L678-L820) |
-| `RestoreTerrainBackup` | 평탄화 전 원본 지형(높이/스플랫/잔디)으로 1초 만에 100% 원상복구 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L825-L870) |
-| `Contains` | 특정 월드 좌표가 도로 영역(폭 및 수직 높이 범위)에 있는지 판정 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L185-L210) |
-| `IsOnAnyRoad` | 전역에 배치된 모든 도로 중 특정 월드 좌표가 도로 위인지 정적 판정 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L212-L224) |
-| `EnforceLevelTransform` | 도로 오브젝트의 기울어짐(Roll/Pitch)을 0으로 강제 수평 보정 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L85-L105) |
+| `TotalWarRoadSpline` | 군사 도로망 스플라인, 3D 메쉬 생성 및 지형 평탄화 총괄 컴포넌트 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L23-L75) |
+| `RoadSurfaceType` | 도로 표면 재질 열거형 (`ClimateSync` 기후 동기화, `Gravel` 자갈길, `Dirt` 흙길) + 구 Enum(3) 자동 이관 (`NormalizeSurfaceType`) | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L25-L33) |
+| `EnsureSplineCache` / `InvalidateSplineCache` | 월드 스플라인 점 배열 캐시 및 XZ 축 정렬 바운딩 박스 (AABB) 캐시 구축·무효화 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L155-L240) |
+| `EnsureRoadMaterial` / `GetMaterialPathForSurface` | 도로 스타일별 전용 머터리얼 (`TotalWarRoad_ClimateSync`, `TotalWarRoad_Gravel`, `TotalWarRoad_Dirt`) 분리 로드/바인딩 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L613-L690) |
+| `SyncWithTerrainClimate` / `OnTerrainThemeChanged` | 기후 테마 `dirtRoadLayer` 동기화 (고정 스타일 `Gravel`/`Dirt`는 유지하고 레이어 인덱스만 재정합) | TotalWarRoadSpline.cs |
+| `SetSurfaceType` | 인스펙터 토글 툴바 클릭 시 도로 표면 재질 및 전용 머터리얼·지형 스플랫 즉각 전환 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L815-L855) |
+| `RepaintAllActiveRoadSplatmaps` | 계절/기후 팔레트 재페인팅 직후 모든 활성 도로의 스플랫맵을 지형 높이 수정 없이 재도색 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L1058-L1240) |
+| `Contains` | AABB 조기 탈출 + 캐시된 세그먼트 제곱거리 검사 기반 O(1) 무할당 도로 영역 판정 | [TotalWarRoadSpline.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarRoadSpline.cs#L328-L360) |
+| `IsOnAnyRoad` | 전역에 배치된 모든 도로 중 특정 월드 좌표가 도로 위인지 정적 판정 | TotalWarRoadSpline.cs |
 | `TotalWarRoadSplineEditor` | 상단 원클릭 스타일 토글 툴바, 마우스 펜 툴, 노드 선택 3축 핸들, 평탄화/도색 인스펙터 | [TotalWarRoadSplineEditor.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Editor/TotalWarRoadSplineEditor.cs#L10-L75) |
 | `TotalWarRoadMenuItems` | 유니티 에디터 상단 메뉴 `GameObject > Total War Roads` 스폰 도구 | [TotalWarRoadMenuItems.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Editor/TotalWarRoadMenuItems.cs#L7-L35) |
 
