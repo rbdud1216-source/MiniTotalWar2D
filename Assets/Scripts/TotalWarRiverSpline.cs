@@ -164,28 +164,40 @@ public class TotalWarRiverSpline : MonoBehaviour
     }
 
     /// <summary>
+    /// 특정 월드 좌표가 하천 수면 영역 내부(강폭 및 수면 높이 범위)에 진입했는지 여부 정밀 판정
     /// 특정 월드 좌표가 하천 수면 영역 내부(강폭 및 수면 높이 범위)에 진입했는지 여부 정밀 판정 (Zero-Allocation)
     /// - 🌊 [Y축 높이 검사]: 공중(다리 위/화살 투사체) 및 지하 판정 완전 배제
     /// </summary>
     public bool Contains(Vector3 worldPos)
     {
+        List<Vector3> worldPoints = SampleSplinePointsWorld();
+        if (worldPoints.Count < 2) return false;
         EnsureSplineCache();
         if (_cachedWorldPoints.Count < 2) return false;
 
+        float halfWidth = riverWidth * 0.5f;
+        Vector3 cellPos = new Vector3(worldPos.x, 0f, worldPos.z);
         // 1단계: O(1) AABB 빠른 배제
         if (worldPos.x < _cacheMinX || worldPos.x > _cacheMaxX || worldPos.z < _cacheMinZ || worldPos.z > _cacheMaxZ)
         {
             return false;
         }
 
+        float minDist = float.MaxValue;
+        Vector3 closestPt = Vector3.zero;
         float minDistSqr = float.MaxValue;
         float closestY = 0f;
         float px = worldPos.x;
         float pz = worldPos.z;
 
+        for (int i = 0; i < worldPoints.Count - 1; i++)
         int count = _cachedWorldPoints.Count;
         for (int i = 0; i < count - 1; i++)
         {
+            Vector3 pA = worldPoints[i];
+            Vector3 pB = worldPoints[i + 1];
+            Vector3 proj = ClosestPointOnSegmentXZ(cellPos, pA, pB, out float dist);
+            if (dist < minDist)
             Vector3 pA = _cachedWorldPoints[i];
             Vector3 pB = _cachedWorldPoints[i + 1];
 
@@ -202,13 +214,17 @@ public class TotalWarRiverSpline : MonoBehaviour
 
             if (distSqr < minDistSqr)
             {
+                minDist = dist;
+                closestPt = proj;
                 minDistSqr = distSqr;
                 closestY = pA.y + (pB.y - pA.y) * t;
             }
         }
 
+        if (minDist <= halfWidth)
         if (minDistSqr <= (_cachedHalfWidth * _cachedHalfWidth))
         {
+            float surfaceY = closestPt.y + surfaceYOffset;
             float surfaceY = closestY + surfaceYOffset;
             float minY = surfaceY - riverDepth - 0.5f;
             float maxY = surfaceY + 0.6f;

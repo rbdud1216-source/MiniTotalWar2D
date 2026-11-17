@@ -95,6 +95,12 @@ namespace MiniTotalWar
                 primaryGrass = winterGrassLayer;
             }
 
+            // 레이어 배열 구성 (기존 레이어 슬롯 보존)
+            List<TerrainLayer> newLayers = new List<TerrainLayer>();
+            if (primaryGrass != null) newLayers.Add(primaryGrass);
+            if (forestFloorLayer != null) newLayers.Add(forestFloorLayer);
+            if (cliffRockLayer != null) newLayers.Add(cliffRockLayer);
+            if (dirtRoadLayer != null) newLayers.Add(dirtRoadLayer);
             // 🛣️ [표준 5슬롯 지형 레이어 순서 보존]: [0]주 잔디, [1]절벽 암반, [2]흙길/도로, [3]숲 바닥, [4+]수변 자갈/사용자 슬롯
             // 기존 4슬롯 재배열로 [1]암반/[2]흙길/[3]숲/[4]자갈 스플랫맵 및 도로 채널이 뒤바뀌거나 소실되는 문제 방지
             TerrainLayer[] existingLayers = tData.terrainLayers;

@@ -2279,8 +2279,10 @@ public class Squad : MonoBehaviour
         get => _currentTargetSquad;
         set
         {
+            if (_currentTargetSquad != null && value == null)
             if (enableTargetNullStackTrace && _currentTargetSquad != null && value == null)
             {
+                Debug.LogError($"[TARGET NULL DETECTED] Squad: {name}, OldTarget: {_currentTargetSquad.name}\n{System.Environment.StackTrace}");
                 Debug.LogWarning($"[TARGET NULL DETECTED] Squad: {name}, OldTarget: {_currentTargetSquad.name}\n{System.Environment.StackTrace}");
             }
             _currentTargetSquad = value;
@@ -2313,6 +2315,7 @@ public class Squad : MonoBehaviour
         }
 
         UpdatePathLine();
+        DrawEnvelopmentDebugLines();
         if (enableEnvelopmentDebugLines)
         {
             DrawEnvelopmentDebugLines();
@@ -3062,6 +3065,10 @@ public class Squad : MonoBehaviour
             if (world != null && world.IsCreated)
             {
                 var em = world.EntityManager;
+                var query = em.CreateEntityQuery(
+                    typeof(MiniTotalWar.ECS.UnitEntityTag),
+                    typeof(MiniTotalWar.ECS.UnitMovementData)
+                );
                 var query = GetOrCreateEcsPosQuery(world, em);
                 using (var entities = query.ToEntityArray(Unity.Collections.Allocator.Temp))
                 {
@@ -3785,6 +3792,10 @@ public class Squad : MonoBehaviour
         if (world != null && world.IsCreated)
         {
             var em = world.EntityManager;
+            var query = em.CreateEntityQuery(
+                typeof(MiniTotalWar.ECS.UnitEntityTag),
+                typeof(MiniTotalWar.ECS.UnitMovementData)
+            );
             var query = GetOrCreateEcsPosQuery(world, em);
 
             using (var tags = query.ToComponentDataArray<MiniTotalWar.ECS.UnitEntityTag>(Unity.Collections.Allocator.Temp))

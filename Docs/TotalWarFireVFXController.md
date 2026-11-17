@@ -47,6 +47,7 @@
 | `InitComponents` | Flames, Smoke, Embers 파티클과 Point Light를 탐색하고 초기 방출량 캐싱 | [TotalWarFireVFXController.cs#L75-L135](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarFireVFXController.cs#L75-L135) |
 | `FindNearbyTreeRenderers` | 타겟 미지정 시 반경 2.5m 구체 검사로 주변 나무 렌더러를 자동 탐색하여 바인딩 | [TotalWarFireVFXController.cs#L137-L162](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarFireVFXController.cs#L137-L162) |
 | `UpdateTreeMaterialProperties` | `MaterialPropertyBlock`을 통해 타겟 렌더러들에 `_BurnProgress`를 주입 | [TotalWarFireVFXController.cs#L190-L206](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarFireVFXController.cs#L190-L206) |
+| `UpdateParticleLifecycle` | 연소 진행도에 따라 화염 소화, 불티 감쇄, 잔여 훈연 연기 조절 | [TotalWarFireVFXController.cs#L215-L277](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarFireVFXController.cs#L215-L277) |
 | `UpdateParticleLifecycle` | 연소 진행도에 따라 화염 소화, 불티 감쇄, `initialSmokeRate` 비례 잔여 훈연 연기 조절 (고정 하한 클램프 제거) | [TotalWarFireVFXController.cs#L355-L425](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarFireVFXController.cs#L355-L425) |
 | `UpdateSmokeBaseRate` | `TacticalForestZone`의 `smokeScaleMultiplier` 변경 시 `initialSmokeRate`를 실시간 동기화 | [TotalWarFireVFXController.cs#L125](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarFireVFXController.cs#L125) |
 | `UpdateFireLight` | 화염 깜빡임 노이즈 및 전소 막바지 조명 밝기 감쇄 | [TotalWarFireVFXController.cs#L282-L305](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/TotalWarFireVFXController.cs#L282-L305) |

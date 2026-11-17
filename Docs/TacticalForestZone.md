@@ -228,6 +228,7 @@ flowchart TD
 | `isForestRevealedByFire`| `bool` | `false` | 화재로 인한 숲 은폐(매복) 해제 여부 (연소율 40% 이상 시 자동 활성화) |
 | `burningTreesCount` | `int` | `8` | 숲 내에서 동시에 불타는 나무 수 (1 ~ 20그루) |
 | `flameScaleMultiplier` | `float` | `0.45f` | 개별 화염 파티클 크기 배율 (0.15 ~ 1.5, 나뭇가지/잎사귀 크기 0.5~1.3m에 최적화) |
+| `smokeScaleMultiplier` | `float` | `1.0f` | **개별 연기 크기 / 볼륨 배율 슬라이더 (0.2 ~ 3.0)** - 연기 구름의 전체 크기 및 방출량을 실시간 조절 |
 | `smokeScaleMultiplier` | `float` | `1.0f` | **개별 연기 크기 / 볼륨 배율 슬라이더 (0.2 ~ 3.0)** - 연기 구름의 크기와 함께 `rateScale (0.15 ~ 2.5)` 및 `maxParticles`를 비례 축소/확대하고 `TotalWarFireVFXController.UpdateSmokeBaseRate()`에 실시간 동기화 |
 | `smokeVisualType` | `SmokeVisualType` | `TotalWarWarmCharcoal` | **연기 시각 유형 프리셋** (삼탈워 웜 차콜 훈연 / 토탈워 잿빛 훈연 / 삼탈워 흑갈색 / 수종별 자동 전환 / 사용자 지정 색상) |
 | `smokeDensity` | `float` | `0.75f` | **연기 진하기 / 농도 슬라이더 (0.1 ~ 1.0)** - 불투명도(Alpha) 및 입자 방출 밀도를 실시간 조절 |

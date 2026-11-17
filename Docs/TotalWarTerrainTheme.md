@@ -58,6 +58,7 @@ flowchart TD
         LayerSelect -- Autumn --> L2["autumnGrassLayer 바인딩"]
         LayerSelect -- Winter --> L3["winterGrassLayer 바인딩"]
         
+        L1 & L2 & L3 --> ApplyLayers["TerrainData.terrainLayers 갱신"]
         L1 & L2 & L3 --> ApplyLayers["TerrainData.terrainLayers 표준 5슬롯 보존 갱신 ([0]잔디 [1]절벽 [2]흙·도로 [3]숲 [4+]자갈)"]
         ApplyLayers --> RepaintRoads["팔레트 재도색 시 TotalWarRoadSpline.RepaintAllActiveRoadSplatmaps() 연계"]
         

@@ -119,6 +119,7 @@ public class TotalWarFireVFXController : MonoBehaviour
         if (ps == null) return;
         psSmoke = ps;
         float rate = ps.emission.rateOverTime.constant;
+        initialSmokeRate = (rate > 1f) ? rate : 22f;
         initialSmokeRate = (rate > 0.05f) ? rate : 16f;
     }
 
@@ -166,6 +167,7 @@ public class TotalWarFireVFXController : MonoBehaviour
             {
                 psSmoke = ps;
                 float rate = ps.emission.rateOverTime.constant;
+                initialSmokeRate = (rate > 1f) ? rate : 22f;
                 initialSmokeRate = (rate > 0.05f) ? rate : 16f;
             }
             else if (psName.Contains("ground"))
@@ -392,21 +394,27 @@ public class TotalWarFireVFXController : MonoBehaviour
             {
                 // 앙상하게 탄 숯가지만 남은 단계: 실낱같이 가느다랗게 피어오르는 미세 잔여 훈연
                 float remain = 1.0f - ((burnProgress - 0.68f) / 0.24f);
+                emission.rateOverTime = Mathf.Max(2.0f, 6.0f * remain);
                 emission.rateOverTime = Mathf.Max(0.15f, baseRate * 0.25f * remain);
             }
             else if (burnProgress >= 0.50f)
             {
                 // 나뭇잎 소진에 따라 연기 발생량이 서서히 잦아듦
                 float decay = 1.0f - ((burnProgress - 0.50f) / 0.18f);
+                emission.rateOverTime = Mathf.Lerp(6.0f, initialSmokeRate * 1.35f, decay);
                 emission.rateOverTime = Mathf.Lerp(baseRate * 0.25f, baseRate * 1.15f, decay);
             }
             else if (burnProgress >= 0.10f)
             {
+                // 불길 확산 및 절정 단계: 풍성하고 묵직한 훈연 구름
+                emission.rateOverTime = Mathf.Max(30f, initialSmokeRate * 1.5f);
                 // 불길 확산 및 절정 단계: 기본 연기 방출량에 비례하여 풍성하게 상승
                 emission.rateOverTime = baseRate * 1.35f;
             }
             else
             {
+                // [착화 전 훈연 및 초기 발화 단계]: 불은 작거나 없어도 짙은 연기부터 뭉게뭉게 피어오름!
+                emission.rateOverTime = Mathf.Max(24f, initialSmokeRate * 1.2f);
                 // [착화 전 훈연 및 초기 발화 단계]: 초기 훈연 역시 기본 방출량에 비례 제어
                 emission.rateOverTime = baseRate * 1.05f;
             }
