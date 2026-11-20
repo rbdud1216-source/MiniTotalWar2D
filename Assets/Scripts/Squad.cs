@@ -34,6 +34,24 @@ public class Squad : MonoBehaviour
     public string squadName = "보병대";
     [Tooltip("플레이어 진영 부대 여부 (체크 시 아군, 해제 시 적군)")]
     public bool isPlayer = true;
+
+    [Header("🌐 [캠페인/멀티 지휘 권한 및 네트워크 식별]")]
+    [Tooltip("멀티플레이 및 캠페인 공용 결정론적 부대 식별 ID (0이면 런타임 InstanceID 폴백)")]
+    public uint squadNetId = 0;
+    [Tooltip("현재 지휘권을 보유한 플레이어 ID (0: 총사령관, 1~15: 휘하 장군, 255: AI)")]
+    public byte ownerPlayerId = 0;
+    [Tooltip("지휘 권한 실행 모드 (직접 조작 / AI 부관 위임)")]
+    public MiniTotalWar.OpenWorld.SquadAuthorityMode authorityMode = MiniTotalWar.OpenWorld.SquadAuthorityMode.PlayerDirect;
+
+    /// <summary>
+    /// 지정된 플레이어 ID가 이 부대에 전술 명령을 하달할 권한이 있는지 반환합니다.
+    /// 총사령관(playerId == 0)은 모든 아군 부대에 대한 상위 지휘권을 가집니다.
+    /// </summary>
+    public bool CanBeCommandedBy(int playerId)
+    {
+        if (!isPlayer) return false;
+        return playerId == 0 || ownerPlayerId == playerId;
+    }
     [Tooltip("부대의 병과 및 전술 역할 (보병, 창병, 궁병, 기병 등)")]
     public UnitType unitType = UnitType.MeleeInfantry;
     [Tooltip("부대의 투사체 궤적 모드 (HighArc: 포물선 곡사, Flat: 직사)")]
@@ -2279,10 +2297,8 @@ public class Squad : MonoBehaviour
         get => _currentTargetSquad;
         set
         {
-            if (_currentTargetSquad != null && value == null)
             if (enableTargetNullStackTrace && _currentTargetSquad != null && value == null)
             {
-                Debug.LogError($"[TARGET NULL DETECTED] Squad: {name}, OldTarget: {_currentTargetSquad.name}\n{System.Environment.StackTrace}");
                 Debug.LogWarning($"[TARGET NULL DETECTED] Squad: {name}, OldTarget: {_currentTargetSquad.name}\n{System.Environment.StackTrace}");
             }
             _currentTargetSquad = value;
@@ -2315,7 +2331,6 @@ public class Squad : MonoBehaviour
         }
 
         UpdatePathLine();
-        DrawEnvelopmentDebugLines();
         if (enableEnvelopmentDebugLines)
         {
             DrawEnvelopmentDebugLines();
@@ -3065,10 +3080,6 @@ public class Squad : MonoBehaviour
             if (world != null && world.IsCreated)
             {
                 var em = world.EntityManager;
-                var query = em.CreateEntityQuery(
-                    typeof(MiniTotalWar.ECS.UnitEntityTag),
-                    typeof(MiniTotalWar.ECS.UnitMovementData)
-                );
                 var query = GetOrCreateEcsPosQuery(world, em);
                 using (var entities = query.ToEntityArray(Unity.Collections.Allocator.Temp))
                 {
@@ -3792,10 +3803,6 @@ public class Squad : MonoBehaviour
         if (world != null && world.IsCreated)
         {
             var em = world.EntityManager;
-            var query = em.CreateEntityQuery(
-                typeof(MiniTotalWar.ECS.UnitEntityTag),
-                typeof(MiniTotalWar.ECS.UnitMovementData)
-            );
             var query = GetOrCreateEcsPosQuery(world, em);
 
             using (var tags = query.ToComponentDataArray<MiniTotalWar.ECS.UnitEntityTag>(Unity.Collections.Allocator.Temp))

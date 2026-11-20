@@ -243,32 +243,15 @@ namespace MiniTotalWar.ECS
                             }
 
                             // 3. 이동 속도 및 가속도 동기화 (실제 변경 시에만 SetComponentData 호출)
-                            var mov = entityManager.GetComponentData<UnitMovementData>(e);
-                            bool isEngaged = (combat.CurrentState == 2 || combat.CurrentState == 3);
-                            float baseSpeed = isEngaged ? mov.MoveSpeed : syncInfo.Speed;
-
-                            // 🌾 [식생 지형 저항 및 군사 도로 연동 (TotalWar Frictional Drag System)]
-                            // 군사 도로망 위는 1.0f(표준 속도 유지), 관목/키 큰 수풀은 0.68x~0.72x 감속, 짓밟힌 풀은 0.92x, 불탄 재는 1.0f
-                            float foliageDrag = 1.0f;
-                            if (TacticalGrassRenderer.Instance != null)
                             // 🚨 [버그 수정]: 교전 중 mov.MoveSpeed에 foliageDrag를 매 프레임 누적 곱셈하면 속도가 0으로 수렴하고
                             // 매 프레임 SetComponentData가 발생하므로, 반드시 syncInfo의 기준 속도로부터 산출합니다.
                             // 식생 저항 판정은 4프레임 단위 스태거링((i & 3) == currentFrameMod)으로 분산 실행합니다.
                             if (needUpdateCombat || (i & 3) == currentFrameMod)
                             {
-                                foliageDrag = TacticalGrassRenderer.Instance.GetFoliageResistance(mov.Position);
-                            }
-                            float desiredSpeed = baseSpeed * foliageDrag;
-                            float desiredAccel = syncInfo.Acceleration;
                                 var mov = entityManager.GetComponentData<UnitMovementData>(e);
                                 bool isEngaged = (combat.CurrentState == 2 || combat.CurrentState == 3);
                                 float baseSpeed = isEngaged ? syncInfo.EngagedSpeed : syncInfo.Speed;
 
-                            if (math.abs(mov.MoveSpeed - desiredSpeed) > 0.001f || math.abs(mov.Acceleration - desiredAccel) > 0.001f)
-                            {
-                                mov.MoveSpeed = desiredSpeed;
-                                mov.Acceleration = desiredAccel;
-                                entityManager.SetComponentData(e, mov);
                                 // 🌾 [식생 지형 저항 및 군사 도로 연동 (TotalWar Frictional Drag System)]
                                 // 군사 도로망 위는 1.0f(표준 속도 유지), 관목/키 큰 수풀은 0.68x~0.72x 감속, 짓밟힌 풀은 0.92x, 불탄 재는 1.0f
                                 float foliageDrag = 1.0f;
@@ -543,12 +526,6 @@ namespace MiniTotalWar.ECS
             }
 
             // 2. 순수 ECS 모드 Entity 일괄 갱신 (GameObject가 0개여도 200명 전원 100% 완벽 주입)
-            var query = entityManager.CreateEntityQuery(
-                ComponentType.ReadOnly<UnitEntityTag>(),
-                ComponentType.ReadWrite<UnitCombatData>()
-            );
-
-            using (var entities = query.ToEntityArray(Allocator.Temp))
             using (var entities = unitCombatUpdateQuery.ToEntityArray(Allocator.Temp))
             {
                 for (int i = 0; i < entities.Length; i++)
@@ -594,12 +571,6 @@ namespace MiniTotalWar.ECS
             }
 
             // 2. 순수 ECS 모드 Entity 일괄 갱신
-            var query = entityManager.CreateEntityQuery(
-                ComponentType.ReadOnly<UnitEntityTag>(),
-                ComponentType.ReadWrite<UnitCombatData>()
-            );
-
-            using (var entities = query.ToEntityArray(Allocator.Temp))
             using (var entities = unitCombatUpdateQuery.ToEntityArray(Allocator.Temp))
             {
                 for (int i = 0; i < entities.Length; i++)
@@ -676,12 +647,6 @@ namespace MiniTotalWar.ECS
             }
 
             // 2. 순수 ECS 모드 Entity 일괄 갱신 (GameObject가 0개여도 전체 엔티티 100% 동기화)
-            var query = entityManager.CreateEntityQuery(
-                ComponentType.ReadOnly<UnitEntityTag>(),
-                ComponentType.ReadWrite<UnitCombatData>()
-            );
-
-            using (var entities = query.ToEntityArray(Allocator.Temp))
             using (var entities = unitCombatUpdateQuery.ToEntityArray(Allocator.Temp))
             {
                 for (int i = 0; i < entities.Length; i++)

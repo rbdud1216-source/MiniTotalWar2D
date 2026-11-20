@@ -446,6 +446,30 @@ public class CameraController : MonoBehaviour
     }
 
     /// <summary>
+    /// 오픈월드 스트리밍 등 런타임에서 카메라 이동 경계를 동적으로 갱신하거나 해제합니다.
+    /// </summary>
+    public void SetRuntimeBounds(Vector2 newMinXZ, Vector2 newMaxXZ, float newMinY = 5f, float newMaxY = 300f, bool enableBounds = true)
+    {
+        minXZ = newMinXZ;
+        maxXZ = newMaxXZ;
+        minY = newMinY;
+        maxY = newMaxY;
+        useBounds = enableBounds;
+
+        if (newMaxY > maxHeight3D) maxHeight3D = newMaxY;
+        if (newMaxY + 100f > tacticalMaxHeight) tacticalMaxHeight = newMaxY + 100f;
+    }
+
+    /// <summary>
+    /// Floating Origin 재정렬 시 카메라 위치 및 진행 중 포커스 이동을 안전하게 평행 이동합니다.
+    /// </summary>
+    public void ShiftPosition(Vector3 delta)
+    {
+        StopFocusCoroutine();
+        transform.position += delta;
+    }
+
+    /// <summary>
     /// 씬 내 Terrain을 자동 감지하여 카메라의 평면 XZ 및 수직 상하 Y축 이동 제한 경계를 1:1로 맞춥니다.
     /// 에디터 인스펙터 우클릭 메뉴 또는 런타임 시작 시 호출됩니다.
     /// </summary>

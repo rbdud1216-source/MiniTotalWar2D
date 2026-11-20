@@ -462,6 +462,32 @@ namespace MiniTotalWar
         public UnityEngine.Rendering.ShadowCastingMode castShadows = UnityEngine.Rendering.ShadowCastingMode.Off;
         public bool receiveShadows = true;
 
+        [Header("🎨 자연 식생 셰이더 융합 (지형 색·노멀 전이 & 역광·바람 물결)")]
+        [Range(0f, 1f)]
+        [Tooltip("풀 밑동이 발밑 터레인 바닥 색상을 흡수하는 비율 (높을수록 지형과 자연스럽게 융합)")]
+        public float terrainColorBlendStrength = 0.68f;
+        [Range(0f, 1f)]
+        [Tooltip("카드 각진 노멀 대신 지형 법선+구형 노멀로 부드럽게 대체하는 비율")]
+        public float terrainNormalBlendStrength = 0.78f;
+        [Range(0f, 1.5f)]
+        [Tooltip("태양 역광 시 잎끝 반투명 투과광(Subsurface Scattering) 세기")]
+        public float subsurfaceStrength = 0.55f;
+        [Range(0f, 0.5f)]
+        [Tooltip("바람 띠(Gust)가 풀밭을 스쳐 지나갈 때 생기는 햇빛 물결 광택 세기")]
+        public float windGustSheenStrength = 0.18f;
+
+        // 🌍 런타임 지형 색상/법선 전이 맵 캐시 (256x256, 셰이더 전역 바인딩)
+        private Texture2D _terrainColorMap;
+        private Texture2D _terrainNormalMap;
+        private static readonly int TerrainColorMapID = Shader.PropertyToID("_TotalWarTerrainColorMap");
+        private static readonly int TerrainNormalMapID = Shader.PropertyToID("_TotalWarTerrainNormalMap");
+        private static readonly int TerrainBoundsID = Shader.PropertyToID("_TotalWarTerrainBounds");
+        private static readonly int TerrainMapReadyID = Shader.PropertyToID("_TotalWarTerrainMapReady");
+        private static readonly int GrassTerrainColorBlendID = Shader.PropertyToID("_TotalWarGrassTerrainColorBlend");
+        private static readonly int GrassNormalBlendID = Shader.PropertyToID("_TotalWarGrassNormalBlend");
+        private static readonly int GrassSSSStrengthID = Shader.PropertyToID("_TotalWarGrassSSSStrength");
+        private static readonly int GrassGustSheenID = Shader.PropertyToID("_TotalWarGrassGustSheen");
+
         [Header("📊 실시간 스트리밍 대시보드 (읽기 전용)")]
         [SerializeField] private int _totalChunkCount = 0;
         [SerializeField] private int _totalInstanceCount = 0;
@@ -562,6 +588,11 @@ namespace MiniTotalWar
             EnsureDefaultPrototypes(false);
             EnsureAllPrototypesGrounded();
 
+            // 🌍 지형 색상/법선 전이 맵 구축 및 기후 테마 변경 시 자동 갱신 구독
+            TotalWarTerrainManager.OnThemeAppliedEditor -= HandleTerrainThemeChangedForSurfaceMaps;
+            TotalWarTerrainManager.OnThemeAppliedEditor += HandleTerrainThemeChangedForSurfaceMaps;
+            RefreshTerrainSurfaceMaps();
+
             // 🎥 [빌트인 + URP 듀얼 호환 렌더링 이벤트 구독]
             Camera.onPreCull -= OnCameraPreCull;
             Camera.onPreCull += OnCameraPreCull;
@@ -587,22 +618,249 @@ namespace MiniTotalWar
 
         private void OnDisable()
         {
+            TotalWarTerrainManager.OnThemeAppliedEditor -= HandleTerrainThemeChangedForSurfaceMaps;
             Camera.onPreCull -= OnCameraPreCull;
             UnityEngine.Rendering.RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
 #if UNITY_EDITOR
             SceneView.duringSceneGui -= OnSceneGUI;
             EditorApplication.update -= OnEditorUpdate;
 #endif
+            ReleaseTerrainSurfaceMaps();
         }
 
         private void OnDestroy()
         {
+            TotalWarTerrainManager.OnThemeAppliedEditor -= HandleTerrainThemeChangedForSurfaceMaps;
             Camera.onPreCull -= OnCameraPreCull;
             UnityEngine.Rendering.RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
 #if UNITY_EDITOR
             SceneView.duringSceneGui -= OnSceneGUI;
             EditorApplication.update -= OnEditorUpdate;
 #endif
+            ReleaseTerrainSurfaceMaps();
+        }
+
+        private void OnValidate()
+        {
+            ApplyFoliageVisualGlobals();
+        }
+
+        private void HandleTerrainThemeChangedForSurfaceMaps()
+        {
+            RefreshTerrainSurfaceMaps();
+        }
+
+        /// <summary>
+        /// 씬 내 모든 활성 TacticalGrassRenderer의 지형 색상/법선 전이 맵을 일괄 갱신합니다.
+        /// </summary>
+        public static void RefreshAllActiveTerrainSurfaceMaps()
+        {
+            var renderers = FindObjectsByType<TacticalGrassRenderer>(FindObjectsSortMode.None);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null && renderers[i].isActiveAndEnabled)
+                {
+                    renderers[i].RefreshTerrainSurfaceMaps();
+                }
+            }
+        }
+
+        /// <summary>
+        /// 자연 식생 셰이더 튜닝 전역 파라미터를 즉시 브로드캐스트합니다.
+        /// </summary>
+        public void ApplyFoliageVisualGlobals()
+        {
+            Shader.SetGlobalFloat(GrassTerrainColorBlendID, Mathf.Clamp01(terrainColorBlendStrength));
+            Shader.SetGlobalFloat(GrassNormalBlendID, Mathf.Clamp01(terrainNormalBlendStrength));
+            Shader.SetGlobalFloat(GrassSSSStrengthID, Mathf.Max(0f, subsurfaceStrength));
+            Shader.SetGlobalFloat(GrassGustSheenID, Mathf.Max(0f, windGustSheenStrength));
+        }
+
+        private void ReleaseTerrainSurfaceMaps()
+        {
+            Shader.SetGlobalFloat(TerrainMapReadyID, 0f);
+            if (_terrainColorMap != null)
+            {
+                if (Application.isPlaying) Destroy(_terrainColorMap);
+                else DestroyImmediate(_terrainColorMap);
+                _terrainColorMap = null;
+            }
+            if (_terrainNormalMap != null)
+            {
+                if (Application.isPlaying) Destroy(_terrainNormalMap);
+                else DestroyImmediate(_terrainNormalMap);
+                _terrainNormalMap = null;
+            }
+        }
+
+        private static Color ExtractAverageLayerColor(TerrainLayer layer)
+        {
+            if (layer == null) return new Color(0.32f, 0.36f, 0.22f, 1f);
+
+            Texture2D tex = layer.diffuseTexture;
+            if (tex != null)
+            {
+                RenderTexture rt = RenderTexture.GetTemporary(16, 16, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+                RenderTexture prev = RenderTexture.active;
+                Texture2D scratch = new Texture2D(16, 16, TextureFormat.RGBA32, false, false);
+                try
+                {
+                    Graphics.Blit(tex, rt);
+                    RenderTexture.active = rt;
+                    scratch.ReadPixels(new Rect(0, 0, 16, 16), 0, 0, false);
+                    scratch.Apply(false, false);
+
+                    Color32[] pixels = scratch.GetPixels32();
+                    if (pixels != null && pixels.Length > 0)
+                    {
+                        float r = 0f, g = 0f, b = 0f;
+                        for (int i = 0; i < pixels.Length; i++)
+                        {
+                            r += pixels[i].r;
+                            g += pixels[i].g;
+                            b += pixels[i].b;
+                        }
+                        float inv = 1f / (pixels.Length * 255f);
+                        return new Color(r * inv, g * inv, b * inv, 1f);
+                    }
+                }
+                catch
+                {
+                    // 읽기 실패 시 레이어 이름 기반 안전 폴백으로 진행
+                }
+                finally
+                {
+                    RenderTexture.active = prev;
+                    RenderTexture.ReleaseTemporary(rt);
+                    if (Application.isPlaying) Destroy(scratch);
+                    else DestroyImmediate(scratch);
+                }
+            }
+
+            string lower = (layer.name ?? string.Empty).ToLower();
+            if (lower.Contains("rock") || lower.Contains("cliff") || lower.Contains("stone")) return new Color(0.34f, 0.33f, 0.31f, 1f);
+            if (lower.Contains("dirt") || lower.Contains("soil") || lower.Contains("road")) return new Color(0.38f, 0.32f, 0.24f, 1f);
+            if (lower.Contains("pebble") || lower.Contains("sand")) return new Color(0.42f, 0.39f, 0.34f, 1f);
+            if (lower.Contains("snow") || lower.Contains("winter")) return new Color(0.78f, 0.82f, 0.86f, 1f);
+            return new Color(0.30f, 0.35f, 0.20f, 1f);
+        }
+
+        /// <summary>
+        /// 🌍 [지형 색상 & 법선 전이 맵 실시간 생성]
+        /// 터레인 스플랫맵과 레이어 대표색·지형 법선을 256x256 텍스처로 합성하여 셰이더에 전역 바인딩합니다.
+        /// 풀 밑동이 발밑 바닥 색을 흡수하고 카드 각진 노멀이 지형 경사 법선으로 부드럽게 통합됩니다.
+        /// </summary>
+        [ContextMenu("🌍 지형 색상·법선 전이 맵 갱신 (Refresh Terrain Surface Maps)")]
+        public void RefreshTerrainSurfaceMaps()
+        {
+            ApplyFoliageVisualGlobals();
+
+            if (targetTerrain == null) targetTerrain = Terrain.activeTerrain;
+            if (targetTerrain == null || targetTerrain.terrainData == null)
+            {
+                Shader.SetGlobalFloat(TerrainMapReadyID, 0f);
+                return;
+            }
+
+            TerrainData tData = targetTerrain.terrainData;
+            Vector3 terPos = targetTerrain.transform.position;
+            Vector3 terSize = tData.size;
+            if (terSize.x < 1f || terSize.z < 1f) return;
+
+            const int mapRes = 256;
+            if (_terrainColorMap == null || _terrainColorMap.width != mapRes)
+            {
+                if (_terrainColorMap != null)
+                {
+                    if (Application.isPlaying) Destroy(_terrainColorMap);
+                    else DestroyImmediate(_terrainColorMap);
+                }
+                _terrainColorMap = new Texture2D(mapRes, mapRes, TextureFormat.RGBA32, false, false);
+                _terrainColorMap.name = "TotalWar_TerrainColorMap_Runtime";
+                _terrainColorMap.wrapMode = TextureWrapMode.Clamp;
+                _terrainColorMap.filterMode = FilterMode.Bilinear;
+                _terrainColorMap.hideFlags = HideFlags.HideAndDontSave;
+            }
+
+            if (_terrainNormalMap == null || _terrainNormalMap.width != mapRes)
+            {
+                if (_terrainNormalMap != null)
+                {
+                    if (Application.isPlaying) Destroy(_terrainNormalMap);
+                    else DestroyImmediate(_terrainNormalMap);
+                }
+                _terrainNormalMap = new Texture2D(mapRes, mapRes, TextureFormat.RGBA32, false, true);
+                _terrainNormalMap.name = "TotalWar_TerrainNormalMap_Runtime";
+                _terrainNormalMap.wrapMode = TextureWrapMode.Clamp;
+                _terrainNormalMap.filterMode = FilterMode.Bilinear;
+                _terrainNormalMap.hideFlags = HideFlags.HideAndDontSave;
+            }
+
+            int alphaRes = tData.alphamapResolution;
+            TerrainLayer[] layers = tData.terrainLayers;
+            int layerCount = (layers != null) ? layers.Length : 0;
+            float[,,] splatmap = (alphaRes > 0 && layerCount > 0) ? tData.GetAlphamaps(0, 0, alphaRes, alphaRes) : null;
+
+            Color[] layerAvgColors = new Color[layerCount];
+            for (int l = 0; l < layerCount; l++)
+            {
+                layerAvgColors[l] = ExtractAverageLayerColor(layers[l]);
+            }
+
+            Color32[] colorPixels = new Color32[mapRes * mapRes];
+            Color32[] normalPixels = new Color32[mapRes * mapRes];
+
+            for (int y = 0; y < mapRes; y++)
+            {
+                float v = (float)y / (mapRes - 1);
+                int ay = (alphaRes > 0) ? Mathf.Clamp(Mathf.RoundToInt(v * (alphaRes - 1)), 0, alphaRes - 1) : 0;
+
+                for (int x = 0; x < mapRes; x++)
+                {
+                    float u = (float)x / (mapRes - 1);
+                    int idx = y * mapRes + x;
+
+                    // 1. 스플랫맵 가중치 기반 지형 대표 색 합성
+                    Color blendedCol = new Color(0.30f, 0.35f, 0.20f, 1f);
+                    if (splatmap != null && layerCount > 0)
+                    {
+                        int ax = Mathf.Clamp(Mathf.RoundToInt(u * (alphaRes - 1)), 0, alphaRes - 1);
+                        float r = 0f, g = 0f, b = 0f, wSum = 0f;
+                        for (int l = 0; l < layerCount; l++)
+                        {
+                            float w = splatmap[ay, ax, l];
+                            if (w <= 0.0001f) continue;
+                            Color lc = layerAvgColors[l];
+                            r += lc.r * w;
+                            g += lc.g * w;
+                            b += lc.b * w;
+                            wSum += w;
+                        }
+                        if (wSum > 0.001f)
+                        {
+                            blendedCol = new Color(r / wSum, g / wSum, b / wSum, 1f);
+                        }
+                    }
+                    colorPixels[idx] = blendedCol;
+
+                    // 2. 터레인 표면 법선 패킹
+                    Vector3 n = tData.GetInterpolatedNormal(u, v);
+                    if (n.sqrMagnitude < 0.001f) n = Vector3.up;
+                    else n.Normalize();
+                    normalPixels[idx] = new Color(n.x * 0.5f + 0.5f, n.y * 0.5f + 0.5f, n.z * 0.5f + 0.5f, 1f);
+                }
+            }
+
+            _terrainColorMap.SetPixels32(colorPixels);
+            _terrainColorMap.Apply(false, false);
+
+            _terrainNormalMap.SetPixels32(normalPixels);
+            _terrainNormalMap.Apply(false, false);
+
+            Shader.SetGlobalTexture(TerrainColorMapID, _terrainColorMap);
+            Shader.SetGlobalTexture(TerrainNormalMapID, _terrainNormalMap);
+            Shader.SetGlobalVector(TerrainBoundsID, new Vector4(terPos.x, terPos.z, 1f / terSize.x, 1f / terSize.z));
+            Shader.SetGlobalFloat(TerrainMapReadyID, 1f);
         }
 
 #if UNITY_EDITOR
@@ -1688,7 +1946,7 @@ namespace MiniTotalWar
                 });
             }
 
-            // [8] 🌲 저층 관목 검고사리 (Sword Fern)
+            // [8] 🌲 저층 관목 검고사리 (Sword Fern - 숲 구역 전용 & 바닥 밀착형)
             Mesh swordFernMesh = AssetDatabase.LoadAssetAtPath<Mesh>("Assets/Settings/Vegetation/RadialMeshes/TotalWar_ForestFern_Sword_Mesh.asset");
             if (swordFernMesh != null && fernMat != null)
             {
@@ -1697,16 +1955,16 @@ namespace MiniTotalWar
                     protoName = "🌲 [관목 고사리] 음지 검고사리",
                     mesh = swordFernMesh,
                     material = fernMat,
-                    minScale = 0.95f,
-                    maxScale = 1.30f,
-                    heightMultiplier = 1.0f,
-                    groundEmbedOffset = -0.015f,
-                    alignToGround = 0.30f,
-                    slopeSinkFactor = 0.18f,
+                    minScale = 0.90f,
+                    maxScale = 1.25f,
+                    heightMultiplier = 0.58f,
+                    groundEmbedOffset = -0.04f,
+                    alignToGround = 0.92f,
+                    slopeSinkFactor = 0.55f,
                     stealthCoverage = 0.50f,
                     speedMultiplier = 0.85f,
                     densityThreshold = 0.22f,
-                    targetBiome = FoliageBiomeType.PlainsCarpet
+                    targetBiome = FoliageBiomeType.ForestShade
                 });
             }
 #endif
@@ -1783,12 +2041,10 @@ namespace MiniTotalWar
                 var cfg = configs[i];
                 if (cfg == null || !cfg.isEnabled) continue;
 
-                // 3D OBJ 또는 .asset 메쉬 로드 (RadialMeshes -> Shrubs -> Subtropical -> Temperate -> Cold -> Arid -> DetailGrass 탐색)
                 // 3D OBJ 또는 .asset 메쉬 로드 (RadialMeshes(계절 폴백 포함) -> Shrubs -> Subtropical -> Temperate -> Cold -> Arid -> DetailGrass 탐색)
                 Mesh rawMesh = null;
                 if (cfg.modelFile.EndsWith(".asset"))
                 {
-                    rawMesh = AssetDatabase.LoadAssetAtPath<Mesh>("Assets/Settings/Vegetation/RadialMeshes/" + cfg.modelFile);
                     rawMesh = ResolveRefinedAssetMesh(cfg.modelFile);
                 }
                 if (rawMesh == null) rawMesh = LoadMeshSafe("Assets/TotalWar_ThreeKingdoms_Extracted/Vegetation/Shrubs/" + cfg.modelFile);
@@ -1923,18 +2179,26 @@ namespace MiniTotalWar
                     bType = FoliageBiomeType.RiverWetland;
 
                 // 🌾 [높이 배율 및 물리 속성 설정: 정제된 4대 유형 .asset 메쉬는 이미 실제 월드 높이가 정점에 구워져 있으므로 1.0f 비례 유지]
-                float hMult = isRefinedProceduralAsset
-                    ? Mathf.Clamp(cfg.maxHeight, 0.85f, 1.30f)
-                    : Mathf.Clamp(cfg.maxHeight, 0.32f, 0.52f);
-                float defaultEmbedOffset = -0.015f;
-                float defaultAlign = cfg.alignToGround > 0.01f ? Mathf.Clamp(cfg.alignToGround, 0.08f, 0.40f) : 0.25f;
-                float defaultSink = 0.18f;
+                // 🌲 고사리/양치류는 숲 바닥에 낮게 누워 밀착되도록 높이 축소 + 경사 정렬(0.92) + 뿌리 침하 강화
+                bool isFernConfig = lower.Contains("fern") || lower.Contains("고사리") || lower.Contains("양치");
+                float hMult = isFernConfig
+                    ? Mathf.Clamp(cfg.maxHeight * 0.58f, 0.45f, 0.72f)
+                    : (isRefinedProceduralAsset
+                        ? Mathf.Clamp(cfg.maxHeight, 0.85f, 1.30f)
+                        : Mathf.Clamp(cfg.maxHeight, 0.32f, 0.52f));
+                float defaultEmbedOffset = isFernConfig ? -0.04f : -0.015f;
+                float defaultAlign = isFernConfig
+                    ? 0.92f
+                    : (cfg.alignToGround > 0.01f ? Mathf.Clamp(cfg.alignToGround, 0.08f, 0.40f) : 0.25f);
+                float defaultSink = isFernConfig ? 0.55f : 0.18f;
                 float defaultStealth = (baseName.Contains("TallReed") || baseName.Contains("RadialFan3D")) ? 0.35f : 0.0f;
                 float defaultSpeedMult = (baseName.Contains("TallReed") || baseName.Contains("RadialFan3D")) ? 0.90f : 0.96f;
                 float defaultFlammability = 0.45f;
                 float defaultBurnDuration = 4.5f;
 
-                float finalEmbedOffset = Mathf.Abs(cfg.groundOffset) > 0.001f ? Mathf.Min(cfg.groundOffset, -0.01f) : defaultEmbedOffset;
+                float finalEmbedOffset = isFernConfig
+                    ? defaultEmbedOffset
+                    : (Mathf.Abs(cfg.groundOffset) > 0.001f ? Mathf.Min(cfg.groundOffset, -0.01f) : defaultEmbedOffset);
 
                 prototypes.Add(new TacticalGrassPrototype
                 {
@@ -2039,6 +2303,13 @@ namespace MiniTotalWar
         /// 중심점뿐만 아니라 동서남북 둘레 4점의 지형 높이를 함께 측정하여,
         /// 경사면과 볼록한 언덕 능선(Convex Ridge)에서도 풀포기 가장자리가 절대 허공에 뜨지 않고 지면 곡면을 따라 착 감기도록 계산합니다.
         /// </summary>
+        private static bool IsFernPrototype(TacticalGrassPrototype proto)
+        {
+            if (proto == null) return false;
+            string check = ((proto.protoName ?? string.Empty) + " " + (proto.mesh != null ? proto.mesh.name : string.Empty)).ToLower();
+            return check.Contains("fern") || check.Contains("고사리") || check.Contains("양치");
+        }
+
         private (Vector3 pos, Quaternion rot, Vector3 scale) CalculateSlopeGroundedTransform(
             TerrainData tData,
             Vector3 terPos,
@@ -2058,6 +2329,7 @@ namespace MiniTotalWar
             else normal.Normalize();
 
             float slopeAngle = Vector3.Angle(Vector3.up, normal);
+            bool isFern = IsFernPrototype(proto);
 
             // 1. 스케일 계산 및 급경사 자동 콤팩트화
             float rndScale = UnityEngine.Random.Range(proto.minScale, proto.maxScale);
@@ -2067,10 +2339,12 @@ namespace MiniTotalWar
                 rndScale *= slopeCompactFactor;
             }
             float hMult = Mathf.Abs(proto.heightMultiplier);
-            Vector3 finalScale = new Vector3(rndScale, rndScale * hMult, rndScale);
+            Vector3 finalScale = isFern
+                ? new Vector3(rndScale * 1.08f, rndScale * Mathf.Min(hMult, 0.72f) * 0.78f, rndScale * 1.08f)
+                : new Vector3(rndScale, rndScale * hMult, rndScale);
 
             // 2. 동서남북 둘레 4점(반경 checkR) 지형 높이 다중 샘플링 -> 볼록한 둔덕/능선(Convex Ridge) 들뜸 방지
-            float checkR = 0.35f * rndScale;
+            float checkR = (isFern ? 0.48f : 0.35f) * rndScale;
             float hE = tData.GetInterpolatedHeight(Mathf.Clamp01((sampleX + checkR - terPos.x) / terSize.x), normZ);
             float hW = tData.GetInterpolatedHeight(Mathf.Clamp01((sampleX - checkR - terPos.x) / terSize.x), normZ);
             float hN = tData.GetInterpolatedHeight(normX, Mathf.Clamp01((sampleZ + checkR - terPos.z) / terSize.z));
@@ -2079,24 +2353,37 @@ namespace MiniTotalWar
             float avgPerimeterHeight = (hE + hW + hN + hS) * 0.25f;
             float minPerimeterHeight = Mathf.Min(Mathf.Min(hE, hW), Mathf.Min(hN, hS));
 
-            // 볼록한 능선일수록 중심 높이가 둘레 평균보다 높으므로, 그 차이만큼 피벗을 자연스럽게 낮추되 최대 1.2cm로 제한
-            float convexRidgeDrop = Mathf.Clamp(Mathf.Max(0f, centerHeight - avgPerimeterHeight) * 0.3f, 0f, 0.012f);
-
-            // 3. 지면 접지 계산 (뿌리가 Y=0에 밀착 정규화되었으므로 땅속에 과도하게 파묻히지 않게 지표면 정위치 안착)
-            // 🌿 [기립력 보장: 법선 정렬 비율 최대 0.35f 캡]
-            // 식물은 굴광성/중력반응으로 경사면에서도 하늘을 향해 서 있어야 합니다.
-            // 법선 정렬 비율을 최대 0.35f로 제한하여 비탈길에서도 잎이 지면 아래로 거꾸로 곤두박질치는 현상을 방지합니다.
             float requestedAlign = proto.alignToGround > 0f ? proto.alignToGround : defaultAlignToGround;
-            float align = Mathf.Clamp(requestedAlign, 0.15f, 0.35f);
+            float align;
+            float slopeSink;
+            float convexRidgeDrop;
+            float embedOffset;
+            float actualBaseSink;
 
-            float sinkFactor = proto.slopeSinkFactor > 0f ? proto.slopeSinkFactor : 0.10f;
-            float slopeSink = Mathf.Clamp(Mathf.Sin(slopeAngle * Mathf.Deg2Rad) * (rndScale * sinkFactor * 0.25f), 0f, 0.015f);
-            float embedOffset = Mathf.Max(0.002f, proto.groundEmbedOffset); // 땅 밑 과도한 침하 방지 (지표면 정위치 보장)
-            float actualBaseSink = Mathf.Clamp(baseSink, 0f, 0.005f);
+            if (isFern)
+            {
+                // 🌲 [고사리 바닥 밀착 전용]: 위로 꼿꼿이 서지 않고 지형 경사면에 88~96% 누워 바닥을 감싸듯 안착
+                align = Mathf.Clamp(requestedAlign, 0.88f, 0.96f);
+                slopeSink = Mathf.Clamp(Mathf.Sin(slopeAngle * Mathf.Deg2Rad) * (rndScale * 0.38f), 0f, 0.16f);
+                convexRidgeDrop = Mathf.Clamp(Mathf.Max(0f, centerHeight - minPerimeterHeight) * 0.65f, 0f, 0.14f);
+                embedOffset = Mathf.Min(-0.025f, proto.groundEmbedOffset);
+                actualBaseSink = Mathf.Clamp(baseSink, 0f, 0.03f);
+            }
+            else
+            {
+                // 🌿 일반 잔디/갈대 기립력 보장 (법선 정렬 최대 0.35f 캡)
+                align = Mathf.Clamp(requestedAlign, 0.15f, 0.35f);
+                float sinkFactor = proto.slopeSinkFactor > 0f ? proto.slopeSinkFactor : 0.10f;
+                slopeSink = Mathf.Clamp(Mathf.Sin(slopeAngle * Mathf.Deg2Rad) * (rndScale * sinkFactor * 0.25f), 0f, 0.015f);
+                convexRidgeDrop = Mathf.Clamp(Mathf.Max(0f, centerHeight - avgPerimeterHeight) * 0.3f, 0f, 0.012f);
+                embedOffset = Mathf.Max(0.002f, proto.groundEmbedOffset);
+                actualBaseSink = Mathf.Clamp(baseSink, 0f, 0.005f);
+            }
+
             float finalY = terPos.y + centerHeight + embedOffset - actualBaseSink - slopeSink - convexRidgeDrop;
             Vector3 finalPos = new Vector3(sampleX, finalY, sampleZ);
 
-            // 4. 지형 법선(Normal) 구면 보간(Slerp) 블렌딩 (35%만 경사 추종, 65%는 수직 하늘 기립)
+            // 4. 지형 법선(Normal) 구면 보간(Slerp) 블렌딩
             Vector3 blendedNormal = Vector3.Slerp(Vector3.up, normal, align).normalized;
             Quaternion slopeRot = Quaternion.FromToRotation(Vector3.up, blendedNormal);
             Quaternion yawRot = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
@@ -2132,6 +2419,9 @@ namespace MiniTotalWar
             // 모든 프로토타입 메쉬를 지면 100% 밀착형 1.15m 개별 풀포기(_GroundedTuft)로 정규화 보장
             EnsureAllPrototypesGrounded();
 
+            // 🌍 지형 색상·법선 전이 맵 최신화
+            RefreshTerrainSurfaceMaps();
+
             _chunks.Clear();
             _runtimeDeltas.Clear();
             _totalInstanceCount = 0;
@@ -2154,13 +2444,8 @@ namespace MiniTotalWar
 
             for (int z = 0; z < stepsZ; z++)
             {
-                float normZ = (float)z / stepsZ;
-                float worldZ = terPos.z + normZ * terSize.z;
-
                 for (int x = 0; x < stepsX; x++)
                 {
-                    float normX = (float)x / stepsX;
-                    float worldX = terPos.x + normX * terSize.x;
                     // 🌿 [기계적 바둑판/점무늬 격자 완전 탈피]: 셀 중심 좌표를 고정 격자에서 ±0.44칸 유기적으로 지터링
                     float jitterStepX = UnityEngine.Random.Range(-0.44f, 0.44f) * sampleSpacing;
                     float jitterStepZ = UnityEngine.Random.Range(-0.44f, 0.44f) * sampleSpacing;
@@ -2182,7 +2467,6 @@ namespace MiniTotalWar
                     if (TacticalWaterZone.IsAnyWaterZoneAt(samplePos, out _)) continue;
                     if (TotalWarSeaPlane.Instance != null && samplePos.y < TotalWarSeaPlane.Instance.waterLevelY) continue;
 
-                    // 3. 지형 스플랫맵 잔디 가중치 검사
                     // 3. 지형 스플랫맵 잔디 가중치 검사 + 경계부 자연스러운 확률 감쇄 (칼 같은 직각 경계 제거)
                     float grassWeight = 1.0f;
                     if (splatmap != null && layerCount > 0)
@@ -2202,7 +2486,6 @@ namespace MiniTotalWar
                         grassWeight = Mathf.Clamp01(gVal);
                     }
 
-                    if (grassWeight < 0.15f) continue;
                     if (grassWeight < 0.08f) continue;
                     float edgeKeepProb = Mathf.SmoothStep(0.05f, 1.0f, (grassWeight - 0.08f) / 0.42f);
                     if (UnityEngine.Random.value > edgeKeepProb) continue;
@@ -2228,8 +2511,10 @@ namespace MiniTotalWar
                     // 청크 밀도 배율 확률 검사
                     if (densityMult < 1.0f && UnityEngine.Random.value > densityMult) continue;
 
-                    // 5. 프로토타입 후보군 선별 (청크별 지정 모델 우선, 없으면 바이옴 기준)
                     // 5. 프로토타입 후보군 선별 (청크별 지정 모델 우선, 없으면 바이옴 기준 -> 다층 혼합 보장)
+                    // 🌲 고사리/양치류는 반드시 실제 숲 구역(TacticalForestZone) 내부 좌표에서만 허용!
+                    bool isPointInForest = TacticalForestZone.IsPointInAnyForest(samplePos);
+
                     List<int> candidateIndices = new List<int>();
                     var chunkOverride = GetOverrideForChunk(cKey);
                     if (chunkOverride != null && chunkOverride.allowedModelIndices != null && chunkOverride.allowedModelIndices.Count > 0)
@@ -2238,6 +2523,7 @@ namespace MiniTotalWar
                         {
                             if (idx >= 0 && idx < prototypes.Count)
                             {
+                                if (!isPointInForest && IsFernPrototype(prototypes[idx])) continue;
                                 candidateIndices.Add(idx);
                             }
                         }
@@ -2247,24 +2533,32 @@ namespace MiniTotalWar
                     {
                         for (int p = 0; p < prototypes.Count; p++)
                         {
+                            if (!isPointInForest && IsFernPrototype(prototypes[p])) continue;
                             if (prototypes[p].targetBiome == biome) candidateIndices.Add(p);
                         }
 
-                        // 해당 바이옴에 매핑된 풀이 적으면, 현재 테마에 등록된 전체 식생 종을 후보군으로 확장하여 다층 살포
-                        if (candidateIndices.Count < 2)
-                        // 다종 생태계 풍부화를 위해 해당 바이옴에 상층/관목 풀이 부족하면 전체 팔레트 포함
+                        // 다종 생태계 풍부화를 위해 해당 바이옴에 상층/관목 풀이 부족하면 전체 팔레트 포함 (단, 숲 밖 고사리 엄격 배제)
                         if (candidateIndices.Count < 4)
                         {
                             candidateIndices.Clear();
                             for (int p = 0; p < prototypes.Count; p++)
                             {
+                                if (!isPointInForest && IsFernPrototype(prototypes[p])) continue;
                                 candidateIndices.Add(p);
                             }
                         }
                     }
                     if (candidateIndices.Count == 0)
                     {
-                        candidateIndices.Add(0);
+                        for (int p = 0; p < prototypes.Count; p++)
+                        {
+                            if (!IsFernPrototype(prototypes[p]))
+                            {
+                                candidateIndices.Add(p);
+                                break;
+                            }
+                        }
+                        if (candidateIndices.Count == 0) candidateIndices.Add(0);
                     }
 
                     if (!chunkRawData.TryGetValue(cKey, out var list))
@@ -2279,10 +2573,8 @@ namespace MiniTotalWar
 
                     if (enableMultiSpeciesBlending && candidateIndices.Count > 1)
                     {
-                        // 1. 후보 프로토타입들을 생태계 카테고리별로 분류
                         // 1. 후보 프로토타입들을 생태계 카테고리별로 분류 (한국어/영문 키워드 전수 포함)
                         List<int> carpetPool = new List<int>();  // 납작 바닥 지피 잔디
-                        List<int> tallPool = new List<int>();    // 키 큰 이삭/벼/갈대/풀포기
                         List<int> tallPool = new List<int>();    // 키 큰 이삭/벼/갈대/3D 풀포기
                         List<int> flowerPool = new List<int>();  // 야생화 및 꽃류
                         List<int> fernShrubPool = new List<int>(); // 고사리 및 관목 덤불
@@ -2294,10 +2586,8 @@ namespace MiniTotalWar
 
                             if (pName.Contains("flower") || pName.Contains("꽃") || pName.Contains("lotus") || pName.Contains("magnolia") || pName.Contains("rhododendron") || pName.Contains("convallaria"))
                                 flowerPool.Add(pIdx);
-                            else if (pName.Contains("fern") || pName.Contains("고사리") || pName.Contains("thick") || pName.Contains("bush") || pName.Contains("덤불") || pName.Contains("palm") || pName.Contains("peliosanthes"))
                             else if (pName.Contains("fern") || pName.Contains("고사리") || pName.Contains("thick") || pName.Contains("bush") || pName.Contains("덤불") || pName.Contains("관목") || pName.Contains("palm") || pName.Contains("peliosanthes"))
                                 fernShrubPool.Add(pIdx);
-                            else if (pName.Contains("seedhead") || pName.Contains("이삭") || pName.Contains("tall") || pName.Contains("millet") || pName.Contains("rice") || pName.Contains("grain") || pName.Contains("reeds"))
                             else if (pName.Contains("seedhead") || pName.Contains("이삭") || pName.Contains("갈대") || pName.Contains("풀포기") || pName.Contains("방사형") || pName.Contains("tall") || pName.Contains("millet") || pName.Contains("rice") || pName.Contains("grain") || pName.Contains("reed") || pName.Contains("spike") || pName.Contains("clump") || pName.Contains("radialfan"))
                                 tallPool.Add(pIdx);
                             else if (pName.Contains("flat") || pName.Contains("carpet") || pName.Contains("납작") || pName.Contains("지피") || pName.Contains("grass0_") || pName.Contains("grass1_"))
@@ -2308,133 +2598,114 @@ namespace MiniTotalWar
 
                         if (carpetPool.Count == 0) carpetPool.AddRange(candidateIndices);
 
-                        // 🌿 [Layer 1: 하층 2D 지피 융단 (유기적 포아송-황금각 나선 군락 분산)]
-                        // 10열 다방향 결합 군락(0.9m)이 1.6m 셀 내에서 자연스럽게 20~30% 겹쳐 완벽한 융단을 형성하도록 배치!
-                        // 🌿 [Layer 1: 유기적 가변 밀도 지피 잔디 군락 (고정 3방 링 탈피)]
+                        // 🌿 [Layer 1: 유기적 가변 밀도 지피 잔디 군락 + 가장자리 키 감쇄(Edge Height Taper)]
                         float posX = worldX;
                         float posZ = worldZ;
-                        int tuftCount = 3;
-                        float cellRadius = sampleSpacing * 0.45f;
-                        int tuftCount = Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(1f, 4f, patchDensity * edgeKeepProb)), 1, 4);
+                        float edgeFactor = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(patchDensity * edgeKeepProb * 1.15f));
+                        int tuftCount = Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(1f, 4f, edgeFactor)), 1, 4);
                         float cellRadius = sampleSpacing * 0.68f;
                         float baseAngle = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
-                        float scalePatchBias = Mathf.Lerp(0.84f, 1.24f, macroPatch);
+                        float widthTaper = Mathf.Lerp(0.76f, 1.14f, edgeFactor);
+                        float heightTaper = Mathf.Lerp(0.36f, 1.12f, edgeFactor);
+                        Vector3 carpetScaleBias = new Vector3(widthTaper, heightTaper, widthTaper);
+                        float tallHeightTaper = Mathf.Lerp(0.65f, 1.15f, edgeFactor);
+                        Vector3 upperScaleBias = new Vector3(Mathf.Lerp(0.85f, 1.15f, edgeFactor), tallHeightTaper, Mathf.Lerp(0.85f, 1.15f, edgeFactor));
 
                         for (int t = 0; t < tuftCount; t++)
                         {
-                            int subCarpetIdx = carpetPool[(Mathf.Abs(cx * 37 + cz * 19 + x * 7 + z * 3 + t * 13)) % carpetPool.Count];
                             // 페를린 + 해시 혼합으로 종별 패치가 넓게 뭉쳐서 자연스럽게 어우러지도록 선택
                             int subCarpetIdx = (UnityEngine.Random.value < 0.35f)
                                 ? carpetPool[UnityEngine.Random.Range(0, carpetPool.Count)]
                                 : carpetPool[Mathf.Abs(Mathf.FloorToInt(macroPatch * 97f) + cx * 13 + cz * 7 + t) % carpetPool.Count];
                             var protoBase = prototypes[subCarpetIdx];
 
-                            float goldenAngle = t * 2.39996323f;
-                            float rNorm = Mathf.Sqrt((t + 0.45f) / (float)tuftCount);
                             float goldenAngle = baseAngle + t * 2.39996323f + UnityEngine.Random.Range(-0.45f, 0.45f);
                             float rNorm = Mathf.Sqrt(UnityEngine.Random.Range(0.08f, 1.0f));
                             float r = rNorm * cellRadius;
-                            float jitterX = UnityEngine.Random.Range(-cellRadius * 0.22f, cellRadius * 0.22f);
-                            float jitterZ = UnityEngine.Random.Range(-cellRadius * 0.22f, cellRadius * 0.22f);
 
-                            float subX = posX + Mathf.Cos(goldenAngle) * r + jitterX;
-                            float subZ = posZ + Mathf.Sin(goldenAngle) * r + jitterZ;
                             float subX = posX + Mathf.Cos(goldenAngle) * r;
                             float subZ = posZ + Mathf.Sin(goldenAngle) * r;
 
                             var tSub = CalculateSlopeGroundedTransform(tData, terPos, terSize, subX, subZ, protoBase, 0.32f, 0.015f);
-                            list.Add((tSub.pos, tSub.rot, tSub.scale, subCarpetIdx));
-                            list.Add((tSub.pos, tSub.rot, tSub.scale * scalePatchBias, subCarpetIdx));
+                            list.Add((tSub.pos, tSub.rot, Vector3.Scale(tSub.scale, carpetScaleBias), subCarpetIdx));
                             _totalInstanceCount++;
                         }
 
-                        // 🌾 [Layer 2: 상층 3D 입체 풀포기 레이어] (기획서 표준 15%: tallGrassChance 확률로 잔디밭 사이로 시원하게 솟아오름)
-                        if (tallPool.Count > 0 && UnityEngine.Random.value < tallGrassChance)
-                        // 🌾 [Layer 2: 중·상층 3D 입체 풀포기 & 키 큰 갈대/이삭] (키 높이 및 실루엣 다층화)
-                        float effectiveTallChance = Mathf.Max(tallGrassChance, 0.22f) * Mathf.Lerp(0.6f, 1.4f, macroPatch) * edgeKeepProb;
-                        if (tallPool.Count > 0 && UnityEngine.Random.value < effectiveTallChance)
+                        // 🌾 [Layer 2: 중·상층 3D 입체 풀포기 & 키 큰 갈대/이삭] (군락 중심부 위주 다층화)
+                        float effectiveTallChance = Mathf.Max(tallGrassChance, 0.22f) * Mathf.Lerp(0.45f, 1.45f, edgeFactor);
+                        if (edgeFactor > 0.30f && tallPool.Count > 0 && UnityEngine.Random.value < effectiveTallChance)
                         {
                             int tallIdx = tallPool[UnityEngine.Random.Range(0, tallPool.Count)];
                             var protoTall = prototypes[tallIdx];
 
-                            float sJitterX = posX + UnityEngine.Random.Range(-sampleSpacing * 0.35f, sampleSpacing * 0.35f);
-                            float sJitterZ = posZ + UnityEngine.Random.Range(-sampleSpacing * 0.35f, sampleSpacing * 0.35f);
                             float sJitterX = posX + UnityEngine.Random.Range(-sampleSpacing * 0.45f, sampleSpacing * 0.45f);
                             float sJitterZ = posZ + UnityEngine.Random.Range(-sampleSpacing * 0.45f, sampleSpacing * 0.45f);
 
                             var t2 = CalculateSlopeGroundedTransform(tData, terPos, terSize, sJitterX, sJitterZ, protoTall, 0.28f, 0.015f);
-                            list.Add((t2.pos, t2.rot, t2.scale, tallIdx));
-                            list.Add((t2.pos, t2.rot, t2.scale * scalePatchBias, tallIdx));
+                            list.Add((t2.pos, t2.rot, Vector3.Scale(t2.scale, upperScaleBias), tallIdx));
                             _totalInstanceCount++;
                         }
 
-                        // 🌼 [Layer 3: 2D 야생화 군락 레이어] (페를린 노이즈 또는 15% 빈도로 분홍/연보라/주황 꽃 군락이 잔디밭에 조화롭게 개화)
                         // 🌼 [Layer 3: 2D 야생화 군락 레이어] (페를린 노이즈 기반 군락 개화)
-                        if (flowerPool.Count > 0)
+                        if (edgeFactor > 0.25f && flowerPool.Count > 0)
                         {
-                            float flowerNoise = Mathf.PerlinNoise(posX * 0.055f, posZ * 0.055f);
-                            if (flowerNoise > (1.0f - wildflowerPatchChance) || UnityEngine.Random.value < 0.12f)
                             float flowerNoise = Mathf.PerlinNoise(posX * 0.055f + 3.1f, posZ * 0.055f + 9.4f);
                             if (flowerNoise > (1.0f - wildflowerPatchChance) || UnityEngine.Random.value < 0.08f)
                             {
-                                int flowerIdx = flowerPool[(Mathf.Abs(cx * 13 + cz * 29 + x * 3)) % flowerPool.Count];
                                 int flowerIdx = flowerPool[Mathf.Abs(Mathf.FloorToInt(flowerNoise * 31f) + cx * 13 + cz * 29) % flowerPool.Count];
                                 var protoFlower = prototypes[flowerIdx];
 
-                                float fJitterX = posX + UnityEngine.Random.Range(-sampleSpacing * 0.35f, sampleSpacing * 0.35f);
-                                float fJitterZ = posZ + UnityEngine.Random.Range(-sampleSpacing * 0.35f, sampleSpacing * 0.35f);
                                 float fJitterX = posX + UnityEngine.Random.Range(-sampleSpacing * 0.45f, sampleSpacing * 0.45f);
                                 float fJitterZ = posZ + UnityEngine.Random.Range(-sampleSpacing * 0.45f, sampleSpacing * 0.45f);
 
                                 var t3 = CalculateSlopeGroundedTransform(tData, terPos, terSize, fJitterX, fJitterZ, protoFlower, 0.30f, 0.015f);
-                                list.Add((t3.pos, t3.rot, t3.scale, flowerIdx));
+                                list.Add((t3.pos, t3.rot, Vector3.Scale(t3.scale, upperScaleBias), flowerIdx));
                                 _totalInstanceCount++;
                             }
                         }
 
-                        // 🌲 [Layer 4: 상층 3D 두툼한 수풀 레이어] (약 7% 빈도로 잔디밭 사이에 배치)
-                        if (fernShrubPool.Count > 0 && UnityEngine.Random.value < 0.08f)
-                        // 🌲 [Layer 4: 저층 관목·고사리 수풀 레이어]
-                        if (fernShrubPool.Count > 0 && UnityEngine.Random.value < 0.12f * Mathf.Lerp(0.7f, 1.5f, macroPatch) * edgeKeepProb)
+                        // 🌲 [Layer 4: 저층 관목·고사리 수풀 레이어 (고사리는 숲 구역 내부 전용 + 바닥 밀착 낮춤)]
+                        float layer4Chance = isPointInForest ? 0.24f : 0.10f;
+                        if (edgeFactor > 0.25f && fernShrubPool.Count > 0 && UnityEngine.Random.value < layer4Chance * Mathf.Lerp(0.65f, 1.45f, edgeFactor))
                         {
-                            float fnJitterX = posX + UnityEngine.Random.Range(-sampleSpacing * 0.35f, sampleSpacing * 0.35f);
-                            float fnJitterZ = posZ + UnityEngine.Random.Range(-sampleSpacing * 0.35f, sampleSpacing * 0.35f);
                             float fnJitterX = posX + UnityEngine.Random.Range(-sampleSpacing * 0.45f, sampleSpacing * 0.45f);
                             float fnJitterZ = posZ + UnityEngine.Random.Range(-sampleSpacing * 0.45f, sampleSpacing * 0.45f);
 
                             int fernIdx = fernShrubPool[UnityEngine.Random.Range(0, fernShrubPool.Count)];
                             var protoFern = prototypes[fernIdx];
+                            bool isFernItem = IsFernPrototype(protoFern);
 
-                            var t4 = CalculateSlopeGroundedTransform(tData, terPos, terSize, fnJitterX, fnJitterZ, protoFern, 0.30f, 0.015f);
-                            list.Add((t4.pos, t4.rot, t4.scale, fernIdx));
-                            list.Add((t4.pos, t4.rot, t4.scale * scalePatchBias, fernIdx));
-                            _totalInstanceCount++;
+                            // 고사리인 경우 지터링 후 최종 좌표까지 숲 구역 내부인지 이중 검증
+                            if (!isFernItem || TacticalForestZone.IsPointInAnyForest(new Vector3(fnJitterX, samplePos.y, fnJitterZ)))
+                            {
+                                var t4 = CalculateSlopeGroundedTransform(tData, terPos, terSize, fnJitterX, fnJitterZ, protoFern, isFernItem ? 0.92f : 0.30f, isFernItem ? 0.025f : 0.015f);
+                                Vector3 l4ScaleBias = isFernItem
+                                    ? new Vector3(Mathf.Lerp(0.88f, 1.15f, edgeFactor), Mathf.Lerp(0.55f, 0.80f, edgeFactor), Mathf.Lerp(0.88f, 1.15f, edgeFactor))
+                                    : upperScaleBias;
+                                list.Add((t4.pos, t4.rot, Vector3.Scale(t4.scale, l4ScaleBias), fernIdx));
+                                _totalInstanceCount++;
+                            }
                         }
                     }
                     else
                     {
-                        // 단일 살포 모드에서도 유기적 포아송-황금각 나선 분산으로 바둑판 눈금 완전 소거
-                        // 단일 살포 모드에서도 가변 지터 분산으로 바둑판 눈금 완전 소거
+                        // 단일 살포 모드에서도 가변 지터 분산 + 가장자리 키 감쇄 적용
                         var proto = prototypes[baseProto];
-                        int tuftCount = 4;
-                        float cellRadius = sampleSpacing * 0.58f;
-                        int tuftCount = Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(1f, 4f, patchDensity * edgeKeepProb)), 1, 4);
+                        float edgeFactor = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(patchDensity * edgeKeepProb * 1.15f));
+                        Vector3 singleScaleBias = new Vector3(Mathf.Lerp(0.76f, 1.14f, edgeFactor), Mathf.Lerp(0.36f, 1.12f, edgeFactor), Mathf.Lerp(0.76f, 1.14f, edgeFactor));
+                        int tuftCount = Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(1f, 4f, edgeFactor)), 1, 4);
                         float cellRadius = sampleSpacing * 0.68f;
                         float baseAngle = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
                         for (int t = 0; t < tuftCount; t++)
                         {
-                            float goldenAngle = t * 2.39996323f;
-                            float rNorm = Mathf.Sqrt((t + 0.45f) / (float)tuftCount);
                             float goldenAngle = baseAngle + t * 2.39996323f + UnityEngine.Random.Range(-0.45f, 0.45f);
                             float rNorm = Mathf.Sqrt(UnityEngine.Random.Range(0.08f, 1.0f));
                             float r = rNorm * cellRadius;
-                            float pX = worldX + Mathf.Cos(goldenAngle) * r + UnityEngine.Random.Range(-cellRadius * 0.22f, cellRadius * 0.22f);
-                            float pZ = worldZ + Mathf.Sin(goldenAngle) * r + UnityEngine.Random.Range(-cellRadius * 0.22f, cellRadius * 0.22f);
                             float pX = worldX + Mathf.Cos(goldenAngle) * r;
                             float pZ = worldZ + Mathf.Sin(goldenAngle) * r;
 
                             var tSingle = CalculateSlopeGroundedTransform(tData, terPos, terSize, pX, pZ, proto, 0.32f, 0.015f);
-                            list.Add((tSingle.pos, tSingle.rot, tSingle.scale, baseProto));
+                            list.Add((tSingle.pos, tSingle.rot, Vector3.Scale(tSingle.scale, singleScaleBias), baseProto));
                             _totalInstanceCount++;
                         }
                     }
@@ -2804,6 +3075,11 @@ namespace MiniTotalWar
         public void RenderGrassBatchesForCamera(Camera cam)
         {
             if (_chunks.Count == 0 || prototypes.Count == 0 || cam == null) return;
+
+            if (_terrainColorMap == null && targetTerrain != null)
+            {
+                RefreshTerrainSurfaceMaps();
+            }
 
             bool isSceneView = (cam.cameraType == CameraType.SceneView);
             float effectiveMaxDist = isSceneView ? sceneViewRenderDistance : maxRenderDistance;

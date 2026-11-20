@@ -1,0 +1,2546 @@
+﻿{
+    "nodes": [
+        {
+            "nodeId": "luoyang",
+            "displayName": "낙양 (사예 치소)",
+            "nodeType": 0,
+            "coord": {
+                "sectorX": 115,
+                "sectorZ": 97,
+                "localX": 450.5151672363281,
+                "localZ": 496.6834411621094
+            },
+            "climate": 0,
+            "initialFactionId": "Han_Dynasty",
+            "garrisonStrength": 2400,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "changan",
+            "displayName": "장안 (관중 도읍)",
+            "nodeType": 0,
+            "coord": {
+                "sectorX": 90,
+                "sectorZ": 96,
+                "localX": 179.86233520507813,
+                "localZ": 370.5059509277344
+            },
+            "climate": 0,
+            "initialFactionId": "Dong_Zhuo",
+            "garrisonStrength": 2200,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "ye",
+            "displayName": "업성 (하북 중심)",
+            "nodeType": 1,
+            "coord": {
+                "sectorX": 128,
+                "sectorZ": 115,
+                "localX": 457.9876403808594,
+                "localZ": 87.523193359375
+            },
+            "climate": 0,
+            "initialFactionId": "Yuan_Shao",
+            "garrisonStrength": 2000,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "xuchang",
+            "displayName": "허창 (영천 군진)",
+            "nodeType": 1,
+            "coord": {
+                "sectorX": 127,
+                "sectorZ": 90,
+                "localX": 72.97885131835938,
+                "localZ": 506.8927001953125
+            },
+            "climate": 0,
+            "initialFactionId": "Cao_Cao",
+            "garrisonStrength": 2000,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "youzhou",
+            "displayName": "유주·계성",
+            "nodeType": 1,
+            "coord": {
+                "sectorX": 133,
+                "sectorZ": 136,
+                "localX": 460.8543395996094,
+                "localZ": 312.158935546875
+            },
+            "climate": 4,
+            "initialFactionId": "Gongsun_Zan",
+            "garrisonStrength": 1700,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "xiliang",
+            "displayName": "무위 (서량)",
+            "nodeType": 1,
+            "coord": {
+                "sectorX": 60,
+                "sectorZ": 120,
+                "localX": 162.62130737304688,
+                "localZ": 335.4966735839844
+            },
+            "climate": 2,
+            "initialFactionId": "Ma_Teng",
+            "garrisonStrength": 1600,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "xiapi",
+            "displayName": "하비 (서주)",
+            "nodeType": 1,
+            "coord": {
+                "sectorX": 147,
+                "sectorZ": 89,
+                "localX": 84.47286987304688,
+                "localZ": 125.44635009765625
+            },
+            "climate": 0,
+            "initialFactionId": "Tao_Qian",
+            "garrisonStrength": 1600,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "hefei",
+            "displayName": "합비 (회남 요충)",
+            "nodeType": 1,
+            "coord": {
+                "sectorX": 144,
+                "sectorZ": 78,
+                "localX": 467.17877197265627,
+                "localZ": 396.7629089355469
+            },
+            "climate": 0,
+            "initialFactionId": "Cao_Cao",
+            "garrisonStrength": 1700,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "jianye",
+            "displayName": "건업 (강동 도읍)",
+            "nodeType": 0,
+            "coord": {
+                "sectorX": 153,
+                "sectorZ": 75,
+                "localX": 472.3483581542969,
+                "localZ": 145.87020874023438
+            },
+            "climate": 3,
+            "initialFactionId": "Sun_Jian",
+            "garrisonStrength": 2100,
+            "hasPortAccess": true
+        },
+        {
+            "nodeId": "xiangyang",
+            "displayName": "양양 (형주 북문)",
+            "nodeType": 1,
+            "coord": {
+                "sectorX": 113,
+                "sectorZ": 75,
+                "localX": 321.2210693359375,
+                "localZ": 145.87020874023438
+            },
+            "climate": 3,
+            "initialFactionId": "Liu_Biao",
+            "garrisonStrength": 1900,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "chibi",
+            "displayName": "적벽 (장강 수군)",
+            "nodeType": 4,
+            "coord": {
+                "sectorX": 122,
+                "sectorZ": 64,
+                "localX": 198.25140380859376,
+                "localZ": 417.18408203125
+            },
+            "climate": 3,
+            "initialFactionId": "Sun_Jian",
+            "garrisonStrength": 1400,
+            "hasPortAccess": true
+        },
+        {
+            "nodeId": "changsha",
+            "displayName": "장사 (형남)",
+            "nodeType": 1,
+            "coord": {
+                "sectorX": 118,
+                "sectorZ": 54,
+                "localX": 67.80926513671875,
+                "localZ": 176.5006561279297
+            },
+            "climate": 3,
+            "initialFactionId": "Liu_Biao",
+            "garrisonStrength": 1500,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "hanzhong",
+            "displayName": "한중 (파촉 관문)",
+            "nodeType": 1,
+            "coord": {
+                "sectorX": 86,
+                "sectorZ": 87,
+                "localX": 433.84814453125,
+                "localZ": 256.0
+            },
+            "climate": 0,
+            "initialFactionId": "Zhang_Lu",
+            "garrisonStrength": 1600,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "chengdu",
+            "displayName": "성도 (익주 도읍)",
+            "nodeType": 0,
+            "coord": {
+                "sectorX": 72,
+                "sectorZ": 72,
+                "localX": 425.8050537109375,
+                "localZ": 405.5152282714844
+            },
+            "climate": 0,
+            "initialFactionId": "Liu_Yan",
+            "garrisonStrength": 2100,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "yongan",
+            "displayName": "영안 (백제성)",
+            "nodeType": 1,
+            "coord": {
+                "sectorX": 95,
+                "sectorZ": 72,
+                "localX": 310.87847900390627,
+                "localZ": 22.609268188476564
+            },
+            "climate": 3,
+            "initialFactionId": "Liu_Yan",
+            "garrisonStrength": 1500,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "nanhai",
+            "displayName": "번우 (남해 항구)",
+            "nodeType": 4,
+            "coord": {
+                "sectorX": 108,
+                "sectorZ": 39,
+                "localX": 446.490234375,
+                "localZ": 198.38145446777345
+            },
+            "climate": 3,
+            "initialFactionId": "Shi_Xie",
+            "garrisonStrength": 1400,
+            "hasPortAccess": true
+        },
+        {
+            "nodeId": "gate_0",
+            "displayName": "호로관 (요새 관문)",
+            "nodeType": 3,
+            "coord": {
+                "sectorX": 113,
+                "sectorZ": 120,
+                "localX": 64.93576049804688,
+                "localZ": 335.50201416015627
+            },
+            "climate": 0,
+            "initialFactionId": "Han_Dynasty",
+            "garrisonStrength": 1200,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "gate_1",
+            "displayName": "함곡관 (요새 관문)",
+            "nodeType": 3,
+            "coord": {
+                "sectorX": 58,
+                "sectorZ": 109,
+                "localX": 161.4732666015625,
+                "localZ": 479.1788024902344
+            },
+            "climate": 2,
+            "initialFactionId": "Han_Dynasty",
+            "garrisonStrength": 1200,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "gate_2",
+            "displayName": "동관 (요새 관문)",
+            "nodeType": 3,
+            "coord": {
+                "sectorX": 84,
+                "sectorZ": 116,
+                "localX": 432.70013427734377,
+                "localZ": 86.0609130859375
+            },
+            "climate": 0,
+            "initialFactionId": "Han_Dynasty",
+            "garrisonStrength": 1200,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "gate_3",
+            "displayName": "무관 (요새 관문)",
+            "nodeType": 3,
+            "coord": {
+                "sectorX": 96,
+                "sectorZ": 119,
+                "localX": 311.4525146484375,
+                "localZ": 336.95361328125
+            },
+            "climate": 0,
+            "initialFactionId": "Han_Dynasty",
+            "garrisonStrength": 1200,
+            "hasPortAccess": false
+        },
+        {
+            "nodeId": "gate_4",
+            "displayName": "검각관 (요새 관문)",
+            "nodeType": 3,
+            "coord": {
+                "sectorX": 99,
+                "sectorZ": 130,
+                "localX": 441.32061767578127,
+                "localZ": 193.27682495117188
+            },
+            "climate": 4,
+            "initialFactionId": "Han_Dynasty",
+            "garrisonStrength": 1200,
+            "hasPortAccess": false
+        }
+    ],
+    "roads": [
+        {
+            "roadId": "Road_luoyang_changan",
+            "fromNodeId": "luoyang",
+            "toNodeId": "changan",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 115,
+                    "sectorZ": 98,
+                    "localX": 216.12289428710938,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 114,
+                    "sectorZ": 98,
+                    "localX": 154.37155151367188,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 113,
+                    "sectorZ": 98,
+                    "localX": 92.62020874023438,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 112,
+                    "sectorZ": 98,
+                    "localX": 30.87567138671875,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 110,
+                    "sectorZ": 98,
+                    "localX": 481.12432861328127,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 109,
+                    "sectorZ": 98,
+                    "localX": 419.37640380859377,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 108,
+                    "sectorZ": 98,
+                    "localX": 357.6284484863281,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 107,
+                    "sectorZ": 98,
+                    "localX": 295.8804931640625,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 106,
+                    "sectorZ": 98,
+                    "localX": 234.12916564941407,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 105,
+                    "sectorZ": 98,
+                    "localX": 172.3812255859375,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 104,
+                    "sectorZ": 98,
+                    "localX": 110.63328552246094,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 103,
+                    "sectorZ": 98,
+                    "localX": 48.885345458984378,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 101,
+                    "sectorZ": 98,
+                    "localX": 499.1340026855469,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 100,
+                    "sectorZ": 98,
+                    "localX": 437.38604736328127,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 99,
+                    "sectorZ": 98,
+                    "localX": 375.63812255859377,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 98,
+                    "sectorZ": 98,
+                    "localX": 313.89019775390627,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 97,
+                    "sectorZ": 98,
+                    "localX": 252.14224243164063,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 96,
+                    "sectorZ": 98,
+                    "localX": 190.39089965820313,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 95,
+                    "sectorZ": 98,
+                    "localX": 128.64295959472657,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 94,
+                    "sectorZ": 98,
+                    "localX": 66.89501953125,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 93,
+                    "sectorZ": 98,
+                    "localX": 5.1470794677734379,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 91,
+                    "sectorZ": 98,
+                    "localX": 455.395751953125,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 90,
+                    "sectorZ": 97,
+                    "localX": 393.6477966308594,
+                    "localZ": 49.549041748046878
+                }
+            ]
+        },
+        {
+            "roadId": "Road_luoyang_ye",
+            "fromNodeId": "luoyang",
+            "toNodeId": "ye",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 115,
+                    "sectorZ": 98,
+                    "localX": 216.12289428710938,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 116,
+                    "sectorZ": 99,
+                    "localX": 277.867431640625,
+                    "localZ": 181.67697143554688
+                },
+                {
+                    "sectorX": 117,
+                    "sectorZ": 100,
+                    "localX": 339.6187744140625,
+                    "localZ": 247.74093627929688
+                },
+                {
+                    "sectorX": 118,
+                    "sectorZ": 101,
+                    "localX": 401.3701171875,
+                    "localZ": 313.8049011230469
+                },
+                {
+                    "sectorX": 119,
+                    "sectorZ": 102,
+                    "localX": 463.1146545410156,
+                    "localZ": 379.8688659667969
+                },
+                {
+                    "sectorX": 121,
+                    "sectorZ": 103,
+                    "localX": 12.865997314453125,
+                    "localZ": 445.9328308105469
+                },
+                {
+                    "sectorX": 121,
+                    "sectorZ": 105,
+                    "localX": 12.865997314453125,
+                    "localZ": 0.00213623046875
+                },
+                {
+                    "sectorX": 122,
+                    "sectorZ": 106,
+                    "localX": 74.61053466796875,
+                    "localZ": 66.06610107421875
+                },
+                {
+                    "sectorX": 123,
+                    "sectorZ": 107,
+                    "localX": 136.36187744140626,
+                    "localZ": 132.13006591796876
+                },
+                {
+                    "sectorX": 124,
+                    "sectorZ": 108,
+                    "localX": 198.11322021484376,
+                    "localZ": 198.19403076171876
+                },
+                {
+                    "sectorX": 125,
+                    "sectorZ": 109,
+                    "localX": 259.8577575683594,
+                    "localZ": 264.25799560546877
+                },
+                {
+                    "sectorX": 126,
+                    "sectorZ": 110,
+                    "localX": 321.6091003417969,
+                    "localZ": 330.32196044921877
+                },
+                {
+                    "sectorX": 127,
+                    "sectorZ": 111,
+                    "localX": 383.3536376953125,
+                    "localZ": 396.38592529296877
+                },
+                {
+                    "sectorX": 127,
+                    "sectorZ": 112,
+                    "localX": 383.3536376953125,
+                    "localZ": 462.44989013671877
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 114,
+                    "localX": 445.10498046875,
+                    "localZ": 16.51385498046875
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 115,
+                    "localX": 445.10498046875,
+                    "localZ": 82.58316040039063
+                }
+            ]
+        },
+        {
+            "roadId": "Road_luoyang_xuchang",
+            "fromNodeId": "luoyang",
+            "toNodeId": "xuchang",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 115,
+                    "sectorZ": 98,
+                    "localX": 216.12289428710938,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 116,
+                    "sectorZ": 97,
+                    "localX": 277.867431640625,
+                    "localZ": 49.549041748046878
+                },
+                {
+                    "sectorX": 117,
+                    "sectorZ": 95,
+                    "localX": 339.6187744140625,
+                    "localZ": 495.4850769042969
+                },
+                {
+                    "sectorX": 118,
+                    "sectorZ": 94,
+                    "localX": 401.3701171875,
+                    "localZ": 429.4211120605469
+                },
+                {
+                    "sectorX": 119,
+                    "sectorZ": 94,
+                    "localX": 463.1146545410156,
+                    "localZ": 429.4211120605469
+                },
+                {
+                    "sectorX": 121,
+                    "sectorZ": 93,
+                    "localX": 12.865997314453125,
+                    "localZ": 363.3571472167969
+                },
+                {
+                    "sectorX": 122,
+                    "sectorZ": 93,
+                    "localX": 74.61053466796875,
+                    "localZ": 363.3571472167969
+                },
+                {
+                    "sectorX": 123,
+                    "sectorZ": 92,
+                    "localX": 136.36187744140626,
+                    "localZ": 297.287841796875
+                },
+                {
+                    "sectorX": 124,
+                    "sectorZ": 92,
+                    "localX": 198.11322021484376,
+                    "localZ": 297.287841796875
+                },
+                {
+                    "sectorX": 125,
+                    "sectorZ": 91,
+                    "localX": 259.8577575683594,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 126,
+                    "sectorZ": 91,
+                    "localX": 321.6091003417969,
+                    "localZ": 231.223876953125
+                }
+            ]
+        },
+        {
+            "roadId": "Road_luoyang_xiangyang",
+            "fromNodeId": "luoyang",
+            "toNodeId": "xiangyang",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 115,
+                    "sectorZ": 98,
+                    "localX": 216.12289428710938,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 97,
+                    "localX": 216.12289428710938,
+                    "localZ": 49.549041748046878
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 95,
+                    "localX": 216.12289428710938,
+                    "localZ": 495.4850769042969
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 94,
+                    "localX": 216.12289428710938,
+                    "localZ": 429.4211120605469
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 93,
+                    "localX": 216.12289428710938,
+                    "localZ": 363.3571472167969
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 92,
+                    "localX": 216.12289428710938,
+                    "localZ": 297.287841796875
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 91,
+                    "localX": 216.12289428710938,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 90,
+                    "localX": 216.12289428710938,
+                    "localZ": 165.159912109375
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 89,
+                    "localX": 216.12289428710938,
+                    "localZ": 99.095947265625
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 88,
+                    "localX": 216.12289428710938,
+                    "localZ": 33.031982421875
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 86,
+                    "localX": 216.12289428710938,
+                    "localZ": 478.968017578125
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 85,
+                    "localX": 216.12289428710938,
+                    "localZ": 412.904052734375
+                },
+                {
+                    "sectorX": 114,
+                    "sectorZ": 84,
+                    "localX": 154.37155151367188,
+                    "localZ": 346.83740234375
+                },
+                {
+                    "sectorX": 114,
+                    "sectorZ": 83,
+                    "localX": 154.37155151367188,
+                    "localZ": 280.7734375
+                },
+                {
+                    "sectorX": 114,
+                    "sectorZ": 82,
+                    "localX": 154.37155151367188,
+                    "localZ": 214.70948791503907
+                },
+                {
+                    "sectorX": 114,
+                    "sectorZ": 81,
+                    "localX": 154.37155151367188,
+                    "localZ": 148.64552307128907
+                },
+                {
+                    "sectorX": 114,
+                    "sectorZ": 80,
+                    "localX": 154.37155151367188,
+                    "localZ": 82.58155822753906
+                },
+                {
+                    "sectorX": 114,
+                    "sectorZ": 79,
+                    "localX": 154.37155151367188,
+                    "localZ": 16.514923095703126
+                },
+                {
+                    "sectorX": 114,
+                    "sectorZ": 77,
+                    "localX": 154.37155151367188,
+                    "localZ": 462.4509582519531
+                },
+                {
+                    "sectorX": 113,
+                    "sectorZ": 76,
+                    "localX": 92.62020874023438,
+                    "localZ": 396.3869934082031
+                },
+                {
+                    "sectorX": 113,
+                    "sectorZ": 75,
+                    "localX": 92.62020874023438,
+                    "localZ": 330.3230285644531
+                }
+            ]
+        },
+        {
+            "roadId": "Road_changan_xiliang",
+            "fromNodeId": "changan",
+            "toNodeId": "xiliang",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 90,
+                    "sectorZ": 97,
+                    "localX": 393.6477966308594,
+                    "localZ": 49.549041748046878
+                },
+                {
+                    "sectorX": 91,
+                    "sectorZ": 98,
+                    "localX": 455.395751953125,
+                    "localZ": 115.61300659179688
+                },
+                {
+                    "sectorX": 91,
+                    "sectorZ": 99,
+                    "localX": 455.395751953125,
+                    "localZ": 181.67697143554688
+                },
+                {
+                    "sectorX": 91,
+                    "sectorZ": 100,
+                    "localX": 455.395751953125,
+                    "localZ": 247.74093627929688
+                },
+                {
+                    "sectorX": 93,
+                    "sectorZ": 101,
+                    "localX": 5.1470794677734379,
+                    "localZ": 313.8049011230469
+                },
+                {
+                    "sectorX": 91,
+                    "sectorZ": 102,
+                    "localX": 455.395751953125,
+                    "localZ": 379.8688659667969
+                },
+                {
+                    "sectorX": 90,
+                    "sectorZ": 103,
+                    "localX": 393.6477966308594,
+                    "localZ": 445.9328308105469
+                },
+                {
+                    "sectorX": 89,
+                    "sectorZ": 105,
+                    "localX": 331.89984130859377,
+                    "localZ": 0.00213623046875
+                },
+                {
+                    "sectorX": 88,
+                    "sectorZ": 106,
+                    "localX": 270.15191650390627,
+                    "localZ": 66.06610107421875
+                },
+                {
+                    "sectorX": 87,
+                    "sectorZ": 107,
+                    "localX": 208.40057373046876,
+                    "localZ": 132.13006591796876
+                },
+                {
+                    "sectorX": 86,
+                    "sectorZ": 108,
+                    "localX": 146.6526336669922,
+                    "localZ": 198.19403076171876
+                },
+                {
+                    "sectorX": 85,
+                    "sectorZ": 109,
+                    "localX": 84.90469360351563,
+                    "localZ": 264.25799560546877
+                },
+                {
+                    "sectorX": 84,
+                    "sectorZ": 109,
+                    "localX": 23.156753540039064,
+                    "localZ": 264.25799560546877
+                },
+                {
+                    "sectorX": 82,
+                    "sectorZ": 110,
+                    "localX": 473.4053955078125,
+                    "localZ": 330.32196044921877
+                },
+                {
+                    "sectorX": 81,
+                    "sectorZ": 110,
+                    "localX": 411.657470703125,
+                    "localZ": 330.32196044921877
+                },
+                {
+                    "sectorX": 80,
+                    "sectorZ": 111,
+                    "localX": 349.9095458984375,
+                    "localZ": 396.38592529296877
+                },
+                {
+                    "sectorX": 79,
+                    "sectorZ": 111,
+                    "localX": 288.1615905761719,
+                    "localZ": 396.38592529296877
+                },
+                {
+                    "sectorX": 78,
+                    "sectorZ": 112,
+                    "localX": 226.4136505126953,
+                    "localZ": 462.44989013671877
+                },
+                {
+                    "sectorX": 77,
+                    "sectorZ": 112,
+                    "localX": 164.6623077392578,
+                    "localZ": 462.44989013671877
+                },
+                {
+                    "sectorX": 76,
+                    "sectorZ": 114,
+                    "localX": 102.91436767578125,
+                    "localZ": 16.51385498046875
+                },
+                {
+                    "sectorX": 75,
+                    "sectorZ": 115,
+                    "localX": 41.16642761230469,
+                    "localZ": 82.58316040039063
+                },
+                {
+                    "sectorX": 73,
+                    "sectorZ": 116,
+                    "localX": 491.4184875488281,
+                    "localZ": 148.64712524414063
+                },
+                {
+                    "sectorX": 72,
+                    "sectorZ": 117,
+                    "localX": 429.6671447753906,
+                    "localZ": 214.71109008789063
+                },
+                {
+                    "sectorX": 71,
+                    "sectorZ": 118,
+                    "localX": 367.919189453125,
+                    "localZ": 280.7750549316406
+                },
+                {
+                    "sectorX": 70,
+                    "sectorZ": 119,
+                    "localX": 306.1712646484375,
+                    "localZ": 346.8390197753906
+                },
+                {
+                    "sectorX": 69,
+                    "sectorZ": 120,
+                    "localX": 244.42332458496095,
+                    "localZ": 412.9029846191406
+                },
+                {
+                    "sectorX": 68,
+                    "sectorZ": 120,
+                    "localX": 182.67198181152345,
+                    "localZ": 412.9029846191406
+                },
+                {
+                    "sectorX": 67,
+                    "sectorZ": 120,
+                    "localX": 120.92404174804688,
+                    "localZ": 412.9029846191406
+                },
+                {
+                    "sectorX": 66,
+                    "sectorZ": 120,
+                    "localX": 59.17610168457031,
+                    "localZ": 412.9029846191406
+                },
+                {
+                    "sectorX": 64,
+                    "sectorZ": 120,
+                    "localX": 509.42816162109377,
+                    "localZ": 412.9029846191406
+                },
+                {
+                    "sectorX": 63,
+                    "sectorZ": 120,
+                    "localX": 447.67681884765627,
+                    "localZ": 412.9029846191406
+                },
+                {
+                    "sectorX": 62,
+                    "sectorZ": 120,
+                    "localX": 385.92889404296877,
+                    "localZ": 412.9029846191406
+                },
+                {
+                    "sectorX": 61,
+                    "sectorZ": 120,
+                    "localX": 324.1809387207031,
+                    "localZ": 412.9029846191406
+                },
+                {
+                    "sectorX": 60,
+                    "sectorZ": 120,
+                    "localX": 262.4329833984375,
+                    "localZ": 412.9029846191406
+                }
+            ]
+        },
+        {
+            "roadId": "Road_changan_hanzhong",
+            "fromNodeId": "changan",
+            "toNodeId": "hanzhong",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 90,
+                    "sectorZ": 97,
+                    "localX": 393.6477966308594,
+                    "localZ": 49.549041748046878
+                },
+                {
+                    "sectorX": 89,
+                    "sectorZ": 95,
+                    "localX": 331.89984130859377,
+                    "localZ": 495.4850769042969
+                },
+                {
+                    "sectorX": 89,
+                    "sectorZ": 94,
+                    "localX": 331.89984130859377,
+                    "localZ": 429.4211120605469
+                },
+                {
+                    "sectorX": 89,
+                    "sectorZ": 93,
+                    "localX": 331.89984130859377,
+                    "localZ": 363.3571472167969
+                },
+                {
+                    "sectorX": 89,
+                    "sectorZ": 92,
+                    "localX": 331.89984130859377,
+                    "localZ": 297.287841796875
+                },
+                {
+                    "sectorX": 88,
+                    "sectorZ": 91,
+                    "localX": 270.15191650390627,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 88,
+                    "sectorZ": 90,
+                    "localX": 270.15191650390627,
+                    "localZ": 165.159912109375
+                },
+                {
+                    "sectorX": 87,
+                    "sectorZ": 89,
+                    "localX": 208.40057373046876,
+                    "localZ": 99.095947265625
+                },
+                {
+                    "sectorX": 87,
+                    "sectorZ": 88,
+                    "localX": 208.40057373046876,
+                    "localZ": 33.031982421875
+                }
+            ]
+        },
+        {
+            "roadId": "Road_ye_youzhou",
+            "fromNodeId": "ye",
+            "toNodeId": "youzhou",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 128,
+                    "sectorZ": 115,
+                    "localX": 445.10498046875,
+                    "localZ": 82.58316040039063
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 116,
+                    "localX": 445.10498046875,
+                    "localZ": 148.64712524414063
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 117,
+                    "localX": 445.10498046875,
+                    "localZ": 214.71109008789063
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 118,
+                    "localX": 445.10498046875,
+                    "localZ": 280.7750549316406
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 119,
+                    "localX": 445.10498046875,
+                    "localZ": 346.8390197753906
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 120,
+                    "localX": 445.10498046875,
+                    "localZ": 412.9029846191406
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 121,
+                    "localX": 445.10498046875,
+                    "localZ": 478.9669494628906
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 123,
+                    "localX": 445.10498046875,
+                    "localZ": 33.030914306640628
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 124,
+                    "localX": 445.10498046875,
+                    "localZ": 99.09487915039063
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 125,
+                    "localX": 445.10498046875,
+                    "localZ": 165.15884399414063
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 126,
+                    "localX": 445.10498046875,
+                    "localZ": 231.2281494140625
+                },
+                {
+                    "sectorX": 129,
+                    "sectorZ": 127,
+                    "localX": 506.8563232421875,
+                    "localZ": 297.2921142578125
+                },
+                {
+                    "sectorX": 131,
+                    "sectorZ": 128,
+                    "localX": 56.600860595703128,
+                    "localZ": 363.3560791015625
+                },
+                {
+                    "sectorX": 132,
+                    "sectorZ": 129,
+                    "localX": 118.35220336914063,
+                    "localZ": 429.4200439453125
+                },
+                {
+                    "sectorX": 132,
+                    "sectorZ": 130,
+                    "localX": 118.35220336914063,
+                    "localZ": 495.4840087890625
+                },
+                {
+                    "sectorX": 132,
+                    "sectorZ": 132,
+                    "localX": 118.35220336914063,
+                    "localZ": 49.5479736328125
+                },
+                {
+                    "sectorX": 133,
+                    "sectorZ": 133,
+                    "localX": 180.10354614257813,
+                    "localZ": 115.6119384765625
+                },
+                {
+                    "sectorX": 133,
+                    "sectorZ": 134,
+                    "localX": 180.10354614257813,
+                    "localZ": 181.6759033203125
+                },
+                {
+                    "sectorX": 133,
+                    "sectorZ": 135,
+                    "localX": 180.10354614257813,
+                    "localZ": 247.7398681640625
+                },
+                {
+                    "sectorX": 133,
+                    "sectorZ": 136,
+                    "localX": 180.10354614257813,
+                    "localZ": 313.8038330078125
+                }
+            ]
+        },
+        {
+            "roadId": "Road_xuchang_xiapi",
+            "fromNodeId": "xuchang",
+            "toNodeId": "xiapi",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 126,
+                    "sectorZ": 91,
+                    "localX": 321.6091003417969,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 127,
+                    "sectorZ": 91,
+                    "localX": 383.3536376953125,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 91,
+                    "localX": 445.10498046875,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 129,
+                    "sectorZ": 91,
+                    "localX": 506.8563232421875,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 131,
+                    "sectorZ": 91,
+                    "localX": 56.600860595703128,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 132,
+                    "sectorZ": 91,
+                    "localX": 118.35220336914063,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 133,
+                    "sectorZ": 91,
+                    "localX": 180.10354614257813,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 134,
+                    "sectorZ": 91,
+                    "localX": 241.84808349609376,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 135,
+                    "sectorZ": 91,
+                    "localX": 303.59942626953127,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 136,
+                    "sectorZ": 91,
+                    "localX": 365.3439636230469,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 137,
+                    "sectorZ": 91,
+                    "localX": 427.0953063964844,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 138,
+                    "sectorZ": 90,
+                    "localX": 488.8466491699219,
+                    "localZ": 165.159912109375
+                },
+                {
+                    "sectorX": 140,
+                    "sectorZ": 90,
+                    "localX": 38.5911865234375,
+                    "localZ": 165.159912109375
+                },
+                {
+                    "sectorX": 141,
+                    "sectorZ": 90,
+                    "localX": 100.342529296875,
+                    "localZ": 165.159912109375
+                },
+                {
+                    "sectorX": 142,
+                    "sectorZ": 90,
+                    "localX": 162.08706665039063,
+                    "localZ": 165.159912109375
+                },
+                {
+                    "sectorX": 143,
+                    "sectorZ": 90,
+                    "localX": 223.83840942382813,
+                    "localZ": 165.159912109375
+                },
+                {
+                    "sectorX": 144,
+                    "sectorZ": 90,
+                    "localX": 285.5897521972656,
+                    "localZ": 165.159912109375
+                },
+                {
+                    "sectorX": 145,
+                    "sectorZ": 89,
+                    "localX": 347.33428955078127,
+                    "localZ": 99.095947265625
+                },
+                {
+                    "sectorX": 146,
+                    "sectorZ": 89,
+                    "localX": 409.08563232421877,
+                    "localZ": 99.095947265625
+                }
+            ]
+        },
+        {
+            "roadId": "Road_xuchang_hefei",
+            "fromNodeId": "xuchang",
+            "toNodeId": "hefei",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 126,
+                    "sectorZ": 91,
+                    "localX": 321.6091003417969,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 127,
+                    "sectorZ": 90,
+                    "localX": 383.3536376953125,
+                    "localZ": 165.159912109375
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 89,
+                    "localX": 445.10498046875,
+                    "localZ": 99.095947265625
+                },
+                {
+                    "sectorX": 129,
+                    "sectorZ": 88,
+                    "localX": 506.8563232421875,
+                    "localZ": 33.031982421875
+                },
+                {
+                    "sectorX": 131,
+                    "sectorZ": 86,
+                    "localX": 56.600860595703128,
+                    "localZ": 478.968017578125
+                },
+                {
+                    "sectorX": 132,
+                    "sectorZ": 85,
+                    "localX": 118.35220336914063,
+                    "localZ": 412.904052734375
+                },
+                {
+                    "sectorX": 133,
+                    "sectorZ": 85,
+                    "localX": 180.10354614257813,
+                    "localZ": 412.904052734375
+                },
+                {
+                    "sectorX": 134,
+                    "sectorZ": 84,
+                    "localX": 241.84808349609376,
+                    "localZ": 346.83740234375
+                },
+                {
+                    "sectorX": 135,
+                    "sectorZ": 83,
+                    "localX": 303.59942626953127,
+                    "localZ": 280.7734375
+                },
+                {
+                    "sectorX": 136,
+                    "sectorZ": 82,
+                    "localX": 365.3439636230469,
+                    "localZ": 214.70948791503907
+                },
+                {
+                    "sectorX": 137,
+                    "sectorZ": 82,
+                    "localX": 427.0953063964844,
+                    "localZ": 214.70948791503907
+                },
+                {
+                    "sectorX": 138,
+                    "sectorZ": 81,
+                    "localX": 488.8466491699219,
+                    "localZ": 148.64552307128907
+                },
+                {
+                    "sectorX": 140,
+                    "sectorZ": 81,
+                    "localX": 38.5911865234375,
+                    "localZ": 148.64552307128907
+                },
+                {
+                    "sectorX": 141,
+                    "sectorZ": 80,
+                    "localX": 100.342529296875,
+                    "localZ": 82.58155822753906
+                },
+                {
+                    "sectorX": 142,
+                    "sectorZ": 80,
+                    "localX": 162.08706665039063,
+                    "localZ": 82.58155822753906
+                },
+                {
+                    "sectorX": 143,
+                    "sectorZ": 79,
+                    "localX": 223.83840942382813,
+                    "localZ": 16.514923095703126
+                },
+                {
+                    "sectorX": 144,
+                    "sectorZ": 79,
+                    "localX": 285.5897521972656,
+                    "localZ": 16.514923095703126
+                }
+            ]
+        },
+        {
+            "roadId": "Road_xuchang_xiangyang",
+            "fromNodeId": "xuchang",
+            "toNodeId": "xiangyang",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 126,
+                    "sectorZ": 91,
+                    "localX": 321.6091003417969,
+                    "localZ": 231.223876953125
+                },
+                {
+                    "sectorX": 125,
+                    "sectorZ": 90,
+                    "localX": 259.8577575683594,
+                    "localZ": 165.159912109375
+                },
+                {
+                    "sectorX": 124,
+                    "sectorZ": 89,
+                    "localX": 198.11322021484376,
+                    "localZ": 99.095947265625
+                },
+                {
+                    "sectorX": 123,
+                    "sectorZ": 88,
+                    "localX": 136.36187744140626,
+                    "localZ": 33.031982421875
+                },
+                {
+                    "sectorX": 122,
+                    "sectorZ": 86,
+                    "localX": 74.61053466796875,
+                    "localZ": 478.968017578125
+                },
+                {
+                    "sectorX": 121,
+                    "sectorZ": 85,
+                    "localX": 12.865997314453125,
+                    "localZ": 412.904052734375
+                },
+                {
+                    "sectorX": 121,
+                    "sectorZ": 84,
+                    "localX": 12.865997314453125,
+                    "localZ": 346.83740234375
+                },
+                {
+                    "sectorX": 119,
+                    "sectorZ": 83,
+                    "localX": 463.1146545410156,
+                    "localZ": 280.7734375
+                },
+                {
+                    "sectorX": 118,
+                    "sectorZ": 82,
+                    "localX": 401.3701171875,
+                    "localZ": 214.70948791503907
+                },
+                {
+                    "sectorX": 117,
+                    "sectorZ": 81,
+                    "localX": 339.6187744140625,
+                    "localZ": 148.64552307128907
+                },
+                {
+                    "sectorX": 116,
+                    "sectorZ": 80,
+                    "localX": 277.867431640625,
+                    "localZ": 82.58155822753906
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 79,
+                    "localX": 216.12289428710938,
+                    "localZ": 16.514923095703126
+                },
+                {
+                    "sectorX": 114,
+                    "sectorZ": 77,
+                    "localX": 154.37155151367188,
+                    "localZ": 462.4509582519531
+                },
+                {
+                    "sectorX": 113,
+                    "sectorZ": 76,
+                    "localX": 92.62020874023438,
+                    "localZ": 396.3869934082031
+                },
+                {
+                    "sectorX": 113,
+                    "sectorZ": 75,
+                    "localX": 92.62020874023438,
+                    "localZ": 330.3230285644531
+                }
+            ]
+        },
+        {
+            "roadId": "Road_xiapi_jianye",
+            "fromNodeId": "xiapi",
+            "toNodeId": "jianye",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 146,
+                    "sectorZ": 89,
+                    "localX": 409.08563232421877,
+                    "localZ": 99.095947265625
+                },
+                {
+                    "sectorX": 147,
+                    "sectorZ": 88,
+                    "localX": 470.83697509765627,
+                    "localZ": 33.031982421875
+                },
+                {
+                    "sectorX": 147,
+                    "sectorZ": 86,
+                    "localX": 470.83697509765627,
+                    "localZ": 478.968017578125
+                },
+                {
+                    "sectorX": 149,
+                    "sectorZ": 85,
+                    "localX": 20.581512451171876,
+                    "localZ": 412.904052734375
+                },
+                {
+                    "sectorX": 149,
+                    "sectorZ": 84,
+                    "localX": 20.581512451171876,
+                    "localZ": 346.83740234375
+                },
+                {
+                    "sectorX": 150,
+                    "sectorZ": 83,
+                    "localX": 82.33285522460938,
+                    "localZ": 280.7734375
+                },
+                {
+                    "sectorX": 150,
+                    "sectorZ": 82,
+                    "localX": 82.33285522460938,
+                    "localZ": 214.70948791503907
+                },
+                {
+                    "sectorX": 151,
+                    "sectorZ": 81,
+                    "localX": 144.077392578125,
+                    "localZ": 148.64552307128907
+                },
+                {
+                    "sectorX": 151,
+                    "sectorZ": 80,
+                    "localX": 144.077392578125,
+                    "localZ": 82.58155822753906
+                },
+                {
+                    "sectorX": 152,
+                    "sectorZ": 79,
+                    "localX": 205.8287353515625,
+                    "localZ": 16.514923095703126
+                },
+                {
+                    "sectorX": 152,
+                    "sectorZ": 77,
+                    "localX": 205.8287353515625,
+                    "localZ": 462.4509582519531
+                },
+                {
+                    "sectorX": 153,
+                    "sectorZ": 76,
+                    "localX": 267.580078125,
+                    "localZ": 396.3869934082031
+                },
+                {
+                    "sectorX": 153,
+                    "sectorZ": 75,
+                    "localX": 267.580078125,
+                    "localZ": 330.3230285644531
+                }
+            ]
+        },
+        {
+            "roadId": "Road_hefei_jianye",
+            "fromNodeId": "hefei",
+            "toNodeId": "jianye",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 144,
+                    "sectorZ": 79,
+                    "localX": 285.5897521972656,
+                    "localZ": 16.514923095703126
+                },
+                {
+                    "sectorX": 145,
+                    "sectorZ": 79,
+                    "localX": 347.33428955078127,
+                    "localZ": 16.514923095703126
+                },
+                {
+                    "sectorX": 146,
+                    "sectorZ": 79,
+                    "localX": 409.08563232421877,
+                    "localZ": 16.514923095703126
+                },
+                {
+                    "sectorX": 147,
+                    "sectorZ": 77,
+                    "localX": 470.83697509765627,
+                    "localZ": 462.4509582519531
+                },
+                {
+                    "sectorX": 149,
+                    "sectorZ": 77,
+                    "localX": 20.581512451171876,
+                    "localZ": 462.4509582519531
+                },
+                {
+                    "sectorX": 150,
+                    "sectorZ": 76,
+                    "localX": 82.33285522460938,
+                    "localZ": 396.3869934082031
+                },
+                {
+                    "sectorX": 151,
+                    "sectorZ": 76,
+                    "localX": 144.077392578125,
+                    "localZ": 396.3869934082031
+                },
+                {
+                    "sectorX": 152,
+                    "sectorZ": 75,
+                    "localX": 205.8287353515625,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 153,
+                    "sectorZ": 75,
+                    "localX": 267.580078125,
+                    "localZ": 330.3230285644531
+                }
+            ]
+        },
+        {
+            "roadId": "Road_jianye_chibi",
+            "fromNodeId": "jianye",
+            "toNodeId": "chibi",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 153,
+                    "sectorZ": 75,
+                    "localX": 267.580078125,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 152,
+                    "sectorZ": 75,
+                    "localX": 205.8287353515625,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 151,
+                    "sectorZ": 75,
+                    "localX": 144.077392578125,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 150,
+                    "sectorZ": 75,
+                    "localX": 82.33285522460938,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 149,
+                    "sectorZ": 75,
+                    "localX": 20.581512451171876,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 147,
+                    "sectorZ": 75,
+                    "localX": 470.83697509765627,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 146,
+                    "sectorZ": 75,
+                    "localX": 409.08563232421877,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 145,
+                    "sectorZ": 75,
+                    "localX": 347.33428955078127,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 144,
+                    "sectorZ": 74,
+                    "localX": 285.5897521972656,
+                    "localZ": 264.2590637207031
+                },
+                {
+                    "sectorX": 143,
+                    "sectorZ": 74,
+                    "localX": 223.83840942382813,
+                    "localZ": 264.2590637207031
+                },
+                {
+                    "sectorX": 142,
+                    "sectorZ": 73,
+                    "localX": 162.08706665039063,
+                    "localZ": 198.1924285888672
+                },
+                {
+                    "sectorX": 141,
+                    "sectorZ": 73,
+                    "localX": 100.342529296875,
+                    "localZ": 198.1924285888672
+                },
+                {
+                    "sectorX": 140,
+                    "sectorZ": 72,
+                    "localX": 38.5911865234375,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 138,
+                    "sectorZ": 72,
+                    "localX": 488.8466491699219,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 137,
+                    "sectorZ": 71,
+                    "localX": 427.0953063964844,
+                    "localZ": 66.06449890136719
+                },
+                {
+                    "sectorX": 136,
+                    "sectorZ": 71,
+                    "localX": 365.3439636230469,
+                    "localZ": 66.06449890136719
+                },
+                {
+                    "sectorX": 135,
+                    "sectorZ": 70,
+                    "localX": 303.59942626953127,
+                    "localZ": 0.0005340576171875
+                },
+                {
+                    "sectorX": 134,
+                    "sectorZ": 70,
+                    "localX": 241.84808349609376,
+                    "localZ": 0.0005340576171875
+                },
+                {
+                    "sectorX": 133,
+                    "sectorZ": 70,
+                    "localX": 180.10354614257813,
+                    "localZ": 0.0005340576171875
+                },
+                {
+                    "sectorX": 132,
+                    "sectorZ": 68,
+                    "localX": 118.35220336914063,
+                    "localZ": 445.93658447265627
+                },
+                {
+                    "sectorX": 131,
+                    "sectorZ": 68,
+                    "localX": 56.600860595703128,
+                    "localZ": 445.93658447265627
+                },
+                {
+                    "sectorX": 129,
+                    "sectorZ": 67,
+                    "localX": 506.8563232421875,
+                    "localZ": 379.86993408203127
+                },
+                {
+                    "sectorX": 128,
+                    "sectorZ": 67,
+                    "localX": 445.10498046875,
+                    "localZ": 379.86993408203127
+                },
+                {
+                    "sectorX": 127,
+                    "sectorZ": 66,
+                    "localX": 383.3536376953125,
+                    "localZ": 313.80596923828127
+                },
+                {
+                    "sectorX": 126,
+                    "sectorZ": 66,
+                    "localX": 321.6091003417969,
+                    "localZ": 313.80596923828127
+                },
+                {
+                    "sectorX": 125,
+                    "sectorZ": 65,
+                    "localX": 259.8577575683594,
+                    "localZ": 247.74200439453126
+                },
+                {
+                    "sectorX": 124,
+                    "sectorZ": 65,
+                    "localX": 198.11322021484376,
+                    "localZ": 247.74200439453126
+                },
+                {
+                    "sectorX": 123,
+                    "sectorZ": 64,
+                    "localX": 136.36187744140626,
+                    "localZ": 181.67803955078126
+                },
+                {
+                    "sectorX": 122,
+                    "sectorZ": 64,
+                    "localX": 74.61053466796875,
+                    "localZ": 181.67803955078126
+                }
+            ]
+        },
+        {
+            "roadId": "Road_xiangyang_chibi",
+            "fromNodeId": "xiangyang",
+            "toNodeId": "chibi",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 113,
+                    "sectorZ": 75,
+                    "localX": 92.62020874023438,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 114,
+                    "sectorZ": 74,
+                    "localX": 154.37155151367188,
+                    "localZ": 264.2590637207031
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 73,
+                    "localX": 216.12289428710938,
+                    "localZ": 198.1924285888672
+                },
+                {
+                    "sectorX": 116,
+                    "sectorZ": 72,
+                    "localX": 277.867431640625,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 117,
+                    "sectorZ": 71,
+                    "localX": 339.6187744140625,
+                    "localZ": 66.06449890136719
+                },
+                {
+                    "sectorX": 118,
+                    "sectorZ": 70,
+                    "localX": 401.3701171875,
+                    "localZ": 0.0005340576171875
+                },
+                {
+                    "sectorX": 118,
+                    "sectorZ": 68,
+                    "localX": 401.3701171875,
+                    "localZ": 445.93658447265627
+                },
+                {
+                    "sectorX": 119,
+                    "sectorZ": 67,
+                    "localX": 463.1146545410156,
+                    "localZ": 379.86993408203127
+                },
+                {
+                    "sectorX": 121,
+                    "sectorZ": 66,
+                    "localX": 12.865997314453125,
+                    "localZ": 313.80596923828127
+                },
+                {
+                    "sectorX": 122,
+                    "sectorZ": 65,
+                    "localX": 74.61053466796875,
+                    "localZ": 247.74200439453126
+                },
+                {
+                    "sectorX": 122,
+                    "sectorZ": 64,
+                    "localX": 74.61053466796875,
+                    "localZ": 181.67803955078126
+                }
+            ]
+        },
+        {
+            "roadId": "Road_xiangyang_yongan",
+            "fromNodeId": "xiangyang",
+            "toNodeId": "yongan",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 113,
+                    "sectorZ": 75,
+                    "localX": 92.62020874023438,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 112,
+                    "sectorZ": 75,
+                    "localX": 30.87567138671875,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 110,
+                    "sectorZ": 75,
+                    "localX": 481.12432861328127,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 109,
+                    "sectorZ": 75,
+                    "localX": 419.37640380859377,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 108,
+                    "sectorZ": 75,
+                    "localX": 357.6284484863281,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 107,
+                    "sectorZ": 75,
+                    "localX": 295.8804931640625,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 106,
+                    "sectorZ": 75,
+                    "localX": 234.12916564941407,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 105,
+                    "sectorZ": 75,
+                    "localX": 172.3812255859375,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 104,
+                    "sectorZ": 75,
+                    "localX": 110.63328552246094,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 103,
+                    "sectorZ": 75,
+                    "localX": 48.885345458984378,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 101,
+                    "sectorZ": 75,
+                    "localX": 499.1340026855469,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 100,
+                    "sectorZ": 74,
+                    "localX": 437.38604736328127,
+                    "localZ": 264.2590637207031
+                },
+                {
+                    "sectorX": 99,
+                    "sectorZ": 74,
+                    "localX": 375.63812255859377,
+                    "localZ": 264.2590637207031
+                },
+                {
+                    "sectorX": 98,
+                    "sectorZ": 73,
+                    "localX": 313.89019775390627,
+                    "localZ": 198.1924285888672
+                },
+                {
+                    "sectorX": 97,
+                    "sectorZ": 73,
+                    "localX": 252.14224243164063,
+                    "localZ": 198.1924285888672
+                },
+                {
+                    "sectorX": 96,
+                    "sectorZ": 72,
+                    "localX": 190.39089965820313,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 95,
+                    "sectorZ": 72,
+                    "localX": 128.64295959472657,
+                    "localZ": 132.1284637451172
+                }
+            ]
+        },
+        {
+            "roadId": "Road_chibi_changsha",
+            "fromNodeId": "chibi",
+            "toNodeId": "changsha",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 122,
+                    "sectorZ": 64,
+                    "localX": 74.61053466796875,
+                    "localZ": 181.67803955078126
+                },
+                {
+                    "sectorX": 122,
+                    "sectorZ": 63,
+                    "localX": 74.61053466796875,
+                    "localZ": 115.61407470703125
+                },
+                {
+                    "sectorX": 121,
+                    "sectorZ": 62,
+                    "localX": 12.865997314453125,
+                    "localZ": 49.54743957519531
+                },
+                {
+                    "sectorX": 121,
+                    "sectorZ": 60,
+                    "localX": 12.865997314453125,
+                    "localZ": 495.48345947265627
+                },
+                {
+                    "sectorX": 119,
+                    "sectorZ": 59,
+                    "localX": 463.1146545410156,
+                    "localZ": 429.41949462890627
+                },
+                {
+                    "sectorX": 119,
+                    "sectorZ": 58,
+                    "localX": 463.1146545410156,
+                    "localZ": 363.35552978515627
+                },
+                {
+                    "sectorX": 118,
+                    "sectorZ": 57,
+                    "localX": 401.3701171875,
+                    "localZ": 297.29156494140627
+                },
+                {
+                    "sectorX": 118,
+                    "sectorZ": 56,
+                    "localX": 401.3701171875,
+                    "localZ": 231.22494506835938
+                },
+                {
+                    "sectorX": 117,
+                    "sectorZ": 55,
+                    "localX": 339.6187744140625,
+                    "localZ": 165.16098022460938
+                },
+                {
+                    "sectorX": 117,
+                    "sectorZ": 54,
+                    "localX": 339.6187744140625,
+                    "localZ": 99.09701538085938
+                }
+            ]
+        },
+        {
+            "roadId": "Road_changsha_nanhai",
+            "fromNodeId": "changsha",
+            "toNodeId": "nanhai",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 117,
+                    "sectorZ": 54,
+                    "localX": 339.6187744140625,
+                    "localZ": 99.09701538085938
+                },
+                {
+                    "sectorX": 116,
+                    "sectorZ": 53,
+                    "localX": 277.867431640625,
+                    "localZ": 33.033050537109378
+                },
+                {
+                    "sectorX": 115,
+                    "sectorZ": 51,
+                    "localX": 216.12289428710938,
+                    "localZ": 478.9664306640625
+                },
+                {
+                    "sectorX": 114,
+                    "sectorZ": 50,
+                    "localX": 154.37155151367188,
+                    "localZ": 412.9024658203125
+                },
+                {
+                    "sectorX": 113,
+                    "sectorZ": 49,
+                    "localX": 92.62020874023438,
+                    "localZ": 346.8385009765625
+                },
+                {
+                    "sectorX": 113,
+                    "sectorZ": 48,
+                    "localX": 92.62020874023438,
+                    "localZ": 280.7745361328125
+                },
+                {
+                    "sectorX": 112,
+                    "sectorZ": 47,
+                    "localX": 30.87567138671875,
+                    "localZ": 214.71055603027345
+                },
+                {
+                    "sectorX": 112,
+                    "sectorZ": 46,
+                    "localX": 30.87567138671875,
+                    "localZ": 148.6439208984375
+                },
+                {
+                    "sectorX": 110,
+                    "sectorZ": 45,
+                    "localX": 481.12432861328127,
+                    "localZ": 82.5799560546875
+                },
+                {
+                    "sectorX": 110,
+                    "sectorZ": 44,
+                    "localX": 481.12432861328127,
+                    "localZ": 16.5159912109375
+                },
+                {
+                    "sectorX": 110,
+                    "sectorZ": 42,
+                    "localX": 481.12432861328127,
+                    "localZ": 462.4520263671875
+                },
+                {
+                    "sectorX": 109,
+                    "sectorZ": 41,
+                    "localX": 419.37640380859377,
+                    "localZ": 396.38671875
+                },
+                {
+                    "sectorX": 108,
+                    "sectorZ": 40,
+                    "localX": 357.6284484863281,
+                    "localZ": 330.32275390625
+                },
+                {
+                    "sectorX": 108,
+                    "sectorZ": 39,
+                    "localX": 357.6284484863281,
+                    "localZ": 264.2574462890625
+                }
+            ]
+        },
+        {
+            "roadId": "Road_hanzhong_chengdu",
+            "fromNodeId": "hanzhong",
+            "toNodeId": "chengdu",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 87,
+                    "sectorZ": 88,
+                    "localX": 208.40057373046876,
+                    "localZ": 33.031982421875
+                },
+                {
+                    "sectorX": 86,
+                    "sectorZ": 86,
+                    "localX": 146.6526336669922,
+                    "localZ": 478.968017578125
+                },
+                {
+                    "sectorX": 85,
+                    "sectorZ": 85,
+                    "localX": 84.90469360351563,
+                    "localZ": 412.904052734375
+                },
+                {
+                    "sectorX": 84,
+                    "sectorZ": 84,
+                    "localX": 23.156753540039064,
+                    "localZ": 346.83740234375
+                },
+                {
+                    "sectorX": 82,
+                    "sectorZ": 83,
+                    "localX": 473.4053955078125,
+                    "localZ": 280.7734375
+                },
+                {
+                    "sectorX": 81,
+                    "sectorZ": 82,
+                    "localX": 411.657470703125,
+                    "localZ": 214.70948791503907
+                },
+                {
+                    "sectorX": 80,
+                    "sectorZ": 81,
+                    "localX": 349.9095458984375,
+                    "localZ": 148.64552307128907
+                },
+                {
+                    "sectorX": 79,
+                    "sectorZ": 80,
+                    "localX": 288.1615905761719,
+                    "localZ": 82.58155822753906
+                },
+                {
+                    "sectorX": 78,
+                    "sectorZ": 79,
+                    "localX": 226.4136505126953,
+                    "localZ": 16.514923095703126
+                },
+                {
+                    "sectorX": 77,
+                    "sectorZ": 77,
+                    "localX": 164.6623077392578,
+                    "localZ": 462.4509582519531
+                },
+                {
+                    "sectorX": 76,
+                    "sectorZ": 76,
+                    "localX": 102.91436767578125,
+                    "localZ": 396.3869934082031
+                },
+                {
+                    "sectorX": 75,
+                    "sectorZ": 75,
+                    "localX": 41.16642761230469,
+                    "localZ": 330.3230285644531
+                },
+                {
+                    "sectorX": 73,
+                    "sectorZ": 74,
+                    "localX": 491.4184875488281,
+                    "localZ": 264.2590637207031
+                },
+                {
+                    "sectorX": 72,
+                    "sectorZ": 73,
+                    "localX": 429.6671447753906,
+                    "localZ": 198.1924285888672
+                },
+                {
+                    "sectorX": 72,
+                    "sectorZ": 72,
+                    "localX": 429.6671447753906,
+                    "localZ": 132.1284637451172
+                }
+            ]
+        },
+        {
+            "roadId": "Road_chengdu_yongan",
+            "fromNodeId": "chengdu",
+            "toNodeId": "yongan",
+            "roadWidth": 8.5,
+            "points": [
+                {
+                    "sectorX": 72,
+                    "sectorZ": 72,
+                    "localX": 429.6671447753906,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 73,
+                    "sectorZ": 72,
+                    "localX": 491.4184875488281,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 75,
+                    "sectorZ": 72,
+                    "localX": 41.16642761230469,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 76,
+                    "sectorZ": 72,
+                    "localX": 102.91436767578125,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 77,
+                    "sectorZ": 72,
+                    "localX": 164.6623077392578,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 78,
+                    "sectorZ": 72,
+                    "localX": 226.4136505126953,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 79,
+                    "sectorZ": 72,
+                    "localX": 288.1615905761719,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 80,
+                    "sectorZ": 72,
+                    "localX": 349.9095458984375,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 81,
+                    "sectorZ": 72,
+                    "localX": 411.657470703125,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 82,
+                    "sectorZ": 72,
+                    "localX": 473.4053955078125,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 84,
+                    "sectorZ": 72,
+                    "localX": 23.156753540039064,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 85,
+                    "sectorZ": 72,
+                    "localX": 84.90469360351563,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 86,
+                    "sectorZ": 72,
+                    "localX": 146.6526336669922,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 87,
+                    "sectorZ": 72,
+                    "localX": 208.40057373046876,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 88,
+                    "sectorZ": 72,
+                    "localX": 270.15191650390627,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 89,
+                    "sectorZ": 72,
+                    "localX": 331.89984130859377,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 90,
+                    "sectorZ": 72,
+                    "localX": 393.6477966308594,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 91,
+                    "sectorZ": 72,
+                    "localX": 455.395751953125,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 93,
+                    "sectorZ": 72,
+                    "localX": 5.1470794677734379,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 94,
+                    "sectorZ": 72,
+                    "localX": 66.89501953125,
+                    "localZ": 132.1284637451172
+                },
+                {
+                    "sectorX": 95,
+                    "sectorZ": 72,
+                    "localX": 128.64295959472657,
+                    "localZ": 132.1284637451172
+                }
+            ]
+        }
+    ],
+    "rivers": [
+        {
+            "riverId": "yellow_river",
+            "displayName": "황하 (Yellow River)",
+            "riverWidth": 36.0,
+            "riverDepth": 4.0,
+            "points": [
+                {
+                    "sectorX": 53,
+                    "sectorZ": 94,
+                    "localX": 266.2393798828125,
+                    "localZ": 245.79074096679688
+                },
+                {
+                    "sectorX": 71,
+                    "sectorZ": 94,
+                    "localX": 184.31918334960938,
+                    "localZ": 245.79074096679688
+                },
+                {
+                    "sectorX": 89,
+                    "sectorZ": 120,
+                    "localX": 102.40068054199219,
+                    "localZ": 207.86224365234376
+                },
+                {
+                    "sectorX": 107,
+                    "sectorZ": 121,
+                    "localX": 20.478775024414064,
+                    "localZ": 334.03973388671877
+                },
+                {
+                    "sectorX": 124,
+                    "sectorZ": 119,
+                    "localX": 450.5602722167969,
+                    "localZ": 209.32452392578126
+                },
+                {
+                    "sectorX": 144,
+                    "sectorZ": 96,
+                    "localX": 486.39727783203127,
+                    "localZ": 498.140380859375
+                }
+            ]
+        },
+        {
+            "riverId": "yangtze_river",
+            "displayName": "장강 (Yangtze River)",
+            "riverWidth": 44.0,
+            "riverDepth": 4.800000190734863,
+            "points": [
+                {
+                    "sectorX": 62,
+                    "sectorZ": 83,
+                    "localX": 225.28013610839845,
+                    "localZ": 453.28741455078127
+                },
+                {
+                    "sectorX": 80,
+                    "sectorZ": 57,
+                    "localX": 143.36163330078126,
+                    "localZ": 363.57879638671877
+                },
+                {
+                    "sectorX": 100,
+                    "sectorZ": 79,
+                    "localX": 179.19863891601563,
+                    "localZ": 76.21722412109375
+                },
+                {
+                    "sectorX": 120,
+                    "sectorZ": 80,
+                    "localX": 215.04244995117188,
+                    "localZ": 202.3920440673828
+                },
+                {
+                    "sectorX": 140,
+                    "sectorZ": 57,
+                    "localX": 250.87945556640626,
+                    "localZ": 363.57879638671877
+                },
+                {
+                    "sectorX": 158,
+                    "sectorZ": 67,
+                    "localX": 168.95755004882813,
+                    "localZ": 476.6278076171875
+                }
+            ]
+        },
+        {
+            "riverId": "pearl_river",
+            "displayName": "주강 (Pearl River)",
+            "riverWidth": 28.0,
+            "riverDepth": 3.200000047683716,
+            "points": [
+                {
+                    "sectorX": 75,
+                    "sectorZ": 40,
+                    "localX": 419.84039306640627,
+                    "localZ": 133.10595703125
+                },
+                {
+                    "sectorX": 91,
+                    "sectorZ": 27,
+                    "localX": 220.1595916748047,
+                    "localZ": 407.3390808105469
+                },
+                {
+                    "sectorX": 107,
+                    "sectorZ": 39,
+                    "localX": 20.478775024414064,
+                    "localZ": 134.56423950195313
+                },
+                {
+                    "sectorX": 120,
+                    "sectorZ": 43,
+                    "localX": 215.04244995117188,
+                    "localZ": 384.0
+                },
+                {
+                    "sectorX": 131,
+                    "sectorZ": 43,
+                    "localX": 291.8370056152344,
+                    "localZ": 384.0
+                }
+            ]
+        }
+    ],
+    "forests": []
+}

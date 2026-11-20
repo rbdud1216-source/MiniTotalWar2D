@@ -39,6 +39,11 @@ public class SquadSpawnConfig
 
     [Tooltip("개별 유닛 프리팹 (지정하지 않으면 병과 및 진영 기본 프리팹 사용)")]
     public GameObject customUnitPrefab = null;
+
+    [Header("캠페인/멀티 지휘 권한")]
+    public uint squadNetId = 0;
+    public byte ownerPlayerId = 0;
+    public MiniTotalWar.OpenWorld.SquadAuthorityMode authorityMode = MiniTotalWar.OpenWorld.SquadAuthorityMode.PlayerDirect;
 }
 
 /// <summary>
@@ -52,6 +57,10 @@ public class BattleManager : MonoBehaviour
     [Header("1. 초고성능 순수 ECS 시뮬레이션 모드")]
     [Tooltip("체크 시 유니티 GameObject 생성을 배제하고 순수 GPU 인스턴싱 ECS 엔티티로 5만 기 시뮬레이션을 구동합니다.")]
     public bool usePureECS = false;
+
+    [Header("🌐 오픈월드 부트스트랩 제어")]
+    [Tooltip("체크 시 Start()에서 즉시 스폰하지 않고 BattleLoadingSequence가 3x3 지형 스트리밍 완료 후 스폰합니다.")]
+    public bool deferAutoSpawnToExternalLoader = false;
 
     [Header("2. 기본 유닛 및 부대 프리팹 설정")]
     [Tooltip("플레이어 기본 근접 보병 유닛 프리팹")]
@@ -128,6 +137,8 @@ public class BattleManager : MonoBehaviour
 
     private readonly List<Squad> allSquads = new List<Squad>();
     private readonly List<Unit> unassignedUnits = new List<Unit>();
+    private uint nextPlayerSquadNetId = 1001;
+    private uint nextEnemySquadNetId = 2001;
 
     public IReadOnlyList<Squad> GetAllSquads() => allSquads;
 
@@ -200,7 +211,28 @@ public class BattleManager : MonoBehaviour
 
     private void Start()
     {
-        SpawnBattleScenario();
+        if (!deferAutoSpawnToExternalLoader)
+        {
+            SpawnBattleScenario();
+        }
+    }
+
+    /// <summary>
+    /// 오픈월드 전투 부트스트랩이 3x3 지형 스트리밍 후 교전 중심 좌표와 대치 방위를 동적으로 설정합니다.
+    /// </summary>
+    public void ConfigureEncounterSpawn(Vector3 playerCenter, float playerYaw, Vector3 enemyCenter, float enemyYaw)
+    {
+        playerSpawnCenter = playerCenter;
+        playerFacingAngle = playerYaw;
+        enemySpawnCenter = enemyCenter;
+        enemyFacingAngle = enemyYaw;
+
+        if (DeploymentZoneManager.Instance != null)
+        {
+            DeploymentZoneManager.Instance.playerZoneCenter = playerCenter;
+            DeploymentZoneManager.Instance.enemyZoneCenter = enemyCenter;
+            DeploymentZoneManager.Instance.UpdateZoneVisuals();
+        }
     }
 
     #region 3D 다중 유닛 및 군단 스폰
@@ -210,6 +242,8 @@ public class BattleManager : MonoBehaviour
     public void SpawnBattleScenario()
     {
         allSquads.Clear();
+        nextPlayerSquadNetId = 1001;
+        nextEnemySquadNetId = 2001;
 
         if (usePureECS)
         {
@@ -290,7 +324,10 @@ public class BattleManager : MonoBehaviour
                     columns = card.columns > 0 ? card.columns : 15,
                     formationType = card.formationType,
                     unitType = uType,
-                    customUnitPrefab = customPrefab
+                    customUnitPrefab = customPrefab,
+                    squadNetId = card.persistentSquadNetId,
+                    ownerPlayerId = isPlayer ? card.ownerPlayerId : (byte)255,
+                    authorityMode = isPlayer ? card.authorityMode : MiniTotalWar.OpenWorld.SquadAuthorityMode.AIDelegated
                 };
                 list.Add(cfg);
             }
@@ -517,6 +554,11 @@ public class BattleManager : MonoBehaviour
         int cols = Mathf.Max(1, config.columns);
         squad.squadName = !string.IsNullOrEmpty(config.squadName) ? config.squadName : (isPlayer ? "아군 부대" : "적군 부대");
         squad.isPlayer = isPlayer;
+        squad.squadNetId = (config.squadNetId != 0)
+            ? config.squadNetId
+            : (isPlayer ? nextPlayerSquadNetId++ : nextEnemySquadNetId++);
+        squad.ownerPlayerId = isPlayer ? config.ownerPlayerId : (byte)255;
+        squad.authorityMode = isPlayer ? config.authorityMode : MiniTotalWar.OpenWorld.SquadAuthorityMode.AIDelegated;
         squad.currentColumns = cols;
         squad.currentFormationType = config.formationType;
         squad.unitType = config.unitType;
@@ -963,4 +1005,5 @@ public class BattleManager : MonoBehaviour
         }
     }
     #endregion
-}
+}
+

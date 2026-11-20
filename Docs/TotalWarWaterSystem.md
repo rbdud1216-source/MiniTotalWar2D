@@ -19,12 +19,14 @@
 
 ```
 TotalWar Battlefield Water System
- ├── 1. URP 수면 셰이더 파이프라인 (TotalWarWater.shader)
- │    ├── 카메라 씬 뎁스(SampleSceneDepth) 기반 수심 연산
- │    ├── 수심 페이드 (ShallowColor -> DeepColor)
- │    ├── 2단 법선 스크롤(Wave Speed 1, 2) 및 절차적 사인파 잔물결
- │    ├── 연안 접안선 파도 거품 (Edge Foam)
- │    └── URP 메인 라이트 스펙큘러 및 프레넬(Fresnel) 반사
+ ├── 1. URP 실사 물리 수면 셰이더 파이프라인 (TotalWarWater.shader & TotalWarWaterShaderGUI.cs)
+ │    ├── URP Depth Texture + Opaque Texture 활성화 기반 실제 수직 수심 & 화면 공간 굴절 (Refraction)
+ │    ├── Beer-Lambert RGB 물리 광흡수 & 물가 젖은 바닥 어두움 (Wet Bank Darkening)
+ │    ├── 4파 Gerstner 입체 버텍스 파도 + TotalWarWindManager 강풍·태풍 실시간 연동
+ │    ├── 3중 계층 해석적 절차적 물결 노멀 (Macro/Mid/Micro) + 강물 듀얼 페이즈 유속 흐름 (Dual-Phase Flow)
+ │    ├── 수중 보로노이 커스틱스 빛망울 (Caustics) & 파도 햇살 투과광 (SSS)
+ │    ├── 동적 연안 밀려듦 파도 포말 (Rolling Shoreline Foam) & 강풍 흰파도 (Whitecaps)
+ │    └── URP 실시간 그림자 수신, Schlick 프레넬 반사, 이중 태양 스펙큘러 반짝임 & 겨울 빙해 연동
  │
  ├── 2. 전역 바다 & 대형 호수 수면 평면 (TotalWarSeaPlane.cs)
  │    ├── 전역 수위 평면(waterLevelY) 및 터레인 맞춤 메쉬 생성

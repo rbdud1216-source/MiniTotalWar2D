@@ -38,8 +38,18 @@ public class TotalWarSeaPlane : MonoBehaviour
     [Tooltip("수면 평면이 터레인 외곽으로 확장되는 여유 반경 (미터)")]
     public float seaMargin = 200f;
 
+    [Header("🌐 오픈월드 무한 대양 추적 (Open World Ocean)")]
+    [Tooltip("활성화 시 런타임에 카메라 위치를 따라 대양 평면을 스냅 이동시킵니다.")]
+    public bool followTargetCamera = false;
+
+    [Tooltip("대양 평면 추적 시 UV/파도 떨림 방지를 위한 격자 스냅 간격 (미터)")]
+    public float cameraSnapStep = 32f;
+
     [Header("🎨 수면 머티리얼 (Water Material)")]
     public Material waterMaterial;
+
+    private static readonly int WindVectorGlobalID = Shader.PropertyToID("_TotalWarWindVector");
+    private static readonly int WindParamsGlobalID = Shader.PropertyToID("_TotalWarWindParams");
 
     [Header("⚙️ 렌더러 참조")]
     [SerializeField] private MeshFilter meshFilter;
@@ -57,10 +67,27 @@ public class TotalWarSeaPlane : MonoBehaviour
     {
         _instance = this;
         ApplyWaterLevelPosition();
+
+        // Gerstner 입체 파도를 위해 구버전 저해상도 메쉬(32x32 등)라면 128x128 고밀도 그리드로 자동 업그레이드
+        if (meshFilter == null) meshFilter = GetComponent<MeshFilter>();
+        if (meshFilter != null && (meshFilter.sharedMesh == null || meshFilter.sharedMesh.vertexCount < 8000))
+        {
+            GenerateSeaPlane();
+        }
     }
 
     private void Update()
     {
+        if (followTargetCamera && Application.isPlaying && Camera.main != null)
+        {
+            Vector3 camPos = Camera.main.transform.position;
+            float step = Mathf.Max(1f, cameraSnapStep);
+            float snapX = Mathf.Round(camPos.x / step) * step;
+            float snapZ = Mathf.Round(camPos.z / step) * step;
+            transform.position = new Vector3(snapX, waterLevelY, snapZ);
+            return;
+        }
+
         // 에디터 및 런타임에서 위치 동기화
         if (transform.position.y != waterLevelY)
         {
@@ -88,6 +115,114 @@ public class TotalWarSeaPlane : MonoBehaviour
             return Instance.waterLevelY;
         }
         return defaultLevel;
+    }
+
+    /// <summary>
+    /// 멀티 타일 오픈월드 전체 경계(Bounds)를 덮도록 대양 수면 평면의 위치와 메쉬 크기를 재구성합니다.
+    /// </summary>
+    public void ConfigureForWorldBounds(Bounds worldBounds)
+    {
+        float sizeX = Mathf.Max(512f, worldBounds.size.x + seaMargin * 2f);
+        float sizeZ = Mathf.Max(512f, worldBounds.size.z + seaMargin * 2f);
+        transform.position = new Vector3(worldBounds.center.x, waterLevelY, worldBounds.center.z);
+
+        if (meshFilter == null) meshFilter = GetComponent<MeshFilter>();
+        if (meshFilter == null) meshFilter = gameObject.AddComponent<MeshFilter>();
+        if (meshRenderer == null) meshRenderer = GetComponent<MeshRenderer>();
+        if (meshRenderer == null) meshRenderer = gameObject.AddComponent<MeshRenderer>();
+
+        EnsureWaterMaterial();
+        meshRenderer.sharedMaterial = waterMaterial;
+        meshFilter.sharedMesh = CreatePlaneMesh(sizeX, sizeZ, 128, 128);
+    }
+
+    /// <summary>
+    /// TotalWarWater.shader의 4파 Gerstner 버텍스 파도 공식과 1:1로 일치하는 CPU 파도 높이 및 표면 법선 계산기.
+    /// 군함/선박 부력, 갑판 기울기(Pitch/Roll) 및 탄착 물기둥 높이 산출에 사용됩니다.
+    /// </summary>
+    public bool SampleWaveHeightAndNormal(Vector3 worldPos, out float waveHeightY, out Vector3 waveNormal)
+    {
+        waveHeightY = waterLevelY;
+        waveNormal = Vector3.up;
+
+        Vector4 windParams = Shader.GetGlobalVector(WindParamsGlobalID);
+        Vector4 windVec = Shader.GetGlobalVector(WindVectorGlobalID);
+
+        bool hasWindMgr = windParams.w > 0.5f;
+        Vector2 rawWindVec = new Vector2(windVec.x, windVec.y);
+        float rawWindLen = rawWindVec.magnitude;
+        Vector2 windDir = (rawWindLen > 0.001f) ? (rawWindVec / rawWindLen) : new Vector2(0.76f, 0.65f).normalized;
+        float windMag = hasWindMgr ? Mathf.Clamp(rawWindLen, 0.0f, 10.0f) : 0.45f;
+        float windWaveScale = hasWindMgr ? Mathf.Lerp(0.18f, 2.20f, Mathf.Clamp01(windMag / 6.0f)) : 0.60f;
+        float t = Application.isPlaying ? Time.time : 0f;
+        float waveTime = t * (0.75f + Mathf.Clamp01(windMag / 8.0f) * 1.15f);
+
+        float flowMode = 0f;
+        float gerstnerAmp = 0.09f;
+        float waveChoppiness = 0.32f;
+        if (waterMaterial != null)
+        {
+            if (waterMaterial.HasProperty("_FlowMode")) flowMode = waterMaterial.GetFloat("_FlowMode");
+            if (waterMaterial.HasProperty("_GerstnerAmp")) gerstnerAmp = waterMaterial.GetFloat("_GerstnerAmp");
+            if (waterMaterial.HasProperty("_WaveChoppiness")) waveChoppiness = waterMaterial.GetFloat("_WaveChoppiness");
+        }
+
+        float openWaterMask = 1.0f - Mathf.Clamp01(flowMode);
+        float effAmp = gerstnerAmp * windWaveScale * openWaterMask;
+
+        if (effAmp <= 0.002f)
+        {
+            return true;
+        }
+
+        Vector2 perp = new Vector2(-windDir.y, windDir.x);
+        float chop = Mathf.Lerp(0.03f, 0.18f, waveChoppiness) * Mathf.Clamp01(effAmp * 3.0f);
+
+        Vector3 waveOffset = Vector3.zero;
+        Vector3 tangentX = new Vector3(1f, 0f, 0f);
+        Vector3 tangentZ = new Vector3(0f, 0f, 1f);
+        Vector2 posXZ = new Vector2(worldPos.x, worldPos.z);
+
+        EvaluateGerstnerWaveCpu(windDir, chop * 1.00f, 22.0f, 0.90f, posXZ, waveTime, ref waveOffset, ref tangentX, ref tangentZ);
+        EvaluateGerstnerWaveCpu((windDir * 0.8f + perp * 0.6f).normalized, chop * 0.70f, 14.5f, 1.00f, posXZ, waveTime, ref waveOffset, ref tangentX, ref tangentZ);
+        EvaluateGerstnerWaveCpu((windDir * 0.7f - perp * 0.7f).normalized, chop * 0.48f, 8.7f, 1.12f, posXZ, waveTime, ref waveOffset, ref tangentX, ref tangentZ);
+        EvaluateGerstnerWaveCpu((windDir * 0.3f + perp * 0.95f).normalized, chop * 0.30f, 5.3f, 1.22f, posXZ, waveTime, ref waveOffset, ref tangentX, ref tangentZ);
+
+        waveHeightY = waterLevelY + waveOffset.y * (effAmp * 2.0f);
+
+        Vector3 gerstnerNormal = Vector3.Cross(tangentZ, tangentX).normalized;
+        if (gerstnerNormal.y < 0f) gerstnerNormal = -gerstnerNormal;
+        waveNormal = Vector3.Lerp(Vector3.up, gerstnerNormal, Mathf.Clamp01(effAmp * 3.5f)).normalized;
+
+        return true;
+    }
+
+    private static void EvaluateGerstnerWaveCpu(
+        Vector2 dir,
+        float steepness,
+        float wavelength,
+        float speedMult,
+        Vector2 posXZ,
+        float time,
+        ref Vector3 offset,
+        ref Vector3 tangentX,
+        ref Vector3 tangentZ)
+    {
+        float k = 6.2831853f / Mathf.Max(0.5f, wavelength);
+        float c = Mathf.Sqrt(9.8f / k) * speedMult;
+        Vector2 d = dir.normalized;
+        float f = k * (Vector2.Dot(d, posXZ) - c * time);
+        float a = steepness / k;
+
+        float cosF = Mathf.Cos(f);
+        float sinF = Mathf.Sin(f);
+
+        offset.x += d.x * (a * cosF);
+        offset.y += a * sinF;
+        offset.z += d.y * (a * cosF);
+
+        tangentX += new Vector3(-d.x * d.x * (steepness * sinF), d.x * (steepness * cosF), -d.x * d.y * (steepness * sinF));
+        tangentZ += new Vector3(-d.x * d.y * (steepness * sinF), d.y * (steepness * cosF), -d.y * d.y * (steepness * sinF));
     }
 
     /// <summary>
@@ -122,8 +257,8 @@ public class TotalWarSeaPlane : MonoBehaviour
         EnsureWaterMaterial();
         meshRenderer.sharedMaterial = waterMaterial;
 
-        // 메쉬 생성 (가로세로 서브디비전이 있는 평면)
-        meshFilter.sharedMesh = CreatePlaneMesh(sizeX, sizeZ, 32, 32);
+        // 메쉬 생성 (Gerstner 입체 파도가 매끄럽게 출렁이도록 128x128 고밀도 평면 그리드 구축)
+        meshFilter.sharedMesh = CreatePlaneMesh(sizeX, sizeZ, 128, 128);
 
         Debug.Log($"[TotalWarSeaPlane] 전역 수면 평면 생성 완료! (크기: {sizeX:F0}x{sizeZ:F0}m, 수위: Y={waterLevelY:F1}m)");
     }

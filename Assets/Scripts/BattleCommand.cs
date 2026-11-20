@@ -18,7 +18,10 @@ public enum BattleCommandType
     ToggleLoose,        // 산개 대형 / 밀집 방진 토글
     ToggleStaggered,    // 엇갈린 대형 / 직렬 대형 토글
     AddWaypoint,        // 경유지 추가 (Shift 이동)
-    ClearWaypoints      // 경유지 초기화
+    ClearWaypoints,     // 경유지 초기화
+    AssignSquadOwner,   // 총사령관이 부대 지휘권을 장군/AI에게 할당·회수
+    SetAuthorityMode,   // 부대 지휘 모드(직접 조작 / AI 위임) 전환
+    RequestOffMapFireSupport // 타 지역 포병/함대 원거리 포격 요청
 }
 
 /// <summary>

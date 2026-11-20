@@ -708,7 +708,6 @@ public class TacticalForestZone : MonoBehaviour
                 main.maxParticles = Mathf.Max(8, Mathf.RoundToInt(60f * Mathf.Clamp(smokeScaleMultiplier, 0.2f, 2.0f) * Mathf.Lerp(0.4f, 1.4f, densityMult)));
 
                 var emission = ps.emission;
-                emission.rateOverTime = 16f * Mathf.Clamp(smokeScaleMultiplier, 0.5f, 2.5f) * Mathf.Lerp(0.85f, 1.35f, densityMult);
                 emission.rateOverTime = newRate;
 
                 var vfxCtrl = ps.GetComponentInParent<TotalWarFireVFXController>();
@@ -721,6 +720,15 @@ public class TacticalForestZone : MonoBehaviour
     /// 이전 버전과의 호환용 래퍼
     /// </summary>
     public void RefreshActiveSmokeDensity() => RefreshActiveSmokeVisuals();
+
+    /// <summary>
+    /// 외부 런타임 스트리밍 등에서 지정한 숲 지역 테마 프리셋을 적용합니다.
+    /// </summary>
+    public void ApplyThemePreset(ForestTheme newTheme)
+    {
+        theme = newTheme;
+        ApplyThemePreset();
+    }
 
     /// <summary>
     /// 지역 테마 프리셋 설정에 따른 체크박스 동기화
@@ -1944,12 +1952,10 @@ public class TacticalForestZone : MonoBehaviour
         float peakAlpha = Mathf.Clamp01(densityMult * 0.95f);
 
         main.startColor = new Color(startCol.r, startCol.g, startCol.b, peakAlpha);
-        main.maxParticles = (int)(60 * Mathf.Lerp(0.8f, 1.4f, densityMult));
         main.maxParticles = Mathf.Max(8, Mathf.RoundToInt(60f * Mathf.Clamp(scale, 0.2f, 2.0f) * Mathf.Lerp(0.4f, 1.4f, densityMult)));
 
         var emission = ps.emission;
         emission.enabled = true;
-        emission.rateOverTime = 16f * Mathf.Clamp(scale, 0.5f, 2.5f) * Mathf.Lerp(0.85f, 1.35f, densityMult);
         float rateScale = Mathf.Clamp(scale, 0.15f, 2.5f);
         emission.rateOverTime = 16f * rateScale * Mathf.Lerp(0.35f, 1.35f, densityMult);
 

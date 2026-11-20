@@ -180,17 +180,12 @@ public class TacticalWaterZone : MonoBehaviour
         }
     }
 
-    public bool Contains(Vector3 worldPos)
+    /// <summary>
+    /// 수평(XZ) 평면 기준으로 좌표가 구역 내부에 포함되는지 판정합니다.
+    /// </summary>
+    public bool ContainsXZ(Vector3 worldPos)
     {
         Vector3 center = transform.position;
-        float surfaceY = center.y + surfaceYOffset;
-
-        // 🌊 [높이 Y축 검사]: 공중(화살/비행체/높은 다리 위) 및 지하 판정 완전 배제
-        // 유닛의 발이 수면 근처([-waterDepth ~ +0.5m])에 닿아 있을 때만 물의 영향을 받음
-        float minY = surfaceY - waterDepth - 0.5f;
-        float maxY = surfaceY + 0.6f;
-        if (worldPos.y < minY || worldPos.y > maxY) return false;
-
         if (shape == ZoneShape.Circle)
         {
             float dx = worldPos.x - center.x;
@@ -204,6 +199,20 @@ public class TacticalWaterZone : MonoBehaviour
             float halfZ = boxSize.y * 0.5f;
             return Mathf.Abs(localPos.x) <= halfX && Mathf.Abs(localPos.z) <= halfZ;
         }
+    }
+
+    public bool Contains(Vector3 worldPos)
+    {
+        Vector3 center = transform.position;
+        float surfaceY = center.y + surfaceYOffset;
+
+        // 🌊 [높이 Y축 검사]: 공중(화살/비행체/높은 다리 위) 및 지하 판정 완전 배제
+        // 유닛의 발이 수면 근처([-waterDepth ~ +0.5m])에 닿아 있을 때만 물의 영향을 받음
+        float minY = surfaceY - waterDepth - 0.5f;
+        float maxY = surfaceY + 0.6f;
+        if (worldPos.y < minY || worldPos.y > maxY) return false;
+
+        return ContainsXZ(worldPos);
     }
 
     /// <summary>

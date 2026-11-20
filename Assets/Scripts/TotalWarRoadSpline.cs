@@ -376,25 +376,19 @@ public class TotalWarRoadSpline : MonoBehaviour
     }
 
     /// <summary>
-    /// 특정 월드 좌표가 도로 면적 내부(도로 폭 이내)에 위치하는지 정밀 판정
     /// 특정 월드 좌표가 도로 면적 내부(도로 폭 이내)에 위치하는지 정밀 판정 (Zero-Allocation)
     /// </summary>
     public bool Contains(Vector3 worldPos)
     {
-        List<Vector3> worldPoints = SampleSplinePointsWorld();
-        if (worldPoints.Count < 2) return false;
         EnsureSplineCache();
         if (_cachedWorldPoints.Count < 2) return false;
 
-        float halfWidth = roadWidth * 0.5f;
-        Vector3 cellPos = new Vector3(worldPos.x, 0f, worldPos.z);
         // 1단계: O(1) AABB 빠른 배제
         if (worldPos.x < _cacheMinX || worldPos.x > _cacheMaxX || worldPos.z < _cacheMinZ || worldPos.z > _cacheMaxZ)
         {
             return false;
         }
 
-        for (int i = 0; i < worldPoints.Count - 1; i++)
         float halfWidthSqr = _cachedHalfWidth * _cachedHalfWidth;
         float px = worldPos.x;
         float pz = worldPos.z;
@@ -402,10 +396,6 @@ public class TotalWarRoadSpline : MonoBehaviour
         int count = _cachedWorldPoints.Count;
         for (int i = 0; i < count - 1; i++)
         {
-            Vector3 pA = worldPoints[i];
-            Vector3 pB = worldPoints[i + 1];
-            Vector3 proj = ClosestPointOnSegmentXZ(cellPos, pA, pB, out float dist);
-            if (dist <= halfWidth)
             Vector3 pA = _cachedWorldPoints[i];
             Vector3 pB = _cachedWorldPoints[i + 1];
 
@@ -423,7 +413,6 @@ public class TotalWarRoadSpline : MonoBehaviour
             {
                 float projY = pA.y + (pB.y - pA.y) * t;
                 // 수직 높이 검사 (공중이나 지하 제외)
-                if (Mathf.Abs(worldPos.y - proj.y) <= 1.5f) return true;
                 if (Mathf.Abs(worldPos.y - projY) <= 1.5f) return true;
             }
         }
@@ -621,23 +610,16 @@ public class TotalWarRoadSpline : MonoBehaviour
         }
     }
 
-    private void EnsureRoadMaterial()
     private void EnsureRoadMaterial(bool forceDedicatedAsset = false)
     {
-        if (roadMaterial != null) return;
         NormalizeSurfaceType();
 
 #if UNITY_EDITOR
-        roadMaterial = AssetDatabase.LoadAssetAtPath<Material>(ROAD_MAT_PATH);
-        if (roadMaterial == null)
         string targetMatPath = GetMaterialPathForSurface(surfaceType);
         bool isLegacySharedMat = roadMaterial != null && AssetDatabase.GetAssetPath(roadMaterial) == ROAD_MAT_PATH;
         bool isWrongDedicatedMat = false;
         if (roadMaterial != null)
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            roadMaterial = new Material(shader);
-            roadMaterial.name = "TotalWarRoadMaterial";
             string currentPath = AssetDatabase.GetAssetPath(roadMaterial);
             if (!string.IsNullOrEmpty(currentPath) && currentPath.StartsWith("Assets/Materials/TotalWarRoad_") && currentPath != targetMatPath)
             {
@@ -645,9 +627,6 @@ public class TotalWarRoadSpline : MonoBehaviour
             }
         }
 
-            // 자갈 쇄석길 (Pebbles & Gravel) 설정
-            roadMaterial.color = Color.white;
-            if (roadMaterial.HasProperty("_Smoothness")) roadMaterial.SetFloat("_Smoothness", 0.1f);
         if (roadMaterial == null || forceDedicatedAsset || isLegacySharedMat || isWrongDedicatedMat)
         {
             Material dedicated = AssetDatabase.LoadAssetAtPath<Material>(targetMatPath);
@@ -667,9 +646,6 @@ public class TotalWarRoadSpline : MonoBehaviour
                 dedicated.color = Color.white;
                 if (dedicated.HasProperty("_Smoothness")) dedicated.SetFloat("_Smoothness", 0.1f);
 
-            // Pebbles_A 자갈 텍스처 및 노멀맵 바인딩
-            Texture2D pebbleTex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/TerrainSampleAssets/Textures/Terrain/Pebbles_A_BaseColor.tif");
-            if (pebbleTex != null) roadMaterial.mainTexture = pebbleTex;
                 if (surfaceType == RoadSurfaceType.Dirt)
                 {
                     Texture2D soilTex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/TerrainSampleAssets/Textures/Terrain/Soil_Rocks_BaseColor.tif");
@@ -703,11 +679,6 @@ public class TotalWarRoadSpline : MonoBehaviour
                     }
                 }
 
-            Texture2D pebbleNormal = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/TerrainSampleAssets/Textures/Terrain/Pebbles_A_Normal.tif");
-            if (pebbleNormal != null && roadMaterial.HasProperty("_BumpMap"))
-            {
-                roadMaterial.SetTexture("_BumpMap", pebbleNormal);
-                roadMaterial.EnableKeyword("_NORMALMAP");
                 if (!AssetDatabase.IsValidFolder("Assets/Materials"))
                 {
                     AssetDatabase.CreateFolder("Assets", "Materials");
@@ -716,12 +687,6 @@ public class TotalWarRoadSpline : MonoBehaviour
                 AssetDatabase.SaveAssets();
             }
 
-            if (!AssetDatabase.IsValidFolder("Assets/Materials"))
-            {
-                AssetDatabase.CreateFolder("Assets", "Materials");
-            }
-            AssetDatabase.CreateAsset(roadMaterial, ROAD_MAT_PATH);
-            AssetDatabase.SaveAssets();
             roadMaterial = dedicated;
             if (roadMeshRenderer != null) roadMeshRenderer.sharedMaterial = roadMaterial;
         }
@@ -861,7 +826,6 @@ public class TotalWarRoadSpline : MonoBehaviour
             return;
         }
 
-        EnsureRoadMaterial();
         EnsureRoadMaterial(true);
 
 #if UNITY_EDITOR
@@ -1091,7 +1055,6 @@ public class TotalWarRoadSpline : MonoBehaviour
         }
         tData.SetHeights(0, 0, smoothedHeights);
 
-        // 3. 황토 흙길(Layer 2) 스플랫맵 도색 - AABB 국소 루프
         // 3. 도로 스플랫맵 도색 - AABB 국소 루프
         PaintRoadSplatmapInternal(terrain, worldPoints, minWX, maxWX, minWZ, maxWZ, halfRoadWidth, totalRoadRadius);
 
@@ -1123,7 +1086,6 @@ public class TotalWarRoadSpline : MonoBehaviour
         if (layerCount <= 0) return;
 
         int targetLayer = Mathf.Clamp(roadLayerIndex, 0, layerCount - 1);
-        if (layerCount > 0)
         float[,,] alphas = tData.GetAlphamaps(0, 0, aRes, aRes);
 
         int minAY = Mathf.Clamp(Mathf.FloorToInt((minWZ - tPos.z) / tSize.z * (aRes - 1)), 0, aRes - 1);
@@ -1133,87 +1095,48 @@ public class TotalWarRoadSpline : MonoBehaviour
 
         for (int y = minAY; y <= maxAY; y++)
         {
-            float[,,] alphas = tData.GetAlphamaps(0, 0, aRes, aRes);
             float normY = (float)y / (aRes - 1);
             float worldZ = tPos.z + normY * tSize.z;
 
-            int minAY = Mathf.Clamp(Mathf.FloorToInt((minWZ - tPos.z) / tSize.z * (aRes - 1)), 0, aRes - 1);
-            int maxAY = Mathf.Clamp(Mathf.CeilToInt((maxWZ - tPos.z) / tSize.z * (aRes - 1)), 0, aRes - 1);
-            int minAX = Mathf.Clamp(Mathf.FloorToInt((minWX - tPos.x) / tSize.x * (aRes - 1)), 0, aRes - 1);
-            int maxAX = Mathf.Clamp(Mathf.CeilToInt((maxWX - tPos.x) / tSize.x * (aRes - 1)), 0, aRes - 1);
-
-            for (int y = minAY; y <= maxAY; y++)
             for (int x = minAX; x <= maxAX; x++)
             {
-                float normY = (float)y / (aRes - 1);
-                float worldZ = tPos.z + normY * tSize.z;
                 float normX = (float)x / (aRes - 1);
                 float worldX = tPos.x + normX * tSize.x;
                 Vector3 cellPos = new Vector3(worldX, 0, worldZ);
 
-                for (int x = minAX; x <= maxAX; x++)
                 float minDist = float.MaxValue;
                 for (int i = 0; i < worldPoints.Count - 1; i++)
                 {
-                    float normX = (float)x / (aRes - 1);
-                    float worldX = tPos.x + normX * tSize.x;
-                    Vector3 cellPos = new Vector3(worldX, 0, worldZ);
                     Vector3 pA = worldPoints[i];
                     Vector3 pB = worldPoints[i + 1];
                     ClosestPointOnSegmentXZ(cellPos, pA, pB, out float dist);
                     if (dist < minDist) minDist = dist;
                 }
 
-                    float minDist = float.MaxValue;
-                    for (int i = 0; i < worldPoints.Count - 1; i++)
-                    {
-                        Vector3 pA = worldPoints[i];
-                        Vector3 pB = worldPoints[i + 1];
-                        ClosestPointOnSegmentXZ(cellPos, pA, pB, out float dist);
-                        if (dist < minDist) minDist = dist;
-                    }
                 if (minDist <= halfRoadWidth)
                 {
+                    // 도로 중심: 지정 도로 레이어 100%
                     for (int l = 0; l < layerCount; l++) alphas[y, x, l] = 0f;
                     alphas[y, x, targetLayer] = 1.0f;
                 }
                 else if (minDist <= totalRoadRadius)
                 {
+                    // 갓길: 기존 지형과 도로의 자연스러운 그라데이션
                     float t = (minDist - halfRoadWidth) / shoulderWidth;
                     float dirtWeight = Mathf.SmoothStep(1.0f, 0.0f, t);
                     float baseWeight = 1.0f - dirtWeight;
 
-                    if (minDist <= halfRoadWidth)
                     for (int l = 0; l < layerCount; l++)
                     {
-                        // 도로 중심: 황토길 100%
-                        for (int l = 0; l < layerCount; l++) alphas[y, x, l] = 0f;
-                        alphas[y, x, targetLayer] = 1.0f;
                         if (l == targetLayer) alphas[y, x, l] = dirtWeight;
                         else alphas[y, x, l] = alphas[y, x, l] * baseWeight;
                     }
-                    else if (minDist <= totalRoadRadius)
-                    {
-                        // 갓길: 기존 잔디와 황토길의 자연스러운 그라데이션
-                        float t = (minDist - halfRoadWidth) / shoulderWidth;
-                        float dirtWeight = Mathf.SmoothStep(1.0f, 0.0f, t);
-                        float baseWeight = 1.0f - dirtWeight;
-
-                        for (int l = 0; l < layerCount; l++)
-                        {
-                            if (l == targetLayer) alphas[y, x, l] = dirtWeight;
-                            else alphas[y, x, l] = alphas[y, x, l] * baseWeight;
-                        }
-                    }
                 }
             }
-            tData.SetAlphamaps(0, 0, alphas);
         }
         tData.SetAlphamaps(0, 0, alphas);
     }
 
-        // 4. 도로 위 3D 잔디 100% 클리어링
-        ClearGrassAlongRoadAABB(terrain, worldPoints, minWX, maxWX, minWZ, maxWZ, totalRoadRadius);
     /// <summary>
     /// 터레인 팔레트/기후 재도색 후 기존 도로의 스플랫맵과 잔디 배제 영역만 보존 재적용
     /// </summary>
@@ -1222,12 +1145,9 @@ public class TotalWarRoadSpline : MonoBehaviour
         Terrain terrain = targetTerrain ?? Terrain.activeTerrain ?? Object.FindFirstObjectByType<Terrain>();
         if (terrain == null || terrain.terrainData == null) return;
 
-        // 5. 3D 리본 메쉬 지형에 맞게 리프레시
-        GenerateRoadMesh();
         List<Vector3> worldPoints = SampleSplinePointsWorld();
         if (worldPoints.Count < 2) return;
 
-        // 6. 씬 뷰 즉각 화면 갱신
         float totalRoadRadius = roadWidth * 0.5f + shoulderWidth;
         float halfRoadWidth = roadWidth * 0.5f;
 
@@ -1253,13 +1173,12 @@ public class TotalWarRoadSpline : MonoBehaviour
         ClearGrassAlongRoadAABB(terrain, worldPoints, minWX, maxWX, minWZ, maxWZ, totalRoadRadius);
         terrain.Flush();
 #if UNITY_EDITOR
-        EditorUtility.SetDirty(tData);
+        EditorUtility.SetDirty(terrain.terrainData);
         EditorUtility.SetDirty(terrain);
         SceneView.RepaintAll();
 #endif
     }
 
-        Debug.Log("[TotalWarRoadSpline] 🛣️ 도로 지형 자동 평탄화, 황토길 도색 및 잔디 클리어링 완료!");
     /// <summary>
     /// 씬 내 모든 활성 도로의 스플랫맵을 일괄 복원 (지형 페인팅 시 도로 초기화 방지)
     /// </summary>

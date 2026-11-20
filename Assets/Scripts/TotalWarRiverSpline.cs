@@ -63,6 +63,7 @@ public class TotalWarRiverSpline : MonoBehaviour
     public bool HasBackup => _hasBackup;
 
     private const string WATER_MAT_PATH = "Assets/TotalWar_ThreeKingdoms_Extracted/Materials/TotalWarWater.mat";
+    private const string RIVER_MAT_PATH = "Assets/TotalWar_ThreeKingdoms_Extracted/Materials/TotalWarRiverWater.mat";
 
     private static readonly List<TotalWarRiverSpline> activeRivers = new List<TotalWarRiverSpline>();
     public static IReadOnlyList<TotalWarRiverSpline> ActiveRivers => activeRivers;
@@ -156,6 +157,7 @@ public class TotalWarRiverSpline : MonoBehaviour
     {
         if (!activeRivers.Contains(this)) activeRivers.Add(this);
         InvalidateSplineCache();
+        EnsureRiverMaterial();
     }
 
     private void OnDisable()
@@ -164,40 +166,33 @@ public class TotalWarRiverSpline : MonoBehaviour
     }
 
     /// <summary>
-    /// 특정 월드 좌표가 하천 수면 영역 내부(강폭 및 수면 높이 범위)에 진입했는지 여부 정밀 판정
-    /// 특정 월드 좌표가 하천 수면 영역 내부(강폭 및 수면 높이 범위)에 진입했는지 여부 정밀 판정 (Zero-Allocation)
-    /// - 🌊 [Y축 높이 검사]: 공중(다리 위/화살 투사체) 및 지하 판정 완전 배제
+    /// 특정 월드 XZ 좌표가 강줄기 내부인지 검사하고 수면 높이(surfaceY), 코사인 U자 수심(depth), 유속 방향(flowDirection)을 산출합니다. (Zero-Allocation)
+    /// WorldWaterQueryAPI 및 군함 부력 조회에서 Y 높이와 무관하게 공용으로 호출됩니다.
     /// </summary>
-    public bool Contains(Vector3 worldPos)
+    public bool TrySampleRiverAt(Vector3 worldPos, out float surfaceY, out float depth, out Vector3 flowDirection)
     {
-        List<Vector3> worldPoints = SampleSplinePointsWorld();
-        if (worldPoints.Count < 2) return false;
+        surfaceY = 0f;
+        depth = 0f;
+        flowDirection = Vector3.forward;
+
         EnsureSplineCache();
         if (_cachedWorldPoints.Count < 2) return false;
 
-        float halfWidth = riverWidth * 0.5f;
-        Vector3 cellPos = new Vector3(worldPos.x, 0f, worldPos.z);
         // 1단계: O(1) AABB 빠른 배제
         if (worldPos.x < _cacheMinX || worldPos.x > _cacheMaxX || worldPos.z < _cacheMinZ || worldPos.z > _cacheMaxZ)
         {
             return false;
         }
 
-        float minDist = float.MaxValue;
-        Vector3 closestPt = Vector3.zero;
         float minDistSqr = float.MaxValue;
         float closestY = 0f;
+        Vector3 closestSegDir = Vector3.forward;
         float px = worldPos.x;
         float pz = worldPos.z;
 
-        for (int i = 0; i < worldPoints.Count - 1; i++)
         int count = _cachedWorldPoints.Count;
         for (int i = 0; i < count - 1; i++)
         {
-            Vector3 pA = worldPoints[i];
-            Vector3 pB = worldPoints[i + 1];
-            Vector3 proj = ClosestPointOnSegmentXZ(cellPos, pA, pB, out float dist);
-            if (dist < minDist)
             Vector3 pA = _cachedWorldPoints[i];
             Vector3 pB = _cachedWorldPoints[i + 1];
 
@@ -214,26 +209,46 @@ public class TotalWarRiverSpline : MonoBehaviour
 
             if (distSqr < minDistSqr)
             {
-                minDist = dist;
-                closestPt = proj;
                 minDistSqr = distSqr;
                 closestY = pA.y + (pB.y - pA.y) * t;
+                Vector3 seg = pB - pA;
+                seg.y = 0f;
+                if (seg.sqrMagnitude > 1e-6f)
+                {
+                    closestSegDir = seg.normalized;
+                }
             }
         }
 
-        if (minDist <= halfWidth)
         if (minDistSqr <= (_cachedHalfWidth * _cachedHalfWidth))
         {
-            float surfaceY = closestPt.y + surfaceYOffset;
-            float surfaceY = closestY + surfaceYOffset;
-            float minY = surfaceY - riverDepth - 0.5f;
-            float maxY = surfaceY + 0.6f;
-
-            // 공중(다리 위, 화살 투사체)이나 강바닥 밑 지하는 물의 영향을 받지 않음
-            return worldPos.y >= minY && worldPos.y <= maxY;
+            float dist = Mathf.Sqrt(minDistSqr);
+            float halfW = Mathf.Max(0.01f, _cachedHalfWidth);
+            surfaceY = closestY + surfaceYOffset;
+            depth = riverDepth * Mathf.Cos(Mathf.Clamp01(dist / halfW) * Mathf.PI * 0.5f);
+            flowDirection = closestSegDir;
+            return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// 특정 월드 좌표가 하천 수면 영역 내부(강폭 및 수면 높이 범위)에 진입했는지 여부 정밀 판정 (Zero-Allocation)
+    /// - 🌊 [Y축 높이 검사]: 공중(다리 위/화살 투사체) 및 지하 판정 완전 배제
+    /// </summary>
+    public bool Contains(Vector3 worldPos)
+    {
+        if (!TrySampleRiverAt(worldPos, out float surfaceY, out _, out _))
+        {
+            return false;
+        }
+
+        float minY = surfaceY - riverDepth - 0.5f;
+        float maxY = surfaceY + 0.6f;
+
+        // 공중(다리 위, 화살 투사체)이나 강바닥 밑 지하는 물의 영향을 받지 않음
+        return worldPos.y >= minY && worldPos.y <= maxY;
     }
 
     /// <summary>
@@ -741,20 +756,39 @@ public class TotalWarRiverSpline : MonoBehaviour
 
     public void EnsureRiverMaterial()
     {
-        if (riverMaterial != null) return;
-
 #if UNITY_EDITOR
-        riverMaterial = AssetDatabase.LoadAssetAtPath<Material>(WATER_MAT_PATH);
-        if (riverMaterial == null)
+        // 바다 공용 머티리얼(TotalWarWater.mat)에 묶여 있으면 강물 전용 머티리얼(TotalWarRiverWater.mat)로 자동 분리
+        bool isUsingOceanMat = riverMaterial != null && AssetDatabase.GetAssetPath(riverMaterial) == WATER_MAT_PATH;
+        if (riverMaterial != null && !isUsingOceanMat) return;
+
+        Material dedicatedRiver = AssetDatabase.LoadAssetAtPath<Material>(RIVER_MAT_PATH);
+        if (dedicatedRiver == null)
         {
             Shader s = Shader.Find("Universal Render Pipeline/TotalWarWater");
             if (s != null)
             {
-                riverMaterial = new Material(s);
-                string dir = System.IO.Path.GetDirectoryName(WATER_MAT_PATH);
+                dedicatedRiver = new Material(s);
+                dedicatedRiver.name = "TotalWarRiverWater";
+                dedicatedRiver.SetFloat("_FlowMode", 1f);
+                dedicatedRiver.SetFloat("_FlowSpeed", 0.55f);
+                dedicatedRiver.SetFloat("_Clarity", 7.5f);
+                dedicatedRiver.SetFloat("_WaveStrength", 0.20f);
+                dedicatedRiver.SetFloat("_FoamDistance", 0.08f);
+                dedicatedRiver.SetFloat("_FoamIntensity", 0.12f);
+                dedicatedRiver.SetColor("_ShallowColor", new Color(0.20f, 0.42f, 0.38f, 0.28f));
+                dedicatedRiver.SetColor("_DeepColor", new Color(0.06f, 0.22f, 0.26f, 0.94f));
+
+                string dir = System.IO.Path.GetDirectoryName(RIVER_MAT_PATH);
                 if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
-                AssetDatabase.CreateAsset(riverMaterial, WATER_MAT_PATH);
+                AssetDatabase.CreateAsset(dedicatedRiver, RIVER_MAT_PATH);
+                AssetDatabase.SaveAssets();
             }
+        }
+
+        if (dedicatedRiver != null)
+        {
+            riverMaterial = dedicatedRiver;
+            if (riverMeshRenderer != null) riverMeshRenderer.sharedMaterial = riverMaterial;
         }
 #endif
     }

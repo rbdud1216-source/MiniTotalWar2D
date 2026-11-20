@@ -205,10 +205,6 @@ namespace MiniTotalWar
             Item("🧡 주황 꽃이삭 다방향 군락 (Photo 3)", "TotalWar_FlowerCluster_OrangeSpikes_Photo3_Mesh.asset", "sbt_grass0_flower_base_colour.png", "shrub_grassclump_normal.png", 0.90f, 1.20f, 0.95f, 1.15f, 0.15f, 15, 30, 0.25f, -0.015f),
             Item("🌱 중원 온대 봄 지피 군락", "TotalWar_GrassCluster_Tem_Spring_Mesh.asset", "tem_grass_sp_base_colour.png", "shrub_grassclump_normal.png", 0.95f, 1.25f, 0.95f, 1.15f, 0.10f, 50, 85, 0.25f, -0.015f),
             Item("🌿 중원 온대 여름 지피 군락", "TotalWar_GrassCluster_Tem_Summer_Mesh.asset", "tem_grass_su_base_colour.png", "shrub_grassclump_normal.png", 0.95f, 1.25f, 0.95f, 1.15f, 0.12f, 45, 80, 0.25f, -0.015f),
-            // ② [3D 입체 풀포기]: 중심 피벗 방사형 부채꼴
-            Item("🌿 중원 방사형 3D 풀포기 (봄)", "TotalWar_RadialFan3D_Spring_Mesh.asset", "shrub_grassclump_sp_base_colour.png", "shrub_grassclump_normal.png", 0.90f, 1.20f, 0.90f, 1.15f, 0.22f, 20, 45, 0.20f, -0.015f),
-            // ③ [키 큰 갈대/이삭]: 0.8~1.2m 직립 포인트
-            Item("🎋 중원 키 큰 갈대 이삭 (봄)", "TotalWar_TallReed3D_Spring_Mesh.asset", "shrub_grassclump_sp_base_colour.png", "shrub_grassclump_normal.png", 0.90f, 1.15f, 0.90f, 1.15f, 0.30f, 10, 25, 0.12f, -0.015f)
             Item("🍂 중원 온대 마른 갈대/가을 풀밭", "TotalWar_GrassCluster_Tem_Autumn_Mesh.asset", "tem_grass_au_base_colour.png", "shrub_grassclump_normal.png", 0.90f, 1.25f, 0.90f, 1.15f, 0.16f, 35, 65, 0.25f, -0.015f),
             // ② [3D 입체 풀포기]: 중심 피벗 방사형 부채꼴 (실제 Clump 메쉬 + 봄/여름 머티리얼)
             Item("🌿 중원 방사형 3D 풀포기 (봄)", "TotalWar_RadialFan3D_Clump_Mesh.asset", "shrub_grassclump_sp_base_colour.png", "shrub_grassclump_normal.png", 0.90f, 1.25f, 0.95f, 1.20f, 0.20f, 25, 50, 0.20f, -0.015f),

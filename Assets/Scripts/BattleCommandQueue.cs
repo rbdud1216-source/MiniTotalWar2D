@@ -51,6 +51,13 @@ public class BattleCommandQueue : MonoBehaviour
     [KoreanLabel("누적 처리 명령 수", "지금까지 큐를 거쳐 실행된 총 전술 명령 개수입니다.")]
     [SerializeField] private uint totalCommandsProcessed = 0;
 
+    [Header("지휘 권한 설정 (A안 멀티플레이 대비)")]
+    [KoreanLabel("로컬 플레이어 ID", "0: 총사령관, 1~15: 휘하 장군")]
+    public int localPlayerId = 0;
+
+    [KoreanLabel("권한 검증 활성화", "체크 시 부대 소유자(ownerPlayerId)가 일치하거나 총사령관(0)인 명령만 실행합니다.")]
+    public bool enforceAuthorityCheck = false;
+
     // 명령 큐 및 버퍼
     private readonly Queue<BattleCommand> pendingCommands = new Queue<BattleCommand>();
     private readonly List<BattleCommand> recentCommandHistory = new List<BattleCommand>();
@@ -65,8 +72,9 @@ public class BattleCommandQueue : MonoBehaviour
     // 멀티플레이 네트워크 송신 인터페이스 (옵션)
     private INetworkCommandDispatcher networkDispatcher;
 
-    // 부대 빠른 조회를 위한 캐시 맵
+    // 부대 빠른 조회를 위한 캐시 맵 (InstanceID + 결정론적 squadNetId 이중 지원)
     private readonly Dictionary<int, Squad> squadCache = new Dictionary<int, Squad>();
+    private readonly Dictionary<uint, Squad> squadNetCache = new Dictionary<uint, Squad>();
 
     public bool IsNetworkMode => isNetworkMode;
     public uint CurrentTick => currentTick;
@@ -175,12 +183,16 @@ public class BattleCommandQueue : MonoBehaviour
     {
         if (cmd.targetSquadIds == null || cmd.targetSquadIds.Length == 0) return;
 
-        // 대상 아군 부대 수집
+        // 대상 아군 부대 수집 (InstanceID 또는 결정론적 squadNetId 조회 + A안 지휘권 검증)
         List<Squad> squads = new List<Squad>();
         for (int i = 0; i < cmd.targetSquadIds.Length; i++)
         {
-            if (squadCache.TryGetValue(cmd.targetSquadIds[i], out Squad squad) && squad != null)
+            if (TryResolveSquad(cmd.targetSquadIds[i], out Squad squad) && squad != null)
             {
+                if (enforceAuthorityCheck && !squad.CanBeCommandedBy(cmd.playerId))
+                {
+                    continue;
+                }
                 squads.Add(squad);
             }
         }
@@ -191,7 +203,7 @@ public class BattleCommandQueue : MonoBehaviour
         Squad targetEnemy = null;
         if (cmd.targetEnemySquadId != -1)
         {
-            squadCache.TryGetValue(cmd.targetEnemySquadId, out targetEnemy);
+            TryResolveSquad(cmd.targetEnemySquadId, out targetEnemy);
         }
 
         switch (cmd.commandType)
@@ -335,6 +347,30 @@ public class BattleCommandQueue : MonoBehaviour
                     s.ClearWaypoints();
                 }
                 break;
+
+            case BattleCommandType.AssignSquadOwner:
+                // 총사령관(playerId == 0) 또는 권한 비활성 모드에서만 부대 소유자 위임/회수 허용
+                if (!enforceAuthorityCheck || cmd.playerId == 0)
+                {
+                    byte targetOwner = (byte)Mathf.Clamp(cmd.intParam, 0, 255);
+                    foreach (var s in squads)
+                    {
+                        s.ownerPlayerId = targetOwner;
+                    }
+                }
+                break;
+
+            case BattleCommandType.SetAuthorityMode:
+                var authMode = (MiniTotalWar.OpenWorld.SquadAuthorityMode)cmd.intParam;
+                foreach (var s in squads)
+                {
+                    s.authorityMode = authMode;
+                }
+                break;
+
+            case BattleCommandType.RequestOffMapFireSupport:
+                // Phase 5 OffMapFireSupportManager 연동 슬롯
+                break;
         }
     }
 
@@ -404,6 +440,20 @@ public class BattleCommandQueue : MonoBehaviour
     /// <summary>
     /// 전장 내 모든 활성 부대를 캐시 맵에 갱신합니다.
     /// </summary>
+    private bool TryResolveSquad(int squadId, out Squad squad)
+    {
+        if (squadCache.TryGetValue(squadId, out squad) && squad != null)
+        {
+            return true;
+        }
+        if (squadId > 0 && squadNetCache.TryGetValue((uint)squadId, out squad) && squad != null)
+        {
+            return true;
+        }
+        squad = null;
+        return false;
+    }
+
     private void RefreshSquadCache()
     {
         if (BattleManager.Instance == null) return;
@@ -411,12 +461,17 @@ public class BattleCommandQueue : MonoBehaviour
         if (allSquads == null) return;
 
         squadCache.Clear();
+        squadNetCache.Clear();
         for (int i = 0; i < allSquads.Count; i++)
         {
             Squad s = allSquads[i];
             if (s != null)
             {
                 squadCache[s.GetInstanceID()] = s;
+                if (s.squadNetId != 0)
+                {
+                    squadNetCache[s.squadNetId] = s;
+                }
             }
         }
     }
@@ -443,7 +498,7 @@ public class BattleCommandQueue : MonoBehaviour
 
         EnqueueCommand(new BattleCommand
         {
-            playerId = 0,
+            playerId = localPlayerId,
             commandType = BattleCommandType.Move,
             targetSquadIds = ids,
             targetEnemySquadId = -1,
@@ -462,7 +517,7 @@ public class BattleCommandQueue : MonoBehaviour
 
         EnqueueCommand(new BattleCommand
         {
-            playerId = 0,
+            playerId = localPlayerId,
             commandType = BattleCommandType.AttackSquad,
             targetSquadIds = ids,
             targetEnemySquadId = enemySquad.GetInstanceID(),
@@ -479,7 +534,7 @@ public class BattleCommandQueue : MonoBehaviour
 
         EnqueueCommand(new BattleCommand
         {
-            playerId = 0,
+            playerId = localPlayerId,
             commandType = BattleCommandType.AttackPosition,
             targetSquadIds = ids,
             targetEnemySquadId = -1,
@@ -496,7 +551,7 @@ public class BattleCommandQueue : MonoBehaviour
 
         EnqueueCommand(new BattleCommand
         {
-            playerId = 0,
+            playerId = localPlayerId,
             commandType = BattleCommandType.Stop,
             targetSquadIds = ids,
             targetEnemySquadId = -1
@@ -510,7 +565,7 @@ public class BattleCommandQueue : MonoBehaviour
 
         EnqueueCommand(new BattleCommand
         {
-            playerId = 0,
+            playerId = localPlayerId,
             commandType = BattleCommandType.SetStance,
             targetSquadIds = ids,
             intParam = (int)stance
@@ -524,7 +579,7 @@ public class BattleCommandQueue : MonoBehaviour
 
         EnqueueCommand(new BattleCommand
         {
-            playerId = 0,
+            playerId = localPlayerId,
             commandType = BattleCommandType.ToggleRun,
             targetSquadIds = ids
         });
@@ -537,7 +592,7 @@ public class BattleCommandQueue : MonoBehaviour
 
         EnqueueCommand(new BattleCommand
         {
-            playerId = 0,
+            playerId = localPlayerId,
             commandType = BattleCommandType.ToggleAutoAttack,
             targetSquadIds = ids
         });
@@ -550,7 +605,7 @@ public class BattleCommandQueue : MonoBehaviour
 
         EnqueueCommand(new BattleCommand
         {
-            playerId = 0,
+            playerId = localPlayerId,
             commandType = BattleCommandType.ToggleFireAtWill,
             targetSquadIds = ids
         });
@@ -563,7 +618,7 @@ public class BattleCommandQueue : MonoBehaviour
 
         EnqueueCommand(new BattleCommand
         {
-            playerId = 0,
+            playerId = localPlayerId,
             commandType = BattleCommandType.SetFormation,
             targetSquadIds = ids,
             intParam = (int)formationType
@@ -577,7 +632,7 @@ public class BattleCommandQueue : MonoBehaviour
 
         EnqueueCommand(new BattleCommand
         {
-            playerId = 0,
+            playerId = localPlayerId,
             commandType = BattleCommandType.ToggleLoose,
             targetSquadIds = ids
         });
@@ -590,9 +645,45 @@ public class BattleCommandQueue : MonoBehaviour
 
         EnqueueCommand(new BattleCommand
         {
-            playerId = 0,
+            playerId = localPlayerId,
             commandType = BattleCommandType.ToggleStaggered,
             targetSquadIds = ids
+        });
+    }
+
+    /// <summary>
+    /// 총사령관이 특정 부대의 실시간 지휘 권한을 장군(1~15) 또는 AI(255)에게 위임하거나 회수(0)합니다.
+    /// </summary>
+    public void IssueAssignSquadOwnerCommand(IReadOnlyList<Squad> squads, byte targetOwnerPlayerId)
+    {
+        int[] ids = ExtractSquadIds(squads);
+        if (ids.Length == 0) return;
+
+        EnqueueCommand(new BattleCommand
+        {
+            playerId = localPlayerId,
+            commandType = BattleCommandType.AssignSquadOwner,
+            targetSquadIds = ids,
+            targetEnemySquadId = -1,
+            intParam = targetOwnerPlayerId
+        });
+    }
+
+    /// <summary>
+    /// 부대의 실행 권한 모드(직접 조작 vs AI 부관 위임)를 전환합니다.
+    /// </summary>
+    public void IssueSetAuthorityModeCommand(IReadOnlyList<Squad> squads, MiniTotalWar.OpenWorld.SquadAuthorityMode mode)
+    {
+        int[] ids = ExtractSquadIds(squads);
+        if (ids.Length == 0) return;
+
+        EnqueueCommand(new BattleCommand
+        {
+            playerId = localPlayerId,
+            commandType = BattleCommandType.SetAuthorityMode,
+            targetSquadIds = ids,
+            targetEnemySquadId = -1,
+            intParam = (int)mode
         });
     }
 }

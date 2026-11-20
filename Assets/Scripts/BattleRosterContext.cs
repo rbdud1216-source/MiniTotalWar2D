@@ -41,6 +41,15 @@ namespace MiniTotalWar.Roster
         [Tooltip("소속 상위 제대 번호 (1: F1, 2: F2, 3: F3, 4: F4, 5: F5, 0: 미지정)")]
         public int assignedEchelon = 1;
 
+        [Tooltip("캠페인/멀티 공용 부대 영구 네트워크 ID (0이면 스폰 시 자동 할당)")]
+        public uint persistentSquadNetId = 0;
+
+        [Tooltip("부대 지휘권을 가진 플레이어 ID (0: 총사령관, 1~15: 휘하 장군, 255: AI)")]
+        public byte ownerPlayerId = 0;
+
+        [Tooltip("부대 지휘 권한 모드 (직접 조작 / AI 부관 위임)")]
+        public MiniTotalWar.OpenWorld.SquadAuthorityMode authorityMode = MiniTotalWar.OpenWorld.SquadAuthorityMode.PlayerDirect;
+
         /// <summary>
         /// 인원 완편 비율 (0.0 ~ 1.0)
         /// </summary>
@@ -59,7 +68,10 @@ namespace MiniTotalWar.Roster
                 startingAmmoRatio = this.startingAmmoRatio,
                 veteranRank = this.veteranRank,
                 isCommander = this.isCommander,
-                assignedEchelon = this.assignedEchelon
+                assignedEchelon = this.assignedEchelon,
+                persistentSquadNetId = this.persistentSquadNetId,
+                ownerPlayerId = this.ownerPlayerId,
+                authorityMode = this.authorityMode
             };
         }
     }

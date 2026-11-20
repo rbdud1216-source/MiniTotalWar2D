@@ -1,0 +1,17 @@
+﻿{
+    "continentId": "ThreeKingdoms_China",
+    "displayName": "삼국지 중원 대륙 (TW3K 114km 풀 스케일)",
+    "sourceReference": "TotalWar:ThreeKingdoms 892x703 + lf_sea_height_map",
+    "sectorCountX": 223,
+    "sectorCountZ": 175,
+    "sectorSizeMeters": 512.0,
+    "heightmapResolution": 129,
+    "alphamapResolution": 128,
+    "maxTerrainHeight": 140.0,
+    "seaLevelY": 20.0,
+    "worldMinY": 0.0,
+    "seed": 190,
+    "useOnDemandSynthesis": true,
+    "campaignMapWidthMeters": 640.0,
+    "generatedUtcIso": "2026-11-20T05:17:30.7038893Z"
+}

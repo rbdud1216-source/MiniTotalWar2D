@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
@@ -13,32 +14,46 @@ public struct TerrainHeightData
     public float3 origin;
     public float3 size;
     public int isValid;
+    public int resolutionX;
+    public int resolutionZ;
+
+    /// <summary>
+    /// 지정된 월드 XZ 좌표가 현재 캐싱된 지형 영역 내부에 있는지 검사합니다.
+    /// </summary>
+    public bool ContainsXZ(float worldX, float worldZ)
+    {
+        if (isValid == 0 || size.x <= 0.001f || size.z <= 0.001f) return false;
+        return worldX >= origin.x && worldX <= origin.x + size.x
+            && worldZ >= origin.z && worldZ <= origin.z + size.z;
+    }
 
     /// <summary>
     /// 월드 좌표 (worldX, worldZ)에서의 지형 표면 높이(Y)를 O(1) 쌍선형 보간(Bilinear Interpolation)으로 계산합니다.
     /// </summary>
     public float SampleHeight(float worldX, float worldZ)
     {
-        if (isValid == 0 || !heights.IsCreated || resolution <= 1) return origin.y;
+        int rx = (resolutionX > 1) ? resolutionX : resolution;
+        int rz = (resolutionZ > 1) ? resolutionZ : resolution;
+        if (isValid == 0 || !heights.IsCreated || rx <= 1 || rz <= 1) return origin.y;
 
         float u = math.clamp((worldX - origin.x) / size.x, 0f, 1f);
         float v = math.clamp((worldZ - origin.z) / size.z, 0f, 1f);
 
-        float fx = u * (resolution - 1);
-        float fz = v * (resolution - 1);
+        float fx = u * (rx - 1);
+        float fz = v * (rz - 1);
 
-        int x0 = math.clamp((int)fx, 0, resolution - 2);
-        int z0 = math.clamp((int)fz, 0, resolution - 2);
+        int x0 = math.clamp((int)fx, 0, rx - 2);
+        int z0 = math.clamp((int)fz, 0, rz - 2);
         int x1 = x0 + 1;
         int z1 = z0 + 1;
 
         float tx = fx - x0;
         float tz = fz - z0;
 
-        float h00 = heights[z0 * resolution + x0];
-        float h10 = heights[z0 * resolution + x1];
-        float h01 = heights[z1 * resolution + x0];
-        float h11 = heights[z1 * resolution + x1];
+        float h00 = heights[z0 * rx + x0];
+        float h10 = heights[z0 * rx + x1];
+        float h01 = heights[z1 * rx + x0];
+        float h11 = heights[z1 * rx + x1];
 
         float h0 = math.lerp(h00, h10, tx);
         float h1 = math.lerp(h01, h11, tx);
@@ -53,29 +68,31 @@ public struct TerrainHeightData
     /// </summary>
     public float3 SampleNormal(float worldX, float worldZ)
     {
-        if (isValid == 0 || !heights.IsCreated || resolution <= 1) return new float3(0, 1, 0);
+        int rx = (resolutionX > 1) ? resolutionX : resolution;
+        int rz = (resolutionZ > 1) ? resolutionZ : resolution;
+        if (isValid == 0 || !heights.IsCreated || rx <= 1 || rz <= 1) return new float3(0, 1, 0);
 
         float u = math.clamp((worldX - origin.x) / size.x, 0f, 1f);
         float v = math.clamp((worldZ - origin.z) / size.z, 0f, 1f);
 
-        float fx = u * (resolution - 1);
-        float fz = v * (resolution - 1);
+        float fx = u * (rx - 1);
+        float fz = v * (rz - 1);
 
-        int x0 = math.clamp((int)fx, 0, resolution - 2);
-        int z0 = math.clamp((int)fz, 0, resolution - 2);
+        int x0 = math.clamp((int)fx, 0, rx - 2);
+        int z0 = math.clamp((int)fz, 0, rz - 2);
         int x1 = x0 + 1;
         int z1 = z0 + 1;
 
         float tx = fx - x0;
         float tz = fz - z0;
 
-        float h00 = heights[z0 * resolution + x0];
-        float h10 = heights[z0 * resolution + x1];
-        float h01 = heights[z1 * resolution + x0];
-        float h11 = heights[z1 * resolution + x1];
+        float h00 = heights[z0 * rx + x0];
+        float h10 = heights[z0 * rx + x1];
+        float h01 = heights[z1 * rx + x0];
+        float h11 = heights[z1 * rx + x1];
 
-        float stepX = size.x / math.max(1, resolution - 1);
-        float stepZ = size.z / math.max(1, resolution - 1);
+        float stepX = size.x / math.max(1, rx - 1);
+        float stepZ = size.z / math.max(1, rz - 1);
 
         // X, Z 축 경사도 편미분 (Bilinear Gradient)
         float dh_dx = ((h10 - h00) * (1f - tz) + (h11 - h01) * tz) * size.y / math.max(0.001f, stepX);
@@ -92,7 +109,9 @@ public struct TerrainHeightData
     /// </summary>
     public bool CheckLineOfSight(float3 shooterPos, float3 targetPos, float eyeHeight = 1.4f, float targetHeight = 1.0f, int sampleCount = 4)
     {
-        if (isValid == 0 || !heights.IsCreated || resolution <= 1) return true;
+        int rx = (resolutionX > 1) ? resolutionX : resolution;
+        int rz = (resolutionZ > 1) ? resolutionZ : resolution;
+        if (isValid == 0 || !heights.IsCreated || rx <= 1 || rz <= 1) return true;
 
         float3 start = new float3(shooterPos.x, shooterPos.y + eyeHeight, shooterPos.z);
         float3 end = new float3(targetPos.x, targetPos.y + targetHeight, targetPos.z);
@@ -162,6 +181,8 @@ public class TerrainHeightManager : MonoBehaviour
 
     public bool IsDataReady => isDataReady;
     public TerrainHeightData HeightData => heightData;
+    public Bounds ActiveWorldBounds { get; private set; }
+    public int LoadedTileCount { get; private set; }
 
     private void Awake()
     {
@@ -194,12 +215,19 @@ public class TerrainHeightManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 활성 터레인 데이터를 탐색하고 높이맵을 NativeArray로 복사하여 캐싱합니다.
+    /// 씬 내 활성 터레인(단일 또는 멀티 타일 격자) 데이터를 탐색하고 높이맵을 NativeArray로 복사하여 캐싱합니다.
     /// </summary>
     public void InitializeTerrainData()
     {
         if (targetTerrain == null)
         {
+            Terrain[] activeTerrains = Terrain.activeTerrains;
+            if (activeTerrains != null && activeTerrains.Length > 1)
+            {
+                InitializeFromTerrains(activeTerrains);
+                return;
+            }
+
             targetTerrain = Terrain.activeTerrain;
             if (targetTerrain == null)
             {
@@ -207,29 +235,29 @@ public class TerrainHeightManager : MonoBehaviour
             }
         }
 
-        if (targetTerrain == null || targetTerrain.terrainData == null)
+        InitializeFromSingleTerrain(targetTerrain);
+    }
+
+    /// <summary>
+    /// 단일 Terrain에서 1:1 원본 해상도로 높이맵을 로드합니다. (Game2 등 단일 씬 고속 경로)
+    /// </summary>
+    private void InitializeFromSingleTerrain(Terrain singleTerrain)
+    {
+        if (singleTerrain == null || singleTerrain.terrainData == null)
         {
-            heightData = new TerrainHeightData
-            {
-                isValid = 0,
-                origin = float3.zero,
-                size = float3.zero,
-                resolution = 0
-            };
-            isDataReady = false;
+            ResetToInvalid();
             return;
         }
 
-        TerrainData td = targetTerrain.terrainData;
+        targetTerrain = singleTerrain;
+        TerrainData td = singleTerrain.terrainData;
         int res = td.heightmapResolution;
 
         DisposeNativeData();
-
         cachedHeights = new NativeArray<float>(res * res, Allocator.Persistent);
 
         // Unity TerrainData.GetHeights(xBase, yBase, width, height)는 [y, x] 배열 반환 (y가 행(Z축), x가 열(X축))
         float[,] heights2D = td.GetHeights(0, 0, res, res);
-
         for (int z = 0; z < res; z++)
         {
             int rowOffset = z * res;
@@ -239,19 +267,191 @@ public class TerrainHeightManager : MonoBehaviour
             }
         }
 
-        Vector3 originPos = targetTerrain.transform.position;
-        Vector3 terrainSize = td.size;
+        FinalizeHeightData(res, res, singleTerrain.transform.position, td.size, 1);
+    }
 
+    /// <summary>
+    /// 오픈월드 3x3 멀티 타일 등 복수의 Terrain 컴포넌트를 단일 연속 NativeArray 높이맵으로 통합 스티칭합니다.
+    /// Burst Job 및 Pure ECS 시스템 API 시그니처 변경 없이 다중 타일 전역에서 O(1) 샘플링을 제공합니다.
+    /// </summary>
+    public void InitializeFromTerrains(IReadOnlyList<Terrain> terrains, int maxResolutionPerTile = 129)
+    {
+        if (terrains == null || terrains.Count == 0)
+        {
+            ResetToInvalid();
+            return;
+        }
+
+        List<Terrain> validTerrains = new List<Terrain>(terrains.Count);
+        for (int i = 0; i < terrains.Count; i++)
+        {
+            Terrain t = terrains[i];
+            if (t != null && t.terrainData != null)
+            {
+                validTerrains.Add(t);
+            }
+        }
+
+        if (validTerrains.Count == 0)
+        {
+            ResetToInvalid();
+            return;
+        }
+
+        if (validTerrains.Count == 1)
+        {
+            InitializeFromSingleTerrain(validTerrains[0]);
+            return;
+        }
+
+        float minX = float.MaxValue;
+        float minZ = float.MaxValue;
+        float minY = float.MaxValue;
+        float maxX = float.MinValue;
+        float maxZ = float.MinValue;
+        float maxY = float.MinValue;
+
+        for (int i = 0; i < validTerrains.Count; i++)
+        {
+            Terrain t = validTerrains[i];
+            Vector3 pos = t.transform.position;
+            Vector3 sz = t.terrainData.size;
+
+            if (pos.x < minX) minX = pos.x;
+            if (pos.z < minZ) minZ = pos.z;
+            if (pos.y < minY) minY = pos.y;
+            if (pos.x + sz.x > maxX) maxX = pos.x + sz.x;
+            if (pos.z + sz.z > maxZ) maxZ = pos.z + sz.z;
+            if (pos.y + sz.y > maxY) maxY = pos.y + sz.y;
+        }
+
+        float totalW = Mathf.Max(1f, maxX - minX);
+        float totalD = Mathf.Max(1f, maxZ - minZ);
+        float totalH = Mathf.Max(1f, maxY - minY);
+
+        float refTileW = Mathf.Max(1f, validTerrains[0].terrainData.size.x);
+        float refTileD = Mathf.Max(1f, validTerrains[0].terrainData.size.z);
+        int tilesX = Mathf.Max(1, Mathf.RoundToInt(totalW / refTileW));
+        int tilesZ = Mathf.Max(1, Mathf.RoundToInt(totalD / refTileD));
+
+        int perTileStep = Mathf.Clamp(maxResolutionPerTile - 1, 32, 256);
+        int resX = Mathf.Clamp(tilesX * perTileStep + 1, 65, 1025);
+        int resZ = Mathf.Clamp(tilesZ * perTileStep + 1, 65, 1025);
+
+        DisposeNativeData();
+        cachedHeights = new NativeArray<float>(resX * resZ, Allocator.Persistent);
+
+        float invResX = 1f / (resX - 1);
+        float invResZ = 1f / (resZ - 1);
+        float invTotalH = 1f / totalH;
+
+        for (int z = 0; z < resZ; z++)
+        {
+            float wz = minZ + (z * invResZ) * totalD;
+            int rowOffset = z * resX;
+
+            for (int x = 0; x < resX; x++)
+            {
+                float wx = minX + (x * invResX) * totalW;
+                Terrain owner = FindContainingTerrain(validTerrains, wx, wz);
+                float worldY = (owner != null)
+                    ? owner.SampleHeight(new Vector3(wx, 0f, wz)) + owner.transform.position.y
+                    : minY;
+
+                cachedHeights[rowOffset + x] = Mathf.Clamp01((worldY - minY) * invTotalH);
+            }
+        }
+
+        FinalizeHeightData(resX, resZ, new Vector3(minX, minY, minZ), new Vector3(totalW, totalH, totalD), validTerrains.Count);
+    }
+
+    /// <summary>
+    /// 섹터 바이너리 데이터에서 직접 합성한 정규화 높이 배열(0..1)을 Burst 호환 버퍼에 바로 적재합니다.
+    /// </summary>
+    public void InitializeFromCompositeHeightmap(float[] normalizedHeights, int resX, int resZ, Vector3 worldOrigin, Vector3 worldSize, int tileCount = 1)
+    {
+        if (normalizedHeights == null || resX <= 1 || resZ <= 1 || normalizedHeights.Length < resX * resZ)
+        {
+            ResetToInvalid();
+            return;
+        }
+
+        DisposeNativeData();
+        int count = resX * resZ;
+        cachedHeights = new NativeArray<float>(count, Allocator.Persistent);
+        for (int i = 0; i < count; i++)
+        {
+            cachedHeights[i] = normalizedHeights[i];
+        }
+
+        FinalizeHeightData(resX, resZ, worldOrigin, worldSize, tileCount);
+    }
+
+    private void FinalizeHeightData(int resX, int resZ, Vector3 originPos, Vector3 terrainSize, int tileCount)
+    {
         heightData = new TerrainHeightData
         {
             heights = cachedHeights,
-            resolution = res,
+            resolution = math.max(resX, resZ),
+            resolutionX = resX,
+            resolutionZ = resZ,
             origin = new float3(originPos.x, originPos.y, originPos.z),
             size = new float3(terrainSize.x, terrainSize.y, terrainSize.z),
             isValid = 1
         };
 
+        ActiveWorldBounds = new Bounds(
+            originPos + terrainSize * 0.5f,
+            terrainSize
+        );
+        LoadedTileCount = tileCount;
         isDataReady = true;
+    }
+
+    private void ResetToInvalid()
+    {
+        DisposeNativeData();
+        heightData = new TerrainHeightData
+        {
+            isValid = 0,
+            origin = float3.zero,
+            size = float3.zero,
+            resolution = 0,
+            resolutionX = 0,
+            resolutionZ = 0
+        };
+        ActiveWorldBounds = default;
+        LoadedTileCount = 0;
+        isDataReady = false;
+    }
+
+    private static Terrain FindContainingTerrain(List<Terrain> terrains, float worldX, float worldZ)
+    {
+        Terrain bestFallback = terrains[0];
+        float bestDistSq = float.MaxValue;
+
+        for (int i = 0; i < terrains.Count; i++)
+        {
+            Terrain t = terrains[i];
+            Vector3 pos = t.transform.position;
+            Vector3 sz = t.terrainData.size;
+
+            if (worldX >= pos.x && worldX <= pos.x + sz.x && worldZ >= pos.z && worldZ <= pos.z + sz.z)
+            {
+                return t;
+            }
+
+            float cx = pos.x + sz.x * 0.5f;
+            float cz = pos.z + sz.z * 0.5f;
+            float dSq = (worldX - cx) * (worldX - cx) + (worldZ - cz) * (worldZ - cz);
+            if (dSq < bestDistSq)
+            {
+                bestDistSq = dSq;
+                bestFallback = t;
+            }
+        }
+
+        return bestFallback;
     }
 
     private void DisposeNativeData()
@@ -272,6 +472,22 @@ public class TerrainHeightManager : MonoBehaviour
         if (Instance != null && Instance.isDataReady)
         {
             return Instance.heightData.SampleHeight(worldX, worldZ);
+        }
+
+        Terrain[] activeTerrains = Terrain.activeTerrains;
+        if (activeTerrains != null && activeTerrains.Length > 0)
+        {
+            for (int i = 0; i < activeTerrains.Length; i++)
+            {
+                Terrain t = activeTerrains[i];
+                if (t == null || t.terrainData == null) continue;
+                Vector3 pos = t.transform.position;
+                Vector3 sz = t.terrainData.size;
+                if (worldX >= pos.x && worldX <= pos.x + sz.x && worldZ >= pos.z && worldZ <= pos.z + sz.z)
+                {
+                    return t.SampleHeight(new Vector3(worldX, 0f, worldZ)) + pos.y;
+                }
+            }
         }
 
         if (Terrain.activeTerrain != null)

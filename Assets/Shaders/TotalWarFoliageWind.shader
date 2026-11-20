@@ -162,15 +162,17 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 }
                 float stemBendFactor = normY * normY; // 2차 포물선
 
-                // 3. 줄기 메인 스웨이 (완만한 거대 파동, 월드 진폭 5~10cm 제어)
+                // 3. 줄기 메인 스웨이 + 강풍 시 풍향 기울임(Lean) 결합
+                float clampedStr = clamp(windStrength, 0.0, 12.0);
                 float stemPhase = windTime * 0.9 + dot(worldPos.xz, float2(0.03, 0.025));
-                float stemWave = sin(stemPhase) * (0.06 * windStrength);
+                float stemWave = (0.09 * clampedStr) + sin(stemPhase) * (0.08 * clampedStr);
 
-                // 4. 나뭇잎/잔가지 바람결 진행 파동 (Traveling Wave & Directional Flutter)
+                // 4. 나뭇잎/잔가지 바람결 진행 파동 (강풍에 비례해 거세게 펄럭임)
                 float windTravelAxis = dot(worldPos.xz, normWindDir);
                 float leafNoise = dot(input.positionOS.xyz, float3(1.2, 2.4, 1.6));
                 float leafPhase = windTime * 3.8 + windTravelAxis * 0.65 + leafNoise;
-                float leafWave = sin(leafPhase) * (0.040 * _LeafFlutter);
+                float leafAmp = (0.035 + 0.045 * clampedStr) * saturate(clampedStr * 2.5);
+                float leafWave = sin(leafPhase) * (leafAmp * _LeafFlutter);
 
                 // 5. 오브젝트 로컬 공간 변위 합성 (바람 진행 벡터 및 수직 횡방향 탄성 진동)
                 float3 worldWindDir = float3(normWindDir.x, 0.0, normWindDir.y);
@@ -181,7 +183,7 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 float3 stemDisp = objWindDir * (stemWave * stemBendFactor * _WindMultiplier);
 
                 // 나뭇잎 바람결 변위
-                float3 leafDir = objWindDir * 0.70 + objWindCross * (cos(leafPhase * 0.75) * 0.25) - float3(0.0, 0.06, 0.0);
+                float3 leafDir = objWindDir * 0.75 + objWindCross * (cos(leafPhase * 0.75) * 0.28) - float3(0.0, 0.08, 0.0);
                 float3 leafDisp = leafDir * (leafWave * saturate(normY + 0.12) * _WindMultiplier);
 
                 float3 totalDisp = stemDisp + leafDisp;
@@ -201,8 +203,9 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                     }
                 }
 
-                // 과도한 왜곡 방지 안전 클램프
-                float maxAllowed = (_IsShrubGrass > 0.5) ? 0.35 : 0.18;
+                // 과도한 왜곡 방지 가변 클램프 (약풍 시 정교함 유지, 강풍/태풍 시 대폭 굽힘 허용)
+                float windRatio = saturate(clampedStr / 8.0);
+                float maxAllowed = (_IsShrubGrass > 0.5) ? lerp(0.35, 1.35, windRatio) : lerp(0.25, 2.80, windRatio);
                 float dispLen = length(totalDisp);
                 if (dispLen > maxAllowed)
                 {
@@ -577,27 +580,30 @@ Shader "Universal Render Pipeline/TotalWarFoliageWind"
                 float normY = saturate(rawY / 30.0);
                 float stemBendFactor = normY * normY;
 
+                float clampedStr = clamp(windStrength, 0.0, 12.0);
                 float stemPhase = windTime * 0.9 + dot(worldPos.xz, float2(0.03, 0.025));
-                float stemWave = sin(stemPhase) * (0.06 * windStrength);
+                float stemWave = (0.09 * clampedStr) + sin(stemPhase) * (0.08 * clampedStr);
 
                 float windTravelAxis = dot(worldPos.xz, normWindDir);
                 float leafNoise = dot(input.positionOS.xyz, float3(1.2, 2.4, 1.6));
                 float leafPhase = windTime * 3.8 + windTravelAxis * 0.65 + leafNoise;
-                float leafWave = sin(leafPhase) * (0.040 * _LeafFlutter);
+                float leafAmp = (0.035 + 0.045 * clampedStr) * saturate(clampedStr * 2.5);
+                float leafWave = sin(leafPhase) * (leafAmp * _LeafFlutter);
 
                 float3 worldWindDir = float3(normWindDir.x, 0.0, normWindDir.y);
                 float3 objWindDir = normalize(TransformWorldToObjectDir(worldWindDir));
                 float3 objWindCross = normalize(float3(-objWindDir.z, 0.0, objWindDir.x));
 
                 float3 stemDisp = objWindDir * (stemWave * stemBendFactor * _WindMultiplier);
-                float3 leafDir = objWindDir * 0.70 + objWindCross * (cos(leafPhase * 0.75) * 0.25) - float3(0.0, 0.06, 0.0);
+                float3 leafDir = objWindDir * 0.75 + objWindCross * (cos(leafPhase * 0.75) * 0.28) - float3(0.0, 0.08, 0.0);
                 float3 leafDisp = leafDir * (leafWave * saturate(normY + 0.12) * _WindMultiplier);
 
                 float3 totalDisp = stemDisp + leafDisp;
+                float maxAllowed = lerp(0.25, 2.80, saturate(clampedStr / 8.0));
                 float dispLen = length(totalDisp);
-                if (dispLen > 0.18)
+                if (dispLen > maxAllowed)
                 {
-                    totalDisp = totalDisp * (0.18 / dispLen);
+                    totalDisp = totalDisp * (maxAllowed / dispLen);
                 }
 
                 float3 displacedPosOS = input.positionOS.xyz + totalDisp;

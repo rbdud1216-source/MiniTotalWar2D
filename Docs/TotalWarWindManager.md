@@ -65,11 +65,12 @@ flowchart TD
 | 변수명 | 타입 | 기본값 | 설명 및 인스펙터 튜닝 가이드 |
 | :--- | :--- | :--- | :--- |
 | `windAngle` | `float` | `45.0f` | **풍향 (Wind Direction)**: 0도=북, 90도=동, 180도=남, 270도=서. 바람이 불어가는 나침반 각도. |
-| `windSpeed` | `float` | `1.35f` | **기본 풍속 (Wind Speed)**: 나무가 좌우로 흔들리는 주기적 속도. |
-| `windStrength` | `float` | `0.35f` | **바람 강도 (Wind Strength)**: 나뭇가지와 잎이 휘어지는 물리적 진폭. |
+| `windSpeed` | `float` | `1.35f` | **바람 속도 (0.0 ~ 12.0)**: 풀밭 바람 물결과 나뭇가지 흔들림 주기 속도. |
+| `windStrength` | `float` | `0.35f` | **바람 강도 (0.0 ~ 10.0)**: 0=무풍, 0.45=산들바람, 3.5=강풍, 9.0=태풍·광풍 물리 진폭. |
 | `enableGust` | `bool` | `true` | **돌풍 활성화**: 체크 시 일정 주기로 바람이 거세지는 돌풍 시뮬레이션 적용. |
-| `gustFrequency` | `float` | `0.45f` | **돌풍 빈도**: 노이즈 주파수. 높을수록 바람 세기가 자주 바뀜. |
-| `gustMultiplier` | `float` | `1.6f` | **돌풍 최대 배율**: 강풍이 불 때 평상시 풍속 대비 증가 비율. |
+| `gustFrequency` | `float` | `0.45f` | **돌풍 변화 빈도 (0.05 ~ 4.0)**: 노이즈 주파수. 높을수록 바람 세기가 자주 바뀜. |
+| `gustMultiplier` | `float` | `1.6f` | **돌풍 최대 배율 (1.0 ~ 5.0)**: 강풍이 불 때 평상시 풍속 대비 증가 비율. |
+| `TotalWarWindManagerEditor` | CustomEditor | - | 100% 한국어 인스펙터, 실시간 8방위·실효 강도 계기판, 원클릭 6종 프리셋(무풍~태풍·광풍) 제공 ([TotalWarWindManagerEditor.cs](file:///c:/unityProject/MiniTotalWar2D/Assets/Scripts/Editor/TotalWarWindManagerEditor.cs)) |
 
 ---
 

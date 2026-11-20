@@ -54,7 +54,6 @@ Shader "Universal Render Pipeline/TotalWarRadialGrassLOD"
             #pragma vertex vert
             #pragma fragment frag
 
-            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile _ _SHADOWS_SOFT
             #pragma multi_compile_fog
@@ -81,6 +80,8 @@ Shader "Universal Render Pipeline/TotalWarRadialGrassLOD"
                 float distanceToCam : TEXCOORD3;
                 float fogFactor : TEXCOORD4;
                 float heightNorm : TEXCOORD5;
+                float3 sphereNormalWS : TEXCOORD6;
+                float gustFactor : TEXCOORD7;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -119,6 +120,42 @@ Shader "Universal Render Pipeline/TotalWarRadialGrassLOD"
             float _TotalWarTerrainAutumnTint;
             float _TotalWarTerrainSnowAmount;
 
+            // 🌍 지형 색상/법선 전이 맵 및 자연 식생 튜닝 전역 변수 (TacticalGrassRenderer 브로드캐스트)
+            TEXTURE2D(_TotalWarTerrainColorMap);
+            SAMPLER(sampler_TotalWarTerrainColorMap);
+            TEXTURE2D(_TotalWarTerrainNormalMap);
+            SAMPLER(sampler_TotalWarTerrainNormalMap);
+            float4 _TotalWarTerrainBounds;      // (terPos.x, terPos.z, 1/terSize.x, 1/terSize.z)
+            float _TotalWarTerrainMapReady;     // 1.0이면 지형 맵 활성화
+            float _TotalWarGrassTerrainColorBlend;
+            float _TotalWarGrassNormalBlend;
+            float _TotalWarGrassSSSStrength;
+            float _TotalWarGrassGustSheen;
+
+            // 🍃 전역 전장 바람 벡터 (TotalWarWindManager 브로드캐스트)
+            float4 _TotalWarWindVector;         // (DirX * Strength, DirZ * Strength, WindSpeed, Time * Speed)
+            float4 _TotalWarWindParams;         // (WindStrength, GustFactor, 0, 0)
+
+            // 🌊 2D 월드 공간 바람 물결용 경량 절차적 밸류 노이즈
+            float GrassHash21(float2 p)
+            {
+                p = frac(p * float2(123.34, 456.21));
+                p += dot(p, p + 45.32);
+                return frac(p.x * p.y);
+            }
+
+            float GrassValueNoise2D(float2 p)
+            {
+                float2 i = floor(p);
+                float2 f = frac(p);
+                float2 u = f * f * (3.0 - 2.0 * f);
+                float a = GrassHash21(i);
+                float b = GrassHash21(i + float2(1.0, 0.0));
+                float c = GrassHash21(i + float2(0.0, 1.0));
+                float d = GrassHash21(i + float2(1.0, 1.0));
+                return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
+            }
+
             Varyings vert(Attributes input)
             {
                 Varyings output;
@@ -127,31 +164,59 @@ Shader "Universal Render Pipeline/TotalWarRadialGrassLOD"
 
                 float3 worldPos = TransformObjectToWorld(input.positionOS.xyz);
                 float heightNorm = saturate(input.positionOS.y / 0.85);
+                float bendWeight = heightNorm * heightNorm;
 
-                // 🌿 미풍 바람 애니메이션 (뿌리 Y=0은 고정, 잎사귀 상단만 부드럽게 살랑거림)
-                float windTime = _Time.y * _WindFrequency;
-                float wave = sin(windTime + worldPos.x * 1.5 + worldPos.z * 1.2);
-                float flutter = sin(windTime * 2.8 + worldPos.x * 3.4) * _LeafFlutter;
+                // 🍃 전역 바람 매니저 연동 월드 공간 바람 물결 필드 (Wind Gust Field: 무풍 0 ~ 태풍 9.0 완전 대응)
+                bool hasWindManager = (_TotalWarWindParams.w > 0.5);
+                float2 rawWindVec = _TotalWarWindVector.xy;
+                float rawWindLen = length(rawWindVec);
+                float2 windDir = (rawWindLen > 0.0005) ? (rawWindVec / rawWindLen) : normalize(float2(0.75, 0.66));
+                float windStr = hasWindManager ? clamp(rawWindLen * 1.5, 0.0, 9.0) : 0.65;
+                float windScrollTime = hasWindManager ? _TotalWarWindVector.w : (_Time.y * _WindFrequency);
 
-                float3 windDisp = float3(wave * 0.08 + flutter * 0.03, 0.0, wave * 0.06) * (heightNorm * _WindMultiplier);
-                float3 finalWorldPos = worldPos + windDisp;
+                // 큰 바람 띠(Gust)가 전장을 가로지르며 흐르는 2옥타브 월드 노이즈
+                float2 gustUV = worldPos.xz * 0.042 - windDir * (windScrollTime * 0.45);
+                float gustN1 = GrassValueNoise2D(gustUV);
+                float gustN2 = GrassValueNoise2D(gustUV * 2.15 + float2(17.3, 9.1));
+                float gustWave = gustN1 * 0.65 + gustN2 * 0.35;
+                float gustBand = smoothstep(0.28, 0.85, gustWave);
+
+                // 기본 잔물결 + 돌풍 띠 추진 + 잎끝 고주파 펄럭임 (강풍 시 비례 증폭)
+                float activeMotion = saturate(windStr * 2.0);
+                float speedFreq = hasWindManager ? max(0.25, _TotalWarWindVector.z * 0.85) : _WindFrequency;
+                float localPhase = _Time.y * speedFreq + worldPos.x * 1.15 + worldPos.z * 0.95;
+                float sway = sin(localPhase) * (0.055 * (0.4 + windStr * 0.55)) * activeMotion;
+                float flutter = sin(localPhase * 2.7 + input.positionOS.x * 4.5) * (0.03 * (0.5 + windStr * 0.65)) * _LeafFlutter * activeMotion;
+                float2 gustPush = windDir * (0.06 + gustBand * 0.24) * windStr;
+                float2 perpDir = float2(-windDir.y, windDir.x);
+                float2 windXZ = (gustPush + windDir * sway + perpDir * flutter) * (bendWeight * _WindMultiplier);
+
+                // 강풍 시 잎이 길게 늘어나지 않고 실제 호(Arc)를 그리며 바닥 쪽으로 납작하게 눕도록 침하 보정
+                float windYDrop = -min(length(windXZ) * 0.30, 0.52) * heightNorm;
+                float3 finalWorldPos = worldPos + float3(windXZ.x, windYDrop, windXZ.y);
 
                 output.positionCS = TransformWorldToHClip(finalWorldPos);
                 output.positionWS = finalWorldPos;
 
-                // 노멀 보존 (버텍스 노멀이 없거나 비정상일 때 안전 폴백)
+                // 원본 카드 노멀 보존
                 float3 nWS = TransformObjectToWorldNormal(input.normalOS);
                 if (dot(nWS, nWS) < 0.1) nWS = float3(0.0, 1.0, 0.0);
                 output.normalWS = nWS;
 
+                // 🌿 포기 중심에서 바깥·위쪽을 향하는 구형 노멀 (Spherical Normal) 계산 -> 카드 꺾임 명암 완화
+                float3 sphereLocalN = normalize(float3(input.positionOS.x, max(0.35, input.positionOS.y + 0.45), input.positionOS.z));
+                float3 sphereWS = TransformObjectToWorldNormal(sphereLocalN);
+                if (dot(sphereWS, sphereWS) < 0.1) sphereWS = float3(0.0, 1.0, 0.0);
+                output.sphereNormalWS = normalize(sphereWS);
+
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
 
-                // 카메라 거리 계산
-                // 카메라 거리 및 뿌리 차폐(AO)용 높이 정규화 계산
+                // 카메라 거리 및 뿌리 차폐(AO)용 높이 정규화, 바람 물결 계수 전달
                 float3 camPos = GetCameraPositionWS();
                 output.distanceToCam = distance(finalWorldPos, camPos);
                 output.fogFactor = ComputeFogFactor(output.positionCS.z);
                 output.heightNorm = heightNorm;
+                output.gustFactor = gustBand;
 
                 return output;
             }
@@ -220,13 +285,39 @@ Shader "Universal Render Pipeline/TotalWarRadialGrassLOD"
                     }
                 }
 
-                // 4. ☀️ [핵심: 절대 검게 타지 않는 찬란한 삼국지 전장 라이팅]
-                // 4. ☀️ [자연스러운 지형 통합 라이팅 + 실시간 그림자 감쇠 + 뿌리 차폐(AO)]
-                float3 normalWS = normalize(input.normalWS);
-                if (dot(normalWS, normalWS) < 0.1) normalWS = float3(0.0, 1.0, 0.0);
+                // 4. ☀️ [지형 바닥 색상 전이 + 지형/구형 노멀 전이 + 실시간 그림자 + 역광 투과광(SSS) + 바람 물결 광택]
+                float3 meshNormalWS = normalize(input.normalWS);
+                if (dot(meshNormalWS, meshNormalWS) < 0.1) meshNormalWS = float3(0.0, 1.0, 0.0);
+                float3 sphereNormalWS = normalize(input.sphereNormalWS);
+                if (dot(sphereNormalWS, sphereNormalWS) < 0.1) sphereNormalWS = float3(0.0, 1.0, 0.0);
 
-                // URP 공식 주 광원(Directional Light) 가져오기
-                Light mainLight = GetMainLight();
+                // 지형 색상/법선 맵 샘플링 (TacticalGrassRenderer 활성화 시 인스펙터 0.0 설정까지 정확 반영)
+                half colorBlendCfg = (_TotalWarTerrainMapReady > 0.5) ? (half)_TotalWarGrassTerrainColorBlend : 0.68;
+                half normalBlendCfg = (_TotalWarTerrainMapReady > 0.5) ? (half)_TotalWarGrassNormalBlend : 0.78;
+                half sssStrengthCfg = (_TotalWarTerrainMapReady > 0.5) ? (half)_TotalWarGrassSSSStrength : 0.55;
+                half gustSheenCfg = (_TotalWarTerrainMapReady > 0.5) ? (half)_TotalWarGrassGustSheen : 0.18;
+
+                float3 terrainNormalWS = float3(0.0, 1.0, 0.0);
+                if (_TotalWarTerrainMapReady > 0.5)
+                {
+                    float2 terrainUV = saturate((input.positionWS.xz - _TotalWarTerrainBounds.xy) * _TotalWarTerrainBounds.zw);
+                    half4 terrainColSample = SAMPLE_TEXTURE2D(_TotalWarTerrainColorMap, sampler_TotalWarTerrainColorMap, terrainUV);
+                    half4 terrainNormSample = SAMPLE_TEXTURE2D(_TotalWarTerrainNormalMap, sampler_TotalWarTerrainNormalMap, terrainUV);
+
+                    // 1) 지형 바닥 색상 전이: 풀 밑동은 발밑 지형 색을 강하게 흡수하고, 잎끝으로 갈수록 본래 풀/꽃 색 복원
+                    half rootFactor = pow(max(0.0001, 1.0 - saturate(input.heightNorm)), 1.55);
+                    half groundTintWeight = saturate((rootFactor * 0.88 + 0.16) * colorBlendCfg) * terrainColSample.a;
+                    albedo.rgb = lerp(albedo.rgb, terrainColSample.rgb * 1.08, groundTintWeight);
+
+                    // 2) 지형 법선 복원
+                    float3 unpackedN = terrainNormSample.xyz * 2.0 - 1.0;
+                    if (dot(unpackedN, unpackedN) > 0.1) terrainNormalWS = normalize(unpackedN);
+                }
+
+                // 지형 법선(65%) + 구형 노멀(35%)을 결합한 부드러운 노멀로 카드 꺾임 현상 제거
+                float3 softNormalWS = normalize(lerp(terrainNormalWS, sphereNormalWS, 0.35));
+                float3 normalWS = normalize(lerp(meshNormalWS, softNormalWS, normalBlendCfg));
+
                 // URP 캐스케이드 그림자 좌표 샘플링 (산맥/성벽/나무 그림자 속에서는 풀도 함께 어두워져 발광 현상 제거)
                 float4 shadowCoord = TransformWorldToShadowCoord(input.positionWS);
                 Light mainLight = GetMainLight(shadowCoord);
@@ -234,21 +325,22 @@ Shader "Universal Render Pipeline/TotalWarRadialGrassLOD"
                 if (dot(lightDir, lightDir) < 0.001) lightDir = normalize(half3(0.35, 0.85, 0.35));
 
                 half3 lightCol = mainLight.color;
-                if (dot(lightCol, lightCol) < 0.001) lightCol = half3(1.15, 1.10, 0.98); // 따뜻한 주광
                 if (dot(lightCol, lightCol) < 0.001) lightCol = half3(1.0, 0.96, 0.88);
                 half lightAtten = mainLight.distanceAttenuation * mainLight.shadowAttenuation;
 
-                // 하프 램버트(Half-Lambert) 기반 풍성한 수광 (역광/탑뷰에서도 잎사귀가 화사하게 살아남)
                 // 완만한 랩(Wrapped) 램버트 수광 + 그림자 감쇠 적용
                 float NdotL = saturate(dot(normalWS, lightDir));
-                float halfLambert = NdotL * 0.5 + 0.5;
                 float wrappedDiffuse = saturate(NdotL * 0.55 + 0.45);
-                float transmission = saturate(dot(-normalWS, lightDir) * 0.4 + 0.25) * 0.22;
-                float directFactor = (wrappedDiffuse * 0.68 + transmission) * lightAtten;
+                float directFactor = wrappedDiffuse * 0.72 * lightAtten;
 
-                // 양방향 잎사귀 투과광(Translucency)
-                float transmission = saturate(dot(-normalWS, lightDir) * 0.5 + 0.5) * 0.4;
-                float totalDirect = halfLambert * 0.85 + transmission * 0.35;
+                // 역광 태양 투과광 (Subsurface Scattering): 카메라가 태양을 마주볼 때 잎끝이 반투명하게 황록빛 발산
+                float3 viewDirWS = normalize(GetCameraPositionWS() - input.positionWS);
+                float backScatter = pow(max(0.0001, saturate(dot(viewDirWS, -lightDir))), 3.2) * saturate(input.heightNorm * 1.15);
+                half3 sssFactor = half3(1.22, 1.30, 0.65) * (backScatter * sssStrengthCfg * lightAtten);
+
+                // 바람 물결 광택 (Wind Gust Ripple Sheen): 바람 띠가 지나가며 눕힌 풀잎 윗면이 햇빛에 살짝 반짝임
+                half gustSheen = (half)(input.gustFactor * saturate(input.heightNorm)) * lightAtten * gustSheenCfg;
+
                 // 지형 환경광 (SH 라이트 우선, 보조 환경광은 과도한 형광 방지를 위해 톤 다운)
                 half3 skyColor = half3(0.36, 0.42, 0.48);
                 half3 groundColor = half3(0.22, 0.24, 0.17);
@@ -256,24 +348,15 @@ Shader "Universal Render Pipeline/TotalWarRadialGrassLOD"
                 half3 shLight = SampleSH(normalWS);
                 half3 envAmbient = (dot(shLight, shLight) > 0.005) ? lerp(fallbackAmbient, shLight, 0.72) : fallbackAmbient;
 
-                // 대지 반사광 + 창공 환경광 (Ambient)
-                half3 skyColor = half3(0.55, 0.65, 0.78);
-                half3 groundColor = half3(0.30, 0.42, 0.25);
-                half3 envAmbient = lerp(groundColor, skyColor, saturate(normalWS.y * 0.5 + 0.5)) * 0.75;
                 // 월드 좌표 기반 미세 군락 색조 변조 (단일 풀색의 단조로움 완화)
                 float patchNoise = sin(input.positionWS.x * 0.11 + input.positionWS.z * 0.07) * cos(input.positionWS.z * 0.13 - input.positionWS.x * 0.05);
-                half3 naturalTint = lerp(half3(0.88, 0.90, 0.82), half3(1.04, 0.98, 0.88), saturate(patchNoise * 0.5 + 0.5));
+                half3 naturalTint = lerp(half3(0.90, 0.92, 0.85), half3(1.04, 0.99, 0.90), saturate(patchNoise * 0.5 + 0.5));
 
-                // URP 구면 조화 조명(SH Light) 결합
-                half3 shLight = SampleSH(normalWS);
-                if (dot(shLight, shLight) > 0.01) envAmbient = max(envAmbient, shLight);
                 // 지면 밀착 뿌리 AO: 풀 밑동은 어둡고 잎끝으로 갈수록 밝아져 바닥과의 괴리감 제거
-                half rootAO = lerp(0.54, 1.0, saturate(input.heightNorm));
+                half rootAO = lerp(0.58, 1.0, saturate(input.heightNorm));
 
-                half3 diffuse = albedo.rgb * lightCol * totalDirect;
-                half3 ambient = albedo.rgb * envAmbient;
                 half3 tintedAlbedo = albedo.rgb * naturalTint * rootAO;
-                half3 diffuse = tintedAlbedo * lightCol * directFactor;
+                half3 diffuse = tintedAlbedo * lightCol * (directFactor + gustSheen) + tintedAlbedo * lightCol * sssFactor;
                 half3 ambient = tintedAlbedo * envAmbient * 0.85;
 
                 half3 finalColor = diffuse + ambient;
